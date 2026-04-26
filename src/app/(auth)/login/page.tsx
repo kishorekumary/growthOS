@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, Suspense } from 'react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
@@ -21,17 +21,20 @@ const loginSchema = z.object({
 
 type LoginFormValues = z.infer<typeof loginSchema>
 
-export default function LoginPage() {
-  const router = useRouter()
+function OAuthError({ onError }: { onError: (msg: string) => void }) {
   const searchParams = useSearchParams()
+  useEffect(() => {
+    const error = searchParams.get('error')
+    if (error) onError(decodeURIComponent(error))
+  }, [searchParams, onError])
+  return null
+}
+
+function LoginForm() {
+  const router = useRouter()
   const [isLoading, setIsLoading] = useState(false)
   const [isGoogleLoading, setIsGoogleLoading] = useState(false)
   const [serverError, setServerError] = useState<string | null>(null)
-
-  useEffect(() => {
-    const error = searchParams.get('error')
-    if (error) setServerError(decodeURIComponent(error))
-  }, [searchParams])
 
   const {
     register,
@@ -89,6 +92,9 @@ export default function LoginPage() {
 
   return (
     <Card className="border-white/10 bg-white/5 text-white backdrop-blur-sm">
+      <Suspense fallback={null}>
+        <OAuthError onError={setServerError} />
+      </Suspense>
       <CardHeader className="space-y-1">
         <CardTitle className="text-xl text-white">Welcome back</CardTitle>
         <CardDescription className="text-slate-400">Sign in to your account</CardDescription>
@@ -203,5 +209,13 @@ export default function LoginPage() {
         </p>
       </CardFooter>
     </Card>
+  )
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense fallback={null}>
+      <LoginForm />
+    </Suspense>
   )
 }
