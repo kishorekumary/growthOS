@@ -1,11 +1,11 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import Link from 'next/link'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { Loader2 } from 'lucide-react'
 
 import { createSupabaseBrowserClient } from '@/lib/supabase'
@@ -23,9 +23,15 @@ type LoginFormValues = z.infer<typeof loginSchema>
 
 export default function LoginPage() {
   const router = useRouter()
+  const searchParams = useSearchParams()
   const [isLoading, setIsLoading] = useState(false)
   const [isGoogleLoading, setIsGoogleLoading] = useState(false)
   const [serverError, setServerError] = useState<string | null>(null)
+
+  useEffect(() => {
+    const error = searchParams.get('error')
+    if (error) setServerError(decodeURIComponent(error))
+  }, [searchParams])
 
   const {
     register,
@@ -64,13 +70,19 @@ export default function LoginPage() {
     setServerError(null)
     const supabase = createSupabaseBrowserClient()
 
-    const { error } = await supabase.auth.signInWithOAuth({
-      provider: 'google',
-      options: { redirectTo: `${window.location.origin}/auth/callback` },
-    })
+    try {
+      const { error } = await supabase.auth.signInWithOAuth({
+        provider: 'google',
+        options: { redirectTo: `${window.location.origin}/auth/callback` },
+      })
 
-    if (error) {
-      setServerError(error.message)
+      if (error) {
+        setServerError(error.message)
+        setIsGoogleLoading(false)
+      }
+      // on success the browser navigates away — loading state is naturally lost
+    } catch (err) {
+      setServerError('Google sign-in failed. Please try again.')
       setIsGoogleLoading(false)
     }
   }
