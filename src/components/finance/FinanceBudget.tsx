@@ -87,12 +87,15 @@ export default function FinanceBudget() {
   const [budgetDate, setBudgetDate] = useState<string | null>(null)
   const [loading, setLoading]     = useState(true)
   const [generating, setGenerating] = useState(false)
-  const supabase = createSupabaseBrowserClient()
 
   const fetchBudget = useCallback(async () => {
+    const supabase = createSupabaseBrowserClient()
+    const { data: { session } } = await supabase.auth.getSession()
+    if (!session?.user) { setLoading(false); return }
     const { data } = await supabase
       .from('budgets')
       .select('budget, created_at')
+      .eq('user_id', session.user.id)
       .order('created_at', { ascending: false })
       .limit(1)
       .maybeSingle()

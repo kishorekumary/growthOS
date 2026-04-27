@@ -90,7 +90,7 @@ function AddModal({ onAdd }: { onAdd: () => void }) {
   const [description, setDesc]  = useState('')
   const [date, setDate]         = useState(todayStr())
   const [saving, setSaving]     = useState(false)
-  const supabase = createSupabaseBrowserClient()
+  const [error, setError]       = useState<string | null>(null)
 
   const catKeys = type === 'income'
     ? Object.keys(INCOME_CAT)
@@ -108,13 +108,27 @@ function AddModal({ onAdd }: { onAdd: () => void }) {
     const n = parseFloat(amount)
     if (!n || isNaN(n)) return
     setSaving(true)
-    await supabase.from('transactions').insert({
+    setError(null)
+    const supabase = createSupabaseBrowserClient()
+    const { data: { session } } = await supabase.auth.getSession()
+    if (!session?.user) {
+      setError('Not signed in. Please refresh and try again.')
+      setSaving(false)
+      return
+    }
+    const { error: insertError } = await supabase.from('transactions').insert({
+      user_id: session.user.id,
       txn_date: date,
       type,
       category,
       amount: n,
       description: description.trim() || null,
     })
+    if (insertError) {
+      setError(insertError.message)
+      setSaving(false)
+      return
+    }
     setAmount(''); setDesc(''); setDate(todayStr())
     setSaving(false)
     setOpen(false)
@@ -223,6 +237,10 @@ function AddModal({ onAdd }: { onAdd: () => void }) {
             />
           </div>
 
+          {error && (
+            <p className="rounded-lg border border-red-500/20 bg-red-500/10 px-3 py-2 text-xs text-red-400">{error}</p>
+          )}
+
           <Button
             className="w-full bg-violet-600 hover:bg-violet-700 text-white"
             onClick={handleAdd}
@@ -243,12 +261,15 @@ export default function ExpenseTracker() {
   const [txns, setTxns]       = useState<Transaction[]>([])
   const [loading, setLoading] = useState(true)
   const [deletingId, setDeletingId] = useState<string | null>(null)
-  const supabase = createSupabaseBrowserClient()
 
   const fetchTxns = useCallback(async () => {
+    const supabase = createSupabaseBrowserClient()
+    const { data: { session } } = await supabase.auth.getSession()
+    if (!session?.user) { setLoading(false); return }
     const { data } = await supabase
       .from('transactions')
       .select('*')
+      .eq('user_id', session.user.id)
       .order('txn_date', { ascending: false })
       .order('created_at', { ascending: false })
       .limit(50)
@@ -260,6 +281,7 @@ export default function ExpenseTracker() {
 
   async function deleteTxn(id: string) {
     setDeletingId(id)
+    const supabase = createSupabaseBrowserClient()
     await supabase.from('transactions').delete().eq('id', id)
     setTxns(prev => prev.filter(t => t.id !== id))
     setDeletingId(null)

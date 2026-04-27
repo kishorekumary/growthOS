@@ -38,12 +38,15 @@ function AddGoalModal({ onAdd }: { onAdd: () => void }) {
   const [target, setTarget]       = useState('')
   const [deadline, setDeadline]   = useState('')
   const [saving, setSaving]       = useState(false)
-  const supabase = createSupabaseBrowserClient()
 
   async function handleAdd() {
     if (!name.trim() || !target) return
     setSaving(true)
+    const supabase = createSupabaseBrowserClient()
+    const { data: { session } } = await supabase.auth.getSession()
+    if (!session?.user) { setSaving(false); return }
     await supabase.from('finance_goals').insert({
+      user_id: session.user.id,
       goal_name: name.trim(),
       goal_type: type,
       target_amount: Number(target),
@@ -137,7 +140,6 @@ function AddMoneyModal({ goal, onUpdate }: { goal: Goal; onUpdate: () => void })
   const [open, setOpen]   = useState(false)
   const [amount, setAmount] = useState('')
   const [saving, setSaving] = useState(false)
-  const supabase = createSupabaseBrowserClient()
 
   async function handleAdd() {
     const n = Number(amount)
@@ -145,6 +147,7 @@ function AddMoneyModal({ goal, onUpdate }: { goal: Goal; onUpdate: () => void })
     setSaving(true)
     const newAmount = goal.current_amount + n
     const isCompleted = newAmount >= goal.target_amount
+    const supabase = createSupabaseBrowserClient()
     await supabase
       .from('finance_goals')
       .update({
@@ -209,12 +212,15 @@ function AddMoneyModal({ goal, onUpdate }: { goal: Goal; onUpdate: () => void })
 export default function FinanceGoals() {
   const [goals, setGoals]   = useState<Goal[]>([])
   const [loading, setLoading] = useState(true)
-  const supabase = createSupabaseBrowserClient()
 
   const fetchGoals = useCallback(async () => {
+    const supabase = createSupabaseBrowserClient()
+    const { data: { session } } = await supabase.auth.getSession()
+    if (!session?.user) { setLoading(false); return }
     const { data } = await supabase
       .from('finance_goals')
       .select('*')
+      .eq('user_id', session.user.id)
       .order('created_at', { ascending: true })
     setGoals((data as Goal[]) ?? [])
     setLoading(false)

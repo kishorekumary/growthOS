@@ -45,7 +45,6 @@ function AddTransactionModal({ onAdd }: { onAdd: () => void }) {
   const [description, setDesc]  = useState('')
   const [date, setDate]         = useState(todayStr())
   const [saving, setSaving]     = useState(false)
-  const supabase = createSupabaseBrowserClient()
 
   const categories = type === 'income' ? INCOME_CATEGORIES : type === 'savings' ? SAVINGS_CATEGORIES : EXPENSE_CATEGORIES
 
@@ -57,7 +56,11 @@ function AddTransactionModal({ onAdd }: { onAdd: () => void }) {
   async function handleAdd() {
     if (!amount || !category) return
     setSaving(true)
+    const supabase = createSupabaseBrowserClient()
+    const { data: { session } } = await supabase.auth.getSession()
+    if (!session?.user) { setSaving(false); return }
     await supabase.from('transactions').insert({
+      user_id: session.user.id,
       txn_date: date,
       type,
       category,
@@ -179,12 +182,15 @@ function AddTransactionModal({ onAdd }: { onAdd: () => void }) {
 export default function FinanceTracker() {
   const [txns, setTxns]   = useState<Transaction[]>([])
   const [loading, setLoading] = useState(true)
-  const supabase = createSupabaseBrowserClient()
 
   const fetchTxns = useCallback(async () => {
+    const supabase = createSupabaseBrowserClient()
+    const { data: { session } } = await supabase.auth.getSession()
+    if (!session?.user) { setLoading(false); return }
     const { data } = await supabase
       .from('transactions')
       .select('*')
+      .eq('user_id', session.user.id)
       .order('txn_date', { ascending: false })
       .limit(30)
     setTxns((data as Transaction[]) ?? [])

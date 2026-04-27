@@ -55,9 +55,12 @@ export default function FinanceOverview() {
   const [loading, setLoading]     = useState(true)
   const [scoring, setScoring]     = useState(false)
   const [scoreInfo, setScoreInfo] = useState<{ explanation: string; tips: string[] } | null>(null)
-  const supabase = createSupabaseBrowserClient()
 
   const fetchData = useCallback(async () => {
+    const supabase = createSupabaseBrowserClient()
+    const { data: { session } } = await supabase.auth.getSession()
+    if (!session?.user) { setLoading(false); return }
+
     const monthStart = new Date()
     monthStart.setDate(1)
     const monthStartStr = monthStart.toISOString().split('T')[0]
@@ -65,9 +68,11 @@ export default function FinanceOverview() {
     const [{ data: p }, { data: t }] = await Promise.all([
       supabase.from('financial_profile')
         .select('monthly_income, monthly_expenses, total_savings, total_debt, financial_score')
+        .eq('user_id', session.user.id)
         .maybeSingle(),
       supabase.from('transactions')
         .select('amount, category, type')
+        .eq('user_id', session.user.id)
         .gte('txn_date', monthStartStr),
     ])
     setProfile(p as FinancialProfile ?? null)
