@@ -7,7 +7,6 @@ import { cn } from '@/lib/utils'
 import {
   PieChart, Pie, Cell, Tooltip, ResponsiveContainer,
 } from 'recharts'
-import { format, subMonths, startOfMonth, endOfMonth } from 'date-fns'
 
 // ─── Types ────────────────────────────────────────────────────
 
@@ -43,21 +42,6 @@ const TOOLTIP_STYLE = {
   fontSize: 12,
 }
 
-// ─── Month selector helpers ───────────────────────────────────
-
-function buildMonths() {
-  const now = new Date()
-  return Array.from({ length: 6 }, (_, i) => {
-    const d = subMonths(now, i)
-    return {
-      label: format(d, i === 0 ? "'This month'" : 'MMM yyyy'),
-      value: format(d, 'yyyy-MM'),
-      start: startOfMonth(d).toISOString().split('T')[0],
-      end:   endOfMonth(d).toISOString().split('T')[0],
-    }
-  })
-}
-
 // ─── Budget fuzzy match ───────────────────────────────────────
 
 function findBudgeted(category: string, budget: Budget | null): number {
@@ -73,7 +57,7 @@ function findBudgeted(category: string, budget: Budget | null): number {
   return match?.amount ?? 0
 }
 
-// ─── Custom label ─────────────────────────────────────────────
+// ─── Custom tooltip ───────────────────────────────────────────
 
 function CustomTooltip({ active, payload }: { active?: boolean; payload?: { name: string; value: number }[] }) {
   if (!active || !payload?.length) return null
@@ -87,20 +71,16 @@ function CustomTooltip({ active, payload }: { active?: boolean; payload?: { name
 
 // ─── Main component ───────────────────────────────────────────
 
-export default function SpendingChart() {
-  const MONTHS = buildMonths()
+export default function SpendingChart({ start, end }: { start: string; end: string }) {
+  const [catTotals, setCatTotals] = useState<Record<string, number>>({})
+  const [budget, setBudget]       = useState<Budget | null>(null)
+  const [loading, setLoading]     = useState(true)
 
-  const [selectedIdx, setSelectedIdx] = useState(0)
-  const [catTotals, setCatTotals]     = useState<Record<string, number>>({})
-  const [budget, setBudget]           = useState<Budget | null>(null)
-  const [loading, setLoading]         = useState(true)
-
-  const fetchData = useCallback(async (idx: number) => {
+  const fetchData = useCallback(async () => {
     setLoading(true)
     const supabase = createSupabaseBrowserClient()
     const { data: { session } } = await supabase.auth.getSession()
     if (!session?.user) { setLoading(false); return }
-    const { start, end } = MONTHS[idx]
 
     const [{ data: txns }, { data: budgetRow }] = await Promise.all([
       supabase
@@ -126,9 +106,9 @@ export default function SpendingChart() {
     setCatTotals(totals)
     setBudget(budgetRow?.budget as Budget ?? null)
     setLoading(false)
-  }, [])
+  }, [start, end])
 
-  useEffect(() => { fetchData(selectedIdx) }, [fetchData, selectedIdx])
+  useEffect(() => { fetchData() }, [fetchData])
 
   const totalSpent = Object.values(catTotals).reduce((s, v) => s + v, 0)
 
@@ -138,32 +118,10 @@ export default function SpendingChart() {
 
   return (
     <div className="space-y-4">
-      {/* Header */}
-      <div>
-        <h3 className="font-semibold text-white flex items-center gap-2">
-          <TrendingDown className="h-4 w-4 text-red-400" />
-          Spending Breakdown
-        </h3>
-      </div>
-
-      {/* Month selector */}
-      <div className="flex gap-1.5 flex-wrap">
-        {MONTHS.map((m, i) => (
-          <button
-            key={m.value}
-            type="button"
-            onClick={() => setSelectedIdx(i)}
-            className={cn(
-              'rounded-full border px-3 py-1 text-xs font-medium transition-all',
-              selectedIdx === i
-                ? 'border-violet-500 bg-violet-500/20 text-white'
-                : 'border-white/10 bg-white/5 text-slate-400 hover:border-white/20'
-            )}
-          >
-            {m.label}
-          </button>
-        ))}
-      </div>
+      <h3 className="font-semibold text-white flex items-center gap-2">
+        <TrendingDown className="h-4 w-4 text-red-400" />
+        Spending Breakdown
+      </h3>
 
       {loading ? (
         <div className="flex items-center justify-center py-10">

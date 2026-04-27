@@ -4,6 +4,7 @@ import { useState } from 'react'
 import dynamic from 'next/dynamic'
 import { Loader2 } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { format, subMonths, startOfMonth, endOfMonth } from 'date-fns'
 
 const FinanceOverview  = dynamic(() => import('@/components/finance/FinanceOverview'),  { loading: () => <Spinner /> })
 const FinanceBudget    = dynamic(() => import('@/components/finance/FinanceBudget'),    { loading: () => <Spinner /> })
@@ -20,11 +21,27 @@ function Spinner() {
   )
 }
 
+function buildMonths() {
+  const now = new Date()
+  return Array.from({ length: 6 }, (_, i) => {
+    const d = subMonths(now, i)
+    return {
+      label: format(d, i === 0 ? "'This month'" : 'MMM yyyy'),
+      start: startOfMonth(d).toISOString().split('T')[0],
+      end:   endOfMonth(d).toISOString().split('T')[0],
+    }
+  })
+}
+
+const MONTHS = buildMonths()
+
 const TABS = ['Overview', 'Budget', 'Goals', 'Tracker', 'Coach'] as const
 type Tab = typeof TABS[number]
 
 export default function FinancePage() {
   const [tab, setTab] = useState<Tab>('Overview')
+  const [monthIdx, setMonthIdx] = useState(0)
+  const selectedMonth = MONTHS[monthIdx]
 
   return (
     <div className="mx-auto max-w-2xl px-4 py-8 md:px-8">
@@ -55,15 +72,37 @@ export default function FinancePage() {
       {tab === 'Overview' && <FinanceOverview />}
       {tab === 'Budget'   && <FinanceBudget />}
       {tab === 'Goals'    && <FinanceGoals />}
-      {tab === 'Tracker'  && (
-        <div className="space-y-8">
-          <SpendingChart />
+
+      {tab === 'Tracker' && (
+        <div className="space-y-6">
+          {/* Shared month selector */}
+          <div className="flex gap-1.5 flex-wrap">
+            {MONTHS.map((m, i) => (
+              <button
+                key={m.start}
+                type="button"
+                onClick={() => setMonthIdx(i)}
+                className={cn(
+                  'rounded-full border px-3 py-1 text-xs font-medium transition-all',
+                  monthIdx === i
+                    ? 'border-violet-500 bg-violet-500/20 text-white'
+                    : 'border-white/10 bg-white/5 text-slate-400 hover:border-white/20'
+                )}
+              >
+                {m.label}
+              </button>
+            ))}
+          </div>
+
+          <SpendingChart start={selectedMonth.start} end={selectedMonth.end} />
+
           <div className="border-t border-white/10 pt-6">
-            <ExpenseTracker />
+            <ExpenseTracker start={selectedMonth.start} end={selectedMonth.end} />
           </div>
         </div>
       )}
-      {tab === 'Coach'    && <AIChat section="finance" />}
+
+      {tab === 'Coach' && <AIChat section="finance" />}
     </div>
   )
 }

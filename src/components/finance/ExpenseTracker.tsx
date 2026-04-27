@@ -257,12 +257,13 @@ function AddModal({ onAdd }: { onAdd: () => void }) {
 
 // ─── Main component ───────────────────────────────────────────
 
-export default function ExpenseTracker() {
+export default function ExpenseTracker({ start, end }: { start: string; end: string }) {
   const [txns, setTxns]       = useState<Transaction[]>([])
   const [loading, setLoading] = useState(true)
   const [deletingId, setDeletingId] = useState<string | null>(null)
 
   const fetchTxns = useCallback(async () => {
+    setLoading(true)
     const supabase = createSupabaseBrowserClient()
     const { data: { session } } = await supabase.auth.getSession()
     if (!session?.user) { setLoading(false); return }
@@ -270,12 +271,13 @@ export default function ExpenseTracker() {
       .from('transactions')
       .select('*')
       .eq('user_id', session.user.id)
+      .gte('txn_date', start)
+      .lte('txn_date', end)
       .order('txn_date', { ascending: false })
       .order('created_at', { ascending: false })
-      .limit(50)
     setTxns((data as Transaction[]) ?? [])
     setLoading(false)
-  }, [])
+  }, [start, end])
 
   useEffect(() => { fetchTxns() }, [fetchTxns])
 
@@ -307,7 +309,7 @@ export default function ExpenseTracker() {
       <div className="flex items-center justify-between">
         <div>
           <h3 className="font-semibold text-white">Transactions</h3>
-          <p className="text-xs text-slate-500 mt-0.5">{txns.length} recent entries</p>
+          <p className="text-xs text-slate-500 mt-0.5">{txns.length} {txns.length === 1 ? 'entry' : 'entries'}</p>
         </div>
         <AddModal onAdd={fetchTxns} />
       </div>
