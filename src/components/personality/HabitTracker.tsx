@@ -203,10 +203,11 @@ export default function HabitTracker() {
   const supabase = createSupabaseBrowserClient()
 
   const fetchHabits = useCallback(async () => {
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from('personality_habits')
       .select('id, habit_name, category, frequency, streak_count, longest_streak, last_done_at')
       .order('created_at', { ascending: true })
+    if (error) console.error('[HabitTracker] fetch error:', error)
     setHabits((data as Habit[]) ?? [])
     setLoading(false)
   }, [])

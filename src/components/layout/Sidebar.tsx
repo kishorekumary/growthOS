@@ -40,14 +40,14 @@ export default function Sidebar({ userName, userEmail, avatarUrl }: SidebarProps
   return (
     <aside className="hidden md:flex fixed inset-y-0 left-0 z-50 w-64 flex-col border-r border-white/10 bg-slate-950">
       {/* Logo */}
-      <div className="flex h-16 items-center gap-2.5 border-b border-white/10 px-6">
+      <Link href="/dashboard" className="flex h-16 items-center gap-2.5 border-b border-white/10 px-6 hover:opacity-80 transition-opacity">
         <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-purple-600/20 border border-purple-500/30">
           <span className="text-sm">🌱</span>
         </div>
         <span className="text-lg font-bold text-white tracking-tight">
           Growth<span className="text-purple-400">OS</span>
         </span>
-      </div>
+      </Link>
 
       {/* Nav */}
       <nav className="flex-1 space-y-1 px-3 py-4">

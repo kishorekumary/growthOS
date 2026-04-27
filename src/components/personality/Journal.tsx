@@ -94,7 +94,7 @@ export default function Journal() {
   const supabase = createSupabaseBrowserClient()
 
   const fetchData = useCallback(async () => {
-    const [{ data: todayData }, { data: past }] = await Promise.all([
+    const [{ data: todayData, error: e1 }, { data: past, error: e2 }] = await Promise.all([
       supabase
         .from('journal_entries')
         .select('*')
@@ -107,6 +107,8 @@ export default function Journal() {
         .order('entry_date', { ascending: false })
         .limit(10),
     ])
+    if (e1) console.error('[Journal] fetch today error:', e1)
+    if (e2) console.error('[Journal] fetch past error:', e2)
     if (todayData) {
       setTodayEntry(todayData)
       setContent(todayData.content ?? '')
@@ -132,12 +134,15 @@ export default function Journal() {
         .single()
       if (data) setTodayEntry(data)
     } else {
-      const { data } = await supabase
-        .from('journal_entries')
-        .insert({ entry_date: today, content, mood })
-        .select()
-        .single()
-      if (data) setTodayEntry(data)
+      const { data: { user } } = await supabase.auth.getUser()
+      if (user) {
+        const { data } = await supabase
+          .from('journal_entries')
+          .insert({ user_id: user.id, entry_date: today, content, mood })
+          .select()
+          .single()
+        if (data) { setTodayEntry(data); fetchData() }
+      }
     }
     setSaving(false)
   }
@@ -148,9 +153,11 @@ export default function Journal() {
 
     let entryId = todayEntry?.id
     if (!entryId) {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) { setLoadingFeedback(false); return }
       const { data } = await supabase
         .from('journal_entries')
-        .upsert({ entry_date: today, content, mood })
+        .upsert({ user_id: user.id, entry_date: today, content, mood })
         .select()
         .single()
       if (data) { setTodayEntry(data); entryId = data.id }
