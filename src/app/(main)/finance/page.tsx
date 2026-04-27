@@ -5,6 +5,7 @@ import dynamic from 'next/dynamic'
 import { Loader2 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { format, subMonths, startOfMonth, endOfMonth } from 'date-fns'
+import GoalsWidget from '@/components/goals/GoalsWidget'
 
 const FinanceOverview  = dynamic(() => import('@/components/finance/FinanceOverview'),  { loading: () => <Spinner /> })
 const FinanceBudget    = dynamic(() => import('@/components/finance/FinanceBudget'),    { loading: () => <Spinner /> })
@@ -49,6 +50,9 @@ export default function FinancePage() {
         <h1 className="text-2xl font-bold text-white">Finance</h1>
         <p className="text-slate-400 text-sm mt-1">Build wealth, reduce stress</p>
       </div>
+
+      {/* Goals widget */}
+      <GoalsWidget category="finance" />
 
       {/* Tab bar */}
       <div className="flex gap-1 rounded-xl bg-white/5 p-1 mb-6 overflow-x-auto">

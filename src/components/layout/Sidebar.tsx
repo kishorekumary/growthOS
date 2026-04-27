@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
-import { LayoutDashboard, Brain, Dumbbell, Wallet, BookOpen, LogOut } from 'lucide-react'
+import { LayoutDashboard, Brain, Dumbbell, Wallet, BookOpen, Target, LogOut } from 'lucide-react'
 import { createSupabaseBrowserClient } from '@/lib/supabase'
 import { cn } from '@/lib/utils'
 
@@ -12,6 +12,7 @@ const NAV_ITEMS = [
   { href: '/fitness',      label: 'Fitness',     icon: Dumbbell },
   { href: '/finance',      label: 'Finance',     icon: Wallet },
   { href: '/books',        label: 'Books',       icon: BookOpen },
+  { href: '/goals',        label: 'Goals',       icon: Target },
 ]
 
 interface SidebarProps {

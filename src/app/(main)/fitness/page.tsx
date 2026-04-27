@@ -4,6 +4,7 @@ import { useState } from 'react'
 import dynamic from 'next/dynamic'
 import { Loader2 } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import GoalsWidget from '@/components/goals/GoalsWidget'
 
 const WorkoutPlan     = dynamic(() => import('@/components/fitness/WorkoutPlan'),     { loading: () => <Spinner /> })
 const WorkoutLogger   = dynamic(() => import('@/components/fitness/WorkoutLogger'),   { loading: () => <Spinner /> })
@@ -30,6 +31,9 @@ export default function FitnessPage() {
         <h1 className="text-2xl font-bold text-white">Fitness</h1>
         <p className="text-slate-400 text-sm mt-1">Train smart, recover well</p>
       </div>
+
+      {/* Goals widget */}
+      <GoalsWidget category="fitness" />
 
       {/* Tab bar */}
       <div className="flex gap-1 rounded-xl bg-white/5 p-1 mb-6">

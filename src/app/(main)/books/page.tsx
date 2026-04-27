@@ -4,6 +4,7 @@ import { useState } from 'react'
 import dynamic from 'next/dynamic'
 import { Loader2 } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import GoalsWidget from '@/components/goals/GoalsWidget'
 
 const BookDiscover  = dynamic(() => import('@/components/books/BookDiscover'),  { loading: () => <Spinner /> })
 const ReadingList   = dynamic(() => import('@/components/books/ReadingList'),   { loading: () => <Spinner /> })
@@ -30,6 +31,9 @@ export default function BooksPage() {
         <h1 className="text-2xl font-bold text-white">Books</h1>
         <p className="text-slate-400 text-sm mt-1">Read intentionally, grow constantly</p>
       </div>
+
+      {/* Goals widget */}
+      <GoalsWidget category="books" />
 
       {/* Tab bar */}
       <div className="flex gap-1 rounded-xl bg-white/5 p-1 mb-6">
