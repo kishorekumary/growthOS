@@ -77,18 +77,22 @@ export default function FitnessProgress() {
   const [loading, setLoading]         = useState(true)
   const [newWeight, setNewWeight]     = useState('')
   const [savingWeight, setSavingWeight] = useState(false)
-  const supabase = createSupabaseBrowserClient()
 
   const fetchData = useCallback(async () => {
+    const supabase = createSupabaseBrowserClient()
+    const { data: { session } } = await supabase.auth.getSession()
+    if (!session?.user) { setLoading(false); return }
     const [{ data: wl }, { data: wkl }] = await Promise.all([
       supabase
         .from('weight_logs')
         .select('id, log_date, weight_kg')
+        .eq('user_id', session.user.id)
         .order('log_date', { ascending: true })
         .limit(30),
       supabase
         .from('workout_logs')
         .select('id, log_date, workout_type, duration_mins')
+        .eq('user_id', session.user.id)
         .order('log_date', { ascending: false })
         .limit(200),
     ])
@@ -103,10 +107,13 @@ export default function FitnessProgress() {
     const w = parseFloat(newWeight)
     if (!w || isNaN(w)) return
     setSavingWeight(true)
+    const supabase = createSupabaseBrowserClient()
+    const { data: { session } } = await supabase.auth.getSession()
+    if (!session?.user) { setSavingWeight(false); return }
     const today = new Date().toISOString().split('T')[0]
     await supabase
       .from('weight_logs')
-      .upsert({ log_date: today, weight_kg: w }, { onConflict: 'user_id,log_date' })
+      .upsert({ user_id: session.user.id, log_date: today, weight_kg: w }, { onConflict: 'user_id,log_date' })
     setNewWeight('')
     setSavingWeight(false)
     fetchData()

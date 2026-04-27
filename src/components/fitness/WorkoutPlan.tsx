@@ -94,12 +94,15 @@ export default function WorkoutPlan() {
   const [planDate, setPlanDate] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [generating, setGenerating] = useState(false)
-  const supabase = createSupabaseBrowserClient()
 
   const fetchPlan = useCallback(async () => {
+    const supabase = createSupabaseBrowserClient()
+    const { data: { session } } = await supabase.auth.getSession()
+    if (!session?.user) { setLoading(false); return }
     const { data } = await supabase
       .from('workout_plans')
       .select('plan, created_at')
+      .eq('user_id', session.user.id)
       .order('created_at', { ascending: false })
       .limit(1)
       .maybeSingle()
