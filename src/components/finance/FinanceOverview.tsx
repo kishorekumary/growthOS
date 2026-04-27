@@ -198,7 +198,7 @@ export default function FinanceOverview() {
                   {label}
                 </span>
                 <span className="text-sm font-semibold text-white">
-                  ${value.toLocaleString()}
+                  ₹{value.toLocaleString()}
                 </span>
               </div>
               <div className="h-2 rounded-full bg-white/10 overflow-hidden">
@@ -212,7 +212,7 @@ export default function FinanceOverview() {
         </div>
         {income > 0 && (
           <p className={cn('text-xs font-medium', income >= expenses ? 'text-emerald-400' : 'text-red-400')}>
-            Net: {income >= expenses ? '+' : ''}${(income - expenses).toLocaleString()}/mo
+            Net: {income >= expenses ? '+' : ''}₹{(income - expenses).toLocaleString()}/mo
           </p>
         )}
       </div>
@@ -223,9 +223,9 @@ export default function FinanceOverview() {
           <p className="text-sm font-medium text-white">Top Spending Categories</p>
           <ResponsiveContainer width="100%" height={categoryData.length * 36 + 20}>
             <BarChart layout="vertical" data={categoryData} barSize={14}>
-              <XAxis type="number" tick={TICK} axisLine={false} tickLine={false} tickFormatter={v => `$${v}`} />
+              <XAxis type="number" tick={TICK} axisLine={false} tickLine={false} tickFormatter={v => `₹${v}`} />
               <YAxis type="category" dataKey="name" tick={TICK} axisLine={false} tickLine={false} width={80} />
-              <Tooltip contentStyle={TOOLTIP_STYLE} formatter={(v: number) => [`$${v}`, 'Amount']} />
+              <Tooltip contentStyle={TOOLTIP_STYLE} formatter={(v: number) => [`₹${v}`, 'Amount']} />
               <Bar dataKey="amount" radius={[0, 4, 4, 0]}>
                 {categoryData.map((_, i) => (
                   <Cell key={i} fill={BAR_COLORS[i % BAR_COLORS.length]} />
@@ -240,8 +240,8 @@ export default function FinanceOverview() {
       <div className="grid grid-cols-3 gap-3">
         {[
           { label: 'Savings Rate', value: `${savingsRate}%`, sub: 'of annual income' },
-          { label: 'Total Savings', value: `$${savings.toLocaleString()}`, sub: '' },
-          { label: 'Total Debt',    value: `$${debt.toLocaleString()}`,    sub: '' },
+          { label: 'Total Savings', value: `₹${savings.toLocaleString()}`, sub: '' },
+          { label: 'Total Debt',    value: `₹${debt.toLocaleString()}`,    sub: '' },
         ].map(({ label, value, sub }) => (
           <div key={label} className="rounded-xl border border-white/10 bg-white/5 p-3 text-center">
             <p className="text-lg font-bold text-white">{value}</p>

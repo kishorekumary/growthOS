@@ -203,7 +203,7 @@ function AddModal({ onAdd }: { onAdd: () => void }) {
 
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1.5">
-              <Label className="text-slate-300 text-xs">Amount ($)</Label>
+              <Label className="text-slate-300 text-xs">Amount (₹)</Label>
               <Input
                 type="number"
                 min="0.01"
@@ -335,7 +335,7 @@ export default function ExpenseTracker() {
                   {format(new Date(date + 'T12:00:00'), 'EEEE, MMM d')}
                 </p>
                 <p className={cn('text-xs font-medium', dayNet >= 0 ? 'text-emerald-400' : 'text-red-400')}>
-                  {dayNet >= 0 ? '+' : ''}${dayNet.toLocaleString()}
+                  {dayNet >= 0 ? '+' : ''}₹{dayNet.toLocaleString()}
                 </p>
               </div>
 
@@ -367,7 +367,7 @@ export default function ExpenseTracker() {
 
                       {/* Amount */}
                       <p className={cn('text-sm font-semibold shrink-0', TYPE_AMOUNT_COLOR[txn.type])}>
-                        {TYPE_SIGN[txn.type]}${Number(txn.amount).toLocaleString()}
+                        {TYPE_SIGN[txn.type]}₹{Number(txn.amount).toLocaleString()}
                       </p>
 
                       {/* Delete */}

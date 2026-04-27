@@ -131,7 +131,7 @@ function AddTransactionModal({ onAdd }: { onAdd: () => void }) {
 
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1.5">
-              <Label className="text-slate-300">Amount ($)</Label>
+              <Label className="text-slate-300">Amount (₹)</Label>
               <Input
                 type="number"
                 min="0.01"
@@ -246,7 +246,7 @@ export default function FinanceTracker() {
                   {format(new Date(date + 'T12:00:00'), 'EEEE, MMM d')}
                 </p>
                 <p className={cn('text-xs font-medium', dayTotal >= 0 ? 'text-emerald-400' : 'text-red-400')}>
-                  {dayTotal >= 0 ? '+' : ''}${dayTotal.toLocaleString()}
+                  {dayTotal >= 0 ? '+' : ''}₹{dayTotal.toLocaleString()}
                 </p>
               </div>
               <div className="space-y-1.5">
@@ -270,7 +270,7 @@ export default function FinanceTracker() {
                         </span>
                       </div>
                       <p className={cn('text-sm font-semibold shrink-0', cfg.color)}>
-                        {txn.type === 'income' ? '+' : '-'}${Number(txn.amount).toLocaleString()}
+                        {txn.type === 'income' ? '+' : '-'}₹{Number(txn.amount).toLocaleString()}
                       </p>
                     </div>
                   )

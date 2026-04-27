@@ -77,7 +77,7 @@ function EditableAmount({
       className="text-sm font-medium text-white hover:text-violet-300 transition-colors"
       title="Click to edit"
     >
-      ${value.toLocaleString()}
+      ₹{value.toLocaleString()}
     </button>
   )
 }
@@ -192,7 +192,7 @@ export default function FinanceBudget() {
                   <div>
                     <p className={cn('text-sm font-semibold', style.color)}>{cat.label}</p>
                     <p className="text-xs text-slate-500 mt-0.5">
-                      ${cat.amount.toLocaleString()} / month
+                      ₹{cat.amount.toLocaleString()} / month
                     </p>
                   </div>
                   <span className={cn('text-2xl font-bold', style.color)}>

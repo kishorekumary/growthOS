@@ -80,7 +80,7 @@ function CustomTooltip({ active, payload }: { active?: boolean; payload?: { name
   return (
     <div style={TOOLTIP_STYLE} className="px-3 py-2">
       <p className="font-medium">{payload[0].name}</p>
-      <p className="text-slate-400">${payload[0].value.toLocaleString()}</p>
+      <p className="text-slate-400">₹{payload[0].value.toLocaleString()}</p>
     </div>
   )
 }
@@ -94,22 +94,26 @@ export default function SpendingChart() {
   const [catTotals, setCatTotals]     = useState<Record<string, number>>({})
   const [budget, setBudget]           = useState<Budget | null>(null)
   const [loading, setLoading]         = useState(true)
-  const supabase = createSupabaseBrowserClient()
 
   const fetchData = useCallback(async (idx: number) => {
     setLoading(true)
+    const supabase = createSupabaseBrowserClient()
+    const { data: { session } } = await supabase.auth.getSession()
+    if (!session?.user) { setLoading(false); return }
     const { start, end } = MONTHS[idx]
 
     const [{ data: txns }, { data: budgetRow }] = await Promise.all([
       supabase
         .from('transactions')
         .select('category, amount')
+        .eq('user_id', session.user.id)
         .eq('type', 'expense')
         .gte('txn_date', start)
         .lte('txn_date', end),
       supabase
         .from('budgets')
         .select('budget')
+        .eq('user_id', session.user.id)
         .order('created_at', { ascending: false })
         .limit(1)
         .maybeSingle(),
@@ -174,7 +178,7 @@ export default function SpendingChart() {
           {/* Total */}
           <div className="rounded-xl border border-white/10 bg-white/5 px-4 py-3 flex items-center justify-between">
             <p className="text-sm text-slate-400">Total spent</p>
-            <p className="text-lg font-bold text-red-400">${totalSpent.toLocaleString()}</p>
+            <p className="text-lg font-bold text-red-400">₹{totalSpent.toLocaleString()}</p>
           </div>
 
           {/* Pie chart */}
@@ -233,13 +237,13 @@ export default function SpendingChart() {
                         <div className="flex items-center justify-between text-xs mb-1">
                           <span className="text-slate-300">{cat}</span>
                           <div className="flex items-center gap-2">
-                            <span className="text-white font-medium">${actual.toLocaleString()}</span>
+                            <span className="text-white font-medium">₹{actual.toLocaleString()}</span>
                             {budgeted > 0 && (
                               <span className={cn(
                                 'font-medium',
                                 over !== null && over > 0 ? 'text-red-400' : 'text-emerald-400'
                               )}>
-                                {over !== null && over > 0 ? `+$${over.toLocaleString()} over` : budgeted > 0 ? `$${(budgeted - actual).toLocaleString()} left` : ''}
+                                {over !== null && over > 0 ? `+₹${over.toLocaleString()} over` : budgeted > 0 ? `₹${(budgeted - actual).toLocaleString()} left` : ''}
                               </span>
                             )}
                           </div>

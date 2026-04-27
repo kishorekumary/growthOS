@@ -102,7 +102,7 @@ function AddGoalModal({ onAdd }: { onAdd: () => void }) {
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1.5">
-              <Label className="text-slate-300">Target amount ($)</Label>
+              <Label className="text-slate-300">Target amount (₹)</Label>
               <Input
                 type="number"
                 min="1"
@@ -180,7 +180,7 @@ function AddMoneyModal({ goal, onUpdate }: { goal: Goal; onUpdate: () => void })
         </DialogHeader>
         <div className="space-y-4">
           <p className="text-sm text-slate-400">
-            ${goal.current_amount.toLocaleString()} saved · ${remaining.toLocaleString()} remaining
+            ₹{goal.current_amount.toLocaleString()} saved · ₹{remaining.toLocaleString()} remaining
           </p>
           <div className="space-y-1.5">
             <Label className="text-slate-300">Amount to add ($)</Label>
@@ -277,7 +277,7 @@ export default function FinanceGoals() {
               <div>
                 <div className="flex items-center justify-between text-xs mb-1.5">
                   <span className="text-slate-400">
-                    ${goal.current_amount.toLocaleString()} of ${goal.target_amount.toLocaleString()}
+                    ₹{goal.current_amount.toLocaleString()} of ₹{goal.target_amount.toLocaleString()}
                   </span>
                   <span className="font-semibold text-white">{pct}%</span>
                 </div>
@@ -306,7 +306,7 @@ export default function FinanceGoals() {
             <div key={goal.id} className="rounded-xl border border-emerald-500/20 bg-emerald-500/5 px-4 py-3 flex items-center justify-between">
               <div>
                 <p className="text-sm font-medium text-slate-400 line-through">{goal.goal_name}</p>
-                <p className="text-xs text-emerald-400">✓ ${goal.target_amount.toLocaleString()} reached</p>
+                <p className="text-xs text-emerald-400">✓ ₹{goal.target_amount.toLocaleString()} reached</p>
               </div>
             </div>
           ))}
