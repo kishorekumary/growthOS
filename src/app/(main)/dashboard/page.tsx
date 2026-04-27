@@ -3,6 +3,7 @@ import { format, startOfWeek } from 'date-fns'
 import { Brain, Dumbbell, Wallet, BookOpen, ArrowRight, Flame, Trophy, TrendingUp, BookMarked } from 'lucide-react'
 import { createSupabaseServerClient } from '@/lib/supabase-server'
 import DailyGreetingCard from '@/components/shared/DailyGreetingCard'
+import DailyPractice from '@/components/shared/DailyPractice'
 
 export default async function DashboardPage() {
   const supabase = createSupabaseServerClient()
@@ -106,8 +107,13 @@ export default async function DashboardPage() {
       </div>
 
       {/* AI Daily Greeting */}
-      <div className="mb-8">
+      <div className="mb-6">
         <DailyGreetingCard firstName={firstName} />
+      </div>
+
+      {/* Daily Practice — pledge, affirmations, gratitude */}
+      <div className="mb-8">
+        <DailyPractice />
       </div>
 
       {/* Section cards — 2×2 grid */}
