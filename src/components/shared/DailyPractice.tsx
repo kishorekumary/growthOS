@@ -22,7 +22,7 @@ function PledgeCard({ text }: { text: string }) {
       <p className="flex items-center gap-2 text-xs font-semibold uppercase tracking-widest text-amber-400/80 mb-3">
         <ScrollText className="h-3.5 w-3.5" /> My Pledge
       </p>
-      <blockquote className="text-sm text-amber-100/90 leading-relaxed italic border-l-2 border-amber-500/40 pl-4">
+      <blockquote className="text-sm text-amber-100/90 leading-relaxed italic border-l-2 border-amber-500/40 pl-4 whitespace-pre-wrap">
         {text}
       </blockquote>
     </div>

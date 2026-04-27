@@ -112,14 +112,14 @@ export default async function DashboardPage() {
         <DailyGreetingCard firstName={firstName} />
       </div>
 
-      {/* Daily Practice — pledge, affirmations, gratitude */}
-      <div className="mb-8">
-        <DailyPractice />
-      </div>
-
       {/* Today's Tasks widget */}
       <div className="mb-6">
         <TodoWidget />
+      </div>
+
+      {/* Daily Practice — pledge, affirmations, gratitude */}
+      <div className="mb-8">
+        <DailyPractice />
       </div>
 
       {/* Section cards — 2×2 grid */}
