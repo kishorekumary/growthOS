@@ -117,11 +117,6 @@ export default async function DashboardPage() {
         <TodoWidget />
       </div>
 
-      {/* Daily Practice — pledge, affirmations, gratitude */}
-      <div className="mb-8">
-        <DailyPractice />
-      </div>
-
       {/* Section cards — 2×2 grid */}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         {sections.map(({ title, href, icon: Icon, gradient, border, iconBg, iconColor, stat, subStat, subIcon: SubIcon }) => (
@@ -156,6 +151,11 @@ export default async function DashboardPage() {
             </Link>
           </div>
         ))}
+      </div>
+
+      {/* Daily Practice — pledge, affirmations, gratitude */}
+      <div className="mt-8">
+        <DailyPractice />
       </div>
     </div>
   )
