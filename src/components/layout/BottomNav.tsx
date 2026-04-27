@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { LayoutDashboard, Brain, Dumbbell, Wallet, Target } from 'lucide-react'
+import { LayoutDashboard, CheckSquare, Dumbbell, Wallet, Target } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 const NAV_ITEMS = [
@@ -10,7 +10,7 @@ const NAV_ITEMS = [
   { href: '/fitness',     label: 'Fitness', icon: Dumbbell },
   { href: '/goals',       label: 'Goals',   icon: Target },
   { href: '/finance',     label: 'Finance', icon: Wallet },
-  { href: '/personality', label: 'Mind',    icon: Brain },
+  { href: '/todos',       label: 'Tasks',   icon: CheckSquare },
 ]
 
 export default function BottomNav() {

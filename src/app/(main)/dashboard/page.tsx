@@ -4,6 +4,7 @@ import { Brain, Dumbbell, Wallet, BookOpen, ArrowRight, Flame, Trophy, TrendingU
 import { createSupabaseServerClient } from '@/lib/supabase-server'
 import DailyGreetingCard from '@/components/shared/DailyGreetingCard'
 import DailyPractice from '@/components/shared/DailyPractice'
+import TodoWidget from '@/components/todos/TodoWidget'
 
 export default async function DashboardPage() {
   const supabase = createSupabaseServerClient()
@@ -114,6 +115,11 @@ export default async function DashboardPage() {
       {/* Daily Practice — pledge, affirmations, gratitude */}
       <div className="mb-8">
         <DailyPractice />
+      </div>
+
+      {/* Today's Tasks widget */}
+      <div className="mb-6">
+        <TodoWidget />
       </div>
 
       {/* Section cards — 2×2 grid */}
