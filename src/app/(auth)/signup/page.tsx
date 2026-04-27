@@ -34,6 +34,7 @@ export default function SignupPage() {
   const router = useRouter()
   const [isLoading, setIsLoading] = useState(false)
   const [serverError, setServerError] = useState<string | null>(null)
+  const [checkEmail, setCheckEmail] = useState(false)
 
   const {
     register,
@@ -49,7 +50,7 @@ export default function SignupPage() {
     setServerError(null)
     const supabase = createSupabaseBrowserClient()
 
-    const { error } = await supabase.auth.signUp({
+    const { data, error } = await supabase.auth.signUp({
       email: values.email,
       password: values.password,
       options: {
@@ -63,7 +64,31 @@ export default function SignupPage() {
       return
     }
 
-    router.push('/onboarding')
+    // session is null when Supabase requires email confirmation first
+    if (data.session) {
+      router.push('/onboarding')
+    } else {
+      setCheckEmail(true)
+      setIsLoading(false)
+    }
+  }
+
+  if (checkEmail) {
+    return (
+      <Card className="border-white/10 bg-white/5 text-white backdrop-blur-sm">
+        <CardHeader className="space-y-1">
+          <CardTitle className="text-xl text-white">Check your email</CardTitle>
+          <CardDescription className="text-slate-400">
+            We sent a confirmation link to your inbox. Click it to activate your account, then sign in.
+          </CardDescription>
+        </CardHeader>
+        <CardFooter className="justify-center">
+          <Link href="/login" className="text-sm text-purple-400 hover:text-purple-300 font-medium transition-colors">
+            Back to sign in
+          </Link>
+        </CardFooter>
+      </Card>
+    )
   }
 
   return (
