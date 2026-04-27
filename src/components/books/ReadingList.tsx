@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
-import { Loader2, Plus, Star, Sparkles, BookOpen } from 'lucide-react'
+import { Loader2, Plus, Star, Sparkles, BookOpen, AlertCircle } from 'lucide-react'
 import { createSupabaseBrowserClient } from '@/lib/supabase'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -10,8 +10,6 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger,
 } from '@/components/ui/dialog'
 import { cn } from '@/lib/utils'
-
-// ─── Types ────────────────────────────────────────────────────
 
 type Status = 'want_to_read' | 'reading' | 'completed'
 
@@ -27,8 +25,6 @@ interface Book {
 
 interface AiData { summary: string; lessons: string[] }
 
-// ─── Constants ───────────────────────────────────────────────
-
 const STATUS_TABS: { value: Status; label: string; icon: string }[] = [
   { value: 'want_to_read', label: 'Want to Read', icon: '📚' },
   { value: 'reading',      label: 'Reading',      icon: '📖' },
@@ -41,7 +37,7 @@ const STATUS_STYLES: Record<Status, string> = {
   completed:    'bg-emerald-500/20 text-emerald-300',
 }
 
-// ─── Helpers ─────────────────────────────────────────────────
+const GENRES = ['Self-Help', 'Business', 'Psychology', 'Philosophy', 'Science', 'Biography', 'History', 'Fiction', 'Productivity', 'Non-Fiction']
 
 function parseAi(raw: string | null): AiData | null {
   if (!raw) return null
@@ -62,14 +58,7 @@ function StarRating({ value, onChange }: { value: number | null; onChange: (v: n
           onMouseLeave={() => setHover(0)}
           className="transition-transform hover:scale-110"
         >
-          <Star
-            className={cn(
-              'h-5 w-5',
-              n <= (hover || value || 0)
-                ? 'fill-amber-400 text-amber-400'
-                : 'text-slate-600'
-            )}
-          />
+          <Star className={cn('h-5 w-5', n <= (hover || value || 0) ? 'fill-amber-400 text-amber-400' : 'text-slate-600')} />
         </button>
       ))}
     </div>
@@ -79,28 +68,44 @@ function StarRating({ value, onChange }: { value: number | null; onChange: (v: n
 // ─── Add Book Modal ───────────────────────────────────────────
 
 function AddBookModal({ onAdd }: { onAdd: () => void }) {
-  const [open, setOpen]   = useState(false)
-  const [title, setTitle] = useState('')
+  const [open, setOpen]     = useState(false)
+  const [title, setTitle]   = useState('')
   const [author, setAuthor] = useState('')
+  const [genre, setGenre]   = useState('')
   const [saving, setSaving] = useState(false)
-  const supabase = createSupabaseBrowserClient()
+  const [error, setError]   = useState<string | null>(null)
 
   async function handleAdd() {
     if (!title.trim()) return
     setSaving(true)
-    await supabase.from('reading_log').insert({
+    setError(null)
+    const supabase = createSupabaseBrowserClient()
+    const { data: { session } } = await supabase.auth.getSession()
+    if (!session?.user) {
+      setError('Not signed in. Please refresh and try again.')
+      setSaving(false)
+      return
+    }
+    const { error: insertError } = await supabase.from('reading_log').insert({
+      user_id:    session.user.id,
       book_title: title.trim(),
-      author: author.trim() || null,
-      status: 'want_to_read',
+      author:     author.trim() || null,
+      genre:      genre || null,
+      status:     'want_to_read',
     })
-    setTitle(''); setAuthor('')
+    if (insertError) {
+      setError(insertError.message)
+      setSaving(false)
+      return
+    }
+    setTitle(''); setAuthor(''); setGenre('')
     setSaving(false)
     setOpen(false)
     onAdd()
   }
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
+    <Dialog open={open} onOpenChange={v => { setOpen(v); if (!v) setError(null) }}>
       <DialogTrigger asChild>
         <Button size="sm" className="bg-violet-600 hover:bg-violet-700 text-white gap-1.5">
           <Plus className="h-4 w-4" /> Add Book
@@ -108,11 +113,11 @@ function AddBookModal({ onAdd }: { onAdd: () => void }) {
       </DialogTrigger>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>Add to Reading List</DialogTitle>
+          <DialogTitle>Add Book Manually</DialogTitle>
         </DialogHeader>
         <div className="space-y-4">
           <div className="space-y-1.5">
-            <Label className="text-slate-300">Book title</Label>
+            <Label className="text-slate-300">Book title *</Label>
             <Input
               autoFocus
               placeholder="e.g. Atomic Habits"
@@ -123,7 +128,7 @@ function AddBookModal({ onAdd }: { onAdd: () => void }) {
             />
           </div>
           <div className="space-y-1.5">
-            <Label className="text-slate-300">Author (optional)</Label>
+            <Label className="text-slate-300">Author</Label>
             <Input
               placeholder="e.g. James Clear"
               value={author}
@@ -132,13 +137,41 @@ function AddBookModal({ onAdd }: { onAdd: () => void }) {
               className="border-white/20 bg-white/5 text-white placeholder:text-slate-500 focus-visible:ring-violet-500"
             />
           </div>
+          <div className="space-y-1.5">
+            <Label className="text-slate-300">Genre</Label>
+            <div className="flex flex-wrap gap-1.5">
+              {GENRES.map(g => (
+                <button
+                  key={g}
+                  type="button"
+                  onClick={() => setGenre(genre === g ? '' : g)}
+                  className={cn(
+                    'rounded-full px-3 py-1 text-xs font-medium border transition-all',
+                    genre === g
+                      ? 'border-violet-500 bg-violet-500/20 text-white'
+                      : 'border-white/10 bg-white/5 text-slate-400 hover:border-white/20'
+                  )}
+                >
+                  {g}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {error && (
+            <div className="flex items-start gap-2 rounded-lg border border-red-500/20 bg-red-500/10 px-3 py-2">
+              <AlertCircle className="h-4 w-4 text-red-400 shrink-0 mt-0.5" />
+              <p className="text-xs text-red-400">{error}</p>
+            </div>
+          )}
+
           <Button
             className="w-full bg-violet-600 hover:bg-violet-700 text-white"
             onClick={handleAdd}
             disabled={saving || !title.trim()}
           >
             {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-            Add Book
+            Add to Reading List
           </Button>
         </div>
       </DialogContent>
@@ -148,23 +181,19 @@ function AddBookModal({ onAdd }: { onAdd: () => void }) {
 
 // ─── Book Detail Dialog ───────────────────────────────────────
 
-function BookDetailDialog({
-  book,
-  onUpdate,
-  onClose,
-}: {
-  book: Book
-  onUpdate: () => void
-  onClose: () => void
-}) {
+function BookDetailDialog({ book, onUpdate, onClose }: { book: Book; onUpdate: () => void; onClose: () => void }) {
   const [aiData, setAiData]       = useState<AiData | null>(parseAi(book.ai_summary))
   const [loadingAi, setLoadingAi] = useState(false)
   const [status, setStatus]       = useState<Status>(book.status)
   const [rating, setRating]       = useState<number | null>(book.rating)
   const [saving, setSaving]       = useState(false)
-  const supabase = createSupabaseBrowserClient()
 
-  async function getAiSummary() {
+  // Auto-fetch summary if not already cached
+  useEffect(() => {
+    if (!aiData && !loadingAi) fetchSummary()
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
+  async function fetchSummary() {
     setLoadingAi(true)
     const res = await fetch('/api/ai/book-summary', {
       method: 'POST',
@@ -172,23 +201,22 @@ function BookDetailDialog({
       body: JSON.stringify({ bookId: book.id, title: book.book_title, author: book.author }),
     })
     const data = await res.json()
-    setAiData({ summary: data.summary, lessons: data.lessons })
+    if (data.summary) setAiData({ summary: data.summary, lessons: data.lessons ?? [] })
     setLoadingAi(false)
   }
 
   async function saveChanges() {
     setSaving(true)
+    const supabase = createSupabaseBrowserClient()
     await supabase.from('reading_log')
       .update({
         status,
-        rating: status === 'completed' ? rating : null,
-        started_at: status === 'reading' && book.status === 'want_to_read'
-          ? new Date().toISOString().split('T')[0]
-          : undefined,
+        rating:      status === 'completed' ? rating : null,
+        started_at:  status === 'reading' && book.status === 'want_to_read'
+          ? new Date().toISOString().split('T')[0] : undefined,
         finished_at: status === 'completed' && book.status !== 'completed'
-          ? new Date().toISOString().split('T')[0]
-          : undefined,
-        updated_at: new Date().toISOString(),
+          ? new Date().toISOString().split('T')[0] : undefined,
+        updated_at:  new Date().toISOString(),
       })
       .eq('id', book.id)
     setSaving(false)
@@ -200,45 +228,63 @@ function BookDetailDialog({
     <DialogContent className="max-h-[85vh] overflow-y-auto">
       <DialogHeader>
         <DialogTitle className="pr-6">{book.book_title}</DialogTitle>
-        {book.author && <p className="text-sm text-slate-400">{book.author}</p>}
+        <div className="flex items-center gap-2 flex-wrap">
+          {book.author && <p className="text-sm text-slate-400">{book.author}</p>}
+          {book.genre && (
+            <span className="text-xs bg-violet-500/20 text-violet-300 px-2 py-0.5 rounded-full">
+              {book.genre}
+            </span>
+          )}
+        </div>
       </DialogHeader>
 
       <div className="space-y-5">
         {/* AI Summary */}
-        <div className="space-y-2">
-          {aiData ? (
+        <div className="rounded-xl border border-violet-500/20 bg-violet-500/5 p-4 space-y-3">
+          <p className="text-xs font-semibold text-violet-400 flex items-center gap-1.5">
+            <Sparkles className="h-3.5 w-3.5" /> Book Summary
+          </p>
+          {loadingAi ? (
+            <div className="space-y-2">
+              {[...Array(4)].map((_, i) => (
+                <div key={i} className={cn('h-3 rounded-full bg-white/10 animate-pulse', i === 3 ? 'w-2/3' : 'w-full')} />
+              ))}
+            </div>
+          ) : aiData ? (
             <>
               <p className="text-sm text-slate-300 leading-relaxed">{aiData.summary}</p>
               {aiData.lessons.length > 0 && (
-                <div className="space-y-1.5 pt-1">
+                <div className="space-y-1.5 pt-1 border-t border-white/5">
                   <p className="text-xs font-semibold text-violet-400">Key Lessons</p>
                   {aiData.lessons.map((lesson, i) => (
                     <div key={i} className="flex items-start gap-2 text-xs text-slate-300">
-                      <span className="text-violet-400 mt-0.5 shrink-0">{i + 1}.</span>
+                      <span className="text-violet-400 shrink-0 mt-0.5">{i + 1}.</span>
                       {lesson}
                     </div>
                   ))}
                 </div>
               )}
+              <button
+                onClick={fetchSummary}
+                className="text-xs text-slate-500 hover:text-slate-300 transition-colors"
+              >
+                Refresh summary
+              </button>
             </>
           ) : (
             <Button
               size="sm"
-              onClick={getAiSummary}
-              disabled={loadingAi}
+              onClick={fetchSummary}
               className="bg-violet-600/20 hover:bg-violet-600/30 text-violet-300 border border-violet-500/30 gap-1.5"
             >
-              {loadingAi
-                ? <><Loader2 className="h-3.5 w-3.5 animate-spin" /> Getting summary...</>
-                : <><Sparkles className="h-3.5 w-3.5" /> Get AI Summary & Lessons</>
-              }
+              <Sparkles className="h-3.5 w-3.5" /> Get Summary & Key Lessons
             </Button>
           )}
         </div>
 
         {/* Status */}
         <div className="space-y-1.5">
-          <Label className="text-slate-300 text-xs">Status</Label>
+          <Label className="text-slate-300 text-xs">Reading status</Label>
           <div className="grid grid-cols-3 gap-2">
             {STATUS_TABS.map(({ value, label, icon }) => (
               <button
@@ -258,10 +304,9 @@ function BookDetailDialog({
           </div>
         </div>
 
-        {/* Rating */}
         {status === 'completed' && (
           <div className="space-y-1.5">
-            <Label className="text-slate-300 text-xs">Your Rating</Label>
+            <Label className="text-slate-300 text-xs">Your rating</Label>
             <StarRating value={rating} onChange={setRating} />
           </div>
         )}
@@ -282,16 +327,19 @@ function BookDetailDialog({
 // ─── Main component ───────────────────────────────────────────
 
 export default function ReadingList() {
-  const [books, setBooks]         = useState<Book[]>([])
-  const [loading, setLoading]     = useState(true)
+  const [books, setBooks]               = useState<Book[]>([])
+  const [loading, setLoading]           = useState(true)
   const [activeStatus, setActiveStatus] = useState<Status>('want_to_read')
-  const [selected, setSelected]   = useState<Book | null>(null)
-  const supabase = createSupabaseBrowserClient()
+  const [selected, setSelected]         = useState<Book | null>(null)
 
   const fetchBooks = useCallback(async () => {
+    const supabase = createSupabaseBrowserClient()
+    const { data: { session } } = await supabase.auth.getSession()
+    if (!session?.user) { setLoading(false); return }
     const { data } = await supabase
       .from('reading_log')
-      .select('*')
+      .select('id, book_title, author, genre, status, rating, ai_summary')
+      .eq('user_id', session.user.id)
       .order('updated_at', { ascending: false })
     setBooks((data as Book[]) ?? [])
     setLoading(false)
@@ -317,7 +365,12 @@ export default function ReadingList() {
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
-        <h2 className="font-semibold text-white">My Reading List</h2>
+        <div>
+          <h2 className="font-semibold text-white">My Reading List</h2>
+          {books.length > 0 && (
+            <p className="text-xs text-slate-500 mt-0.5">{books.length} book{books.length !== 1 ? 's' : ''} tracked</p>
+          )}
+        </div>
         <AddBookModal onAdd={fetchBooks} />
       </div>
 
@@ -330,17 +383,12 @@ export default function ReadingList() {
             onClick={() => setActiveStatus(value)}
             className={cn(
               'flex-1 rounded-lg py-2 text-center text-xs font-medium transition-all',
-              activeStatus === value
-                ? 'bg-violet-600 text-white shadow-sm'
-                : 'text-slate-400 hover:text-white'
+              activeStatus === value ? 'bg-violet-600 text-white shadow-sm' : 'text-slate-400 hover:text-white'
             )}
           >
             {icon} {label}
             {counts[value] > 0 && (
-              <span className={cn(
-                'ml-1.5 rounded-full px-1.5 py-0.5 text-xs',
-                activeStatus === value ? 'bg-white/20' : 'bg-white/10'
-              )}>
+              <span className={cn('ml-1.5 rounded-full px-1.5 py-0.5 text-xs', activeStatus === value ? 'bg-white/20' : 'bg-white/10')}>
                 {counts[value]}
               </span>
             )}
@@ -353,6 +401,9 @@ export default function ReadingList() {
         <div className="rounded-xl border border-dashed border-white/10 p-8 text-center">
           <BookOpen className="h-8 w-8 text-violet-400/30 mx-auto mb-2" />
           <p className="text-slate-400 text-sm">No books here yet.</p>
+          <p className="text-slate-500 text-xs mt-1">
+            {activeStatus === 'want_to_read' ? 'Click "Add Book" to add one manually.' : 'Move a book to this status to see it here.'}
+          </p>
         </div>
       ) : (
         <div className="space-y-2">
@@ -361,7 +412,7 @@ export default function ReadingList() {
               key={book.id}
               type="button"
               onClick={() => setSelected(book)}
-              className="w-full text-left rounded-xl border border-white/10 bg-white/5 px-4 py-3.5 hover:border-white/20 hover:bg-white/8 transition-all"
+              className="w-full text-left rounded-xl border border-white/10 bg-white/5 px-4 py-3.5 hover:border-violet-500/30 hover:bg-violet-500/5 transition-all"
             >
               <div className="flex items-center gap-3">
                 <div className="h-10 w-8 rounded bg-gradient-to-br from-violet-600 to-violet-800 flex items-center justify-center shrink-0">
@@ -369,12 +420,15 @@ export default function ReadingList() {
                 </div>
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-medium text-white truncate">{book.book_title}</p>
-                  {book.author && <p className="text-xs text-slate-500 truncate">{book.author}</p>}
+                  <p className="text-xs text-slate-500 truncate">
+                    {book.author ?? 'Unknown author'}
+                    {book.genre ? ` · ${book.genre}` : ''}
+                  </p>
                 </div>
                 <div className="flex items-center gap-2 shrink-0">
-                  {book.genre && (
-                    <span className="hidden sm:block text-xs bg-white/10 text-slate-400 px-2 py-0.5 rounded-full">
-                      {book.genre}
+                  {book.ai_summary && (
+                    <span title="Summary available" className="text-violet-400">
+                      <Sparkles className="h-3.5 w-3.5" />
                     </span>
                   )}
                   {book.status === 'completed' && book.rating && (
@@ -384,9 +438,6 @@ export default function ReadingList() {
                       ))}
                     </div>
                   )}
-                  <span className={cn('text-xs px-2 py-0.5 rounded-full', STATUS_STYLES[book.status])}>
-                    {STATUS_TABS.find(t => t.value === book.status)?.icon}
-                  </span>
                 </div>
               </div>
             </button>

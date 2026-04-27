@@ -65,8 +65,6 @@ export default function BookDiscover() {
   const [loading, setLoading] = useState(false)
   const [saved, setSaved]   = useState<Set<number>>(new Set())
   const [saving, setSaving] = useState<number | null>(null)
-  const supabase = createSupabaseBrowserClient()
-
   async function getRecommendations() {
     setLoading(true)
     setSaved(new Set())
@@ -78,12 +76,17 @@ export default function BookDiscover() {
 
   async function saveBook(book: RecommendedBook, idx: number) {
     setSaving(idx)
-    await supabase.from('reading_log').insert({
-      book_title: book.title,
-      author: book.author,
-      genre: book.genre,
-      status: 'want_to_read',
-    })
+    const supabase = createSupabaseBrowserClient()
+    const { data: { session } } = await supabase.auth.getSession()
+    if (session?.user) {
+      await supabase.from('reading_log').insert({
+        user_id: session.user.id,
+        book_title: book.title,
+        author: book.author,
+        genre: book.genre,
+        status: 'want_to_read',
+      })
+    }
     setSaved(prev => new Set(Array.from(prev).concat(idx)))
     setSaving(null)
   }
