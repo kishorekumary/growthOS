@@ -10,7 +10,7 @@ const FinanceBudget    = dynamic(() => import('@/components/finance/FinanceBudge
 const FinanceGoals     = dynamic(() => import('@/components/finance/FinanceGoals'),     { loading: () => <Spinner /> })
 const SpendingChart    = dynamic(() => import('@/components/finance/SpendingChart'),    { loading: () => <Spinner /> })
 const ExpenseTracker   = dynamic(() => import('@/components/finance/ExpenseTracker'),   { loading: () => <Spinner /> })
-const FinanceCoach     = dynamic(() => import('@/components/finance/FinanceCoach'),     { loading: () => <Spinner /> })
+const AIChat           = dynamic(() => import('@/components/shared/AIChat'),            { loading: () => <Spinner /> })
 
 function Spinner() {
   return (
@@ -63,7 +63,7 @@ export default function FinancePage() {
           </div>
         </div>
       )}
-      {tab === 'Coach'    && <FinanceCoach />}
+      {tab === 'Coach'    && <AIChat section="finance" />}
     </div>
   )
 }

@@ -8,7 +8,7 @@ import { cn } from '@/lib/utils'
 const WorkoutPlan     = dynamic(() => import('@/components/fitness/WorkoutPlan'),     { loading: () => <Spinner /> })
 const WorkoutLogger   = dynamic(() => import('@/components/fitness/WorkoutLogger'),   { loading: () => <Spinner /> })
 const FitnessProgress = dynamic(() => import('@/components/fitness/FitnessProgress'), { loading: () => <Spinner /> })
-const FitnessCoach    = dynamic(() => import('@/components/fitness/FitnessCoach'),    { loading: () => <Spinner /> })
+const AIChat          = dynamic(() => import('@/components/shared/AIChat'),            { loading: () => <Spinner /> })
 
 function Spinner() {
   return (
@@ -53,7 +53,7 @@ export default function FitnessPage() {
       {tab === 'Plan'        && <WorkoutPlan />}
       {tab === 'Log Workout' && <WorkoutLogger />}
       {tab === 'Progress'    && <FitnessProgress />}
-      {tab === 'Coach'       && <FitnessCoach />}
+      {tab === 'Coach'       && <AIChat section="fitness" />}
     </div>
   )
 }

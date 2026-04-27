@@ -8,7 +8,7 @@ import { cn } from '@/lib/utils'
 const BookDiscover  = dynamic(() => import('@/components/books/BookDiscover'),  { loading: () => <Spinner /> })
 const ReadingList   = dynamic(() => import('@/components/books/ReadingList'),   { loading: () => <Spinner /> })
 const BookChallenge = dynamic(() => import('@/components/books/BookChallenge'), { loading: () => <Spinner /> })
-const BooksCoach    = dynamic(() => import('@/components/books/BooksCoach'),    { loading: () => <Spinner /> })
+const AIChat        = dynamic(() => import('@/components/shared/AIChat'),        { loading: () => <Spinner /> })
 
 function Spinner() {
   return (
@@ -53,7 +53,7 @@ export default function BooksPage() {
       {tab === 'Discover'   && <BookDiscover />}
       {tab === 'My List'    && <ReadingList />}
       {tab === 'Challenge'  && <BookChallenge />}
-      {tab === 'Coach'      && <BooksCoach />}
+      {tab === 'Coach'      && <AIChat section="books" />}
     </div>
   )
 }
