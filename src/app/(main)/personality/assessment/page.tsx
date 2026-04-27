@@ -51,11 +51,15 @@ export default function AssessmentPage() {
     setMbtiType(type)
 
     const supabase = createSupabaseBrowserClient()
-    await supabase.from('personality_assessments').insert({
-      mbti_type: type,
-      answers,
-      scores: { type },
-    })
+    const { data: { user } } = await supabase.auth.getUser()
+    if (user) {
+      await supabase.from('personality_assessments').insert({
+        user_id: user.id,
+        mbti_type: type,
+        answers,
+        scores: { type },
+      })
+    }
 
     setPhase('result')
     setInsightLoading(true)
