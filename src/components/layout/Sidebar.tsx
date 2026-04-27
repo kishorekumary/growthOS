@@ -14,7 +14,6 @@ const NAV_ITEMS = [
   { href: '/books',        label: 'Books',       icon: BookOpen },
   { href: '/goals',        label: 'Goals',       icon: Target },
   { href: '/todos',        label: 'Tasks',       icon: CheckSquare },
-  { href: '/settings',     label: 'Settings',    icon: Settings },
 ]
 
 interface SidebarProps {
@@ -53,7 +52,7 @@ export default function Sidebar({ userName, userEmail, avatarUrl }: SidebarProps
       </Link>
 
       {/* Nav */}
-      <nav className="flex-1 space-y-1 px-3 py-4">
+      <nav className="flex-1 overflow-y-auto space-y-1 px-3 py-4">
         {NAV_ITEMS.map(({ href, label, icon: Icon }) => {
           const active = pathname === href || pathname.startsWith(href + '/')
           return (
@@ -89,6 +88,18 @@ export default function Sidebar({ userName, userEmail, avatarUrl }: SidebarProps
             <p className="text-xs text-slate-500 truncate">{userEmail}</p>
           </div>
         </div>
+        <Link
+          href="/settings"
+          className={cn(
+            'flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors',
+            pathname === '/settings' || pathname.startsWith('/settings/')
+              ? 'bg-purple-600/20 text-purple-300'
+              : 'text-slate-400 hover:bg-white/5 hover:text-white'
+          )}
+        >
+          <Settings className="h-4 w-4 shrink-0" />
+          Settings
+        </Link>
         <button
           onClick={handleLogout}
           className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-slate-400 hover:bg-white/5 hover:text-white transition-colors"
