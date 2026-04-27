@@ -3,6 +3,7 @@ import { redirect } from 'next/navigation'
 import { createSupabaseServerClient } from '@/lib/supabase-server'
 import Sidebar from '@/components/layout/Sidebar'
 import BottomNav from '@/components/layout/BottomNav'
+import ServiceWorkerRegister from '@/components/layout/ServiceWorkerRegister'
 
 export default async function MainLayout({ children }: { children: React.ReactNode }) {
   const supabase = createSupabaseServerClient()
@@ -40,6 +41,7 @@ export default async function MainLayout({ children }: { children: React.ReactNo
         {children}
       </main>
       <BottomNav />
+      <ServiceWorkerRegister />
     </div>
   )
 }
