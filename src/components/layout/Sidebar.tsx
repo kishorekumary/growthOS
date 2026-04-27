@@ -52,25 +52,43 @@ export default function Sidebar({ userName, userEmail, avatarUrl }: SidebarProps
       </Link>
 
       {/* Nav */}
-      <nav className="flex-1 overflow-y-auto space-y-1 px-3 py-4">
-        {NAV_ITEMS.map(({ href, label, icon: Icon }) => {
-          const active = pathname === href || pathname.startsWith(href + '/')
-          return (
-            <Link
-              key={href}
-              href={href}
-              className={cn(
-                'flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors',
-                active
-                  ? 'bg-purple-600/20 text-purple-300'
-                  : 'text-slate-400 hover:bg-white/5 hover:text-white'
-              )}
-            >
-              <Icon className="h-4 w-4 shrink-0" />
-              {label}
-            </Link>
-          )
-        })}
+      <nav className="flex-1 overflow-y-auto px-3 py-4">
+        <div className="space-y-1">
+          {NAV_ITEMS.map(({ href, label, icon: Icon }) => {
+            const active = pathname === href || pathname.startsWith(href + '/')
+            return (
+              <Link
+                key={href}
+                href={href}
+                className={cn(
+                  'flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors',
+                  active
+                    ? 'bg-purple-600/20 text-purple-300'
+                    : 'text-slate-400 hover:bg-white/5 hover:text-white'
+                )}
+              >
+                <Icon className="h-4 w-4 shrink-0" />
+                {label}
+              </Link>
+            )
+          })}
+        </div>
+
+        {/* Settings — pinned at bottom of nav, above user section */}
+        <div className="mt-4 pt-4 border-t border-white/10">
+          <Link
+            href="/settings"
+            className={cn(
+              'flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors',
+              pathname === '/settings' || pathname.startsWith('/settings/')
+                ? 'bg-purple-600/20 text-purple-300'
+                : 'text-slate-400 hover:bg-white/5 hover:text-white'
+            )}
+          >
+            <Settings className="h-4 w-4 shrink-0" />
+            Settings
+          </Link>
+        </div>
       </nav>
 
       {/* User + logout */}
@@ -88,18 +106,6 @@ export default function Sidebar({ userName, userEmail, avatarUrl }: SidebarProps
             <p className="text-xs text-slate-500 truncate">{userEmail}</p>
           </div>
         </div>
-        <Link
-          href="/settings"
-          className={cn(
-            'flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors',
-            pathname === '/settings' || pathname.startsWith('/settings/')
-              ? 'bg-purple-600/20 text-purple-300'
-              : 'text-slate-400 hover:bg-white/5 hover:text-white'
-          )}
-        >
-          <Settings className="h-4 w-4 shrink-0" />
-          Settings
-        </Link>
         <button
           onClick={handleLogout}
           className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-slate-400 hover:bg-white/5 hover:text-white transition-colors"
