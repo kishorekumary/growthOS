@@ -1,4 +1,5 @@
 import Link from 'next/link'
+import { Settings } from 'lucide-react'
 import { redirect } from 'next/navigation'
 import { createSupabaseServerClient } from '@/lib/supabase-server'
 import Sidebar from '@/components/layout/Sidebar'
@@ -26,7 +27,7 @@ export default async function MainLayout({ children }: { children: React.ReactNo
       />
 
       {/* Mobile top bar — hidden on desktop where sidebar is shown */}
-      <header className="fixed top-0 left-0 right-0 z-40 flex h-14 items-center border-b border-white/10 bg-slate-950/95 backdrop-blur-sm px-4 md:hidden">
+      <header className="fixed top-0 left-0 right-0 z-40 flex h-14 items-center justify-between border-b border-white/10 bg-slate-950/95 backdrop-blur-sm px-4 md:hidden">
         <Link href="/dashboard" className="flex items-center gap-2 hover:opacity-80 transition-opacity">
           <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-purple-600/20 border border-purple-500/30">
             <span className="text-xs">🌱</span>
@@ -34,6 +35,9 @@ export default async function MainLayout({ children }: { children: React.ReactNo
           <span className="text-base font-bold text-white tracking-tight">
             Growth<span className="text-purple-400">OS</span>
           </span>
+        </Link>
+        <Link href="/settings" className="flex h-8 w-8 items-center justify-center rounded-lg text-slate-400 hover:text-white hover:bg-white/5 transition-colors">
+          <Settings className="h-4 w-4" />
         </Link>
       </header>
 
