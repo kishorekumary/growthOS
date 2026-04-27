@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
-import { Flame, Plus, Trash2, Check, Loader2 } from 'lucide-react'
+import { Flame, Plus, Trash2, Check, Loader2, AlertCircle, RefreshCw } from 'lucide-react'
 import { createSupabaseBrowserClient } from '@/lib/supabase'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -10,8 +10,6 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger,
 } from '@/components/ui/dialog'
 import { cn } from '@/lib/utils'
-
-// ─── Types ────────────────────────────────────────────────────
 
 type Category = 'mindset' | 'social' | 'productivity'
 type Frequency = 'daily' | 'weekly'
@@ -26,8 +24,6 @@ interface Habit {
   last_done_at: string | null
 }
 
-// ─── Constants ────────────────────────────────────────────────
-
 const CATEGORY_STYLES: Record<Category, { label: string; badge: string }> = {
   mindset:      { label: '🧠 Mindset',      badge: 'bg-violet-500/20 text-violet-300' },
   social:       { label: '🤝 Social',       badge: 'bg-sky-500/20 text-sky-300' },
@@ -39,8 +35,6 @@ const FREQUENCY_LABELS: Record<Frequency, string> = {
   weekly: 'Weekly',
 }
 
-// ─── Helpers ─────────────────────────────────────────────────
-
 function todayStr() {
   return new Date().toISOString().split('T')[0]
 }
@@ -48,7 +42,6 @@ function todayStr() {
 function isDoneToday(habit: Habit): boolean {
   if (!habit.last_done_at) return false
   if (habit.frequency === 'daily') return habit.last_done_at.startsWith(todayStr())
-  // weekly: done if last_done_at is within the current ISO week
   const last = new Date(habit.last_done_at)
   const now  = new Date()
   const startOfWeek = new Date(now)
@@ -64,39 +57,56 @@ function computeStreak(current: number, lastDoneAt: string | null, frequency: Fr
   const today = new Date()
   today.setHours(0, 0, 0, 0)
   const diffDays = Math.round((today.getTime() - last.getTime()) / 86400000)
-
   if (frequency === 'daily') {
     if (diffDays === 0) return current
     if (diffDays === 1) return current + 1
     return 1
   }
-  // weekly: continue streak if within 7 days
   if (diffDays === 0) return current
   if (diffDays <= 7) return current + 1
   return 1
 }
 
-// ─── Add Habit Modal ─────────────────────────────────────────
+// ─── Add Habit Modal ──────────────────────────────────────────
 
 function AddHabitModal({ onAdd }: { onAdd: () => void }) {
-  const [open, setOpen] = useState(false)
-  const [name, setName] = useState('')
+  const [open, setOpen]         = useState(false)
+  const [name, setName]         = useState('')
   const [category, setCategory] = useState<Category>('mindset')
   const [frequency, setFrequency] = useState<Frequency>('daily')
-  const [saving, setSaving] = useState(false)
-  const supabase = createSupabaseBrowserClient()
+  const [saving, setSaving]     = useState(false)
+  const [error, setError]       = useState<string | null>(null)
 
   async function handleAdd() {
     if (!name.trim()) return
     setSaving(true)
-    const { data: { user } } = await supabase.auth.getUser()
-    if (!user) { setSaving(false); return }
-    await supabase.from('personality_habits').insert({
-      user_id: user.id,
-      habit_name: name.trim(),
-      category,
-      frequency,
-    })
+    setError(null)
+
+    const supabase = createSupabaseBrowserClient()
+
+    // Use getSession (local cache, no network) to get the user id
+    const { data: { session }, error: sessionError } = await supabase.auth.getSession()
+    if (sessionError || !session?.user) {
+      setError('Not signed in. Please refresh and try again.')
+      setSaving(false)
+      return
+    }
+
+    const { error: insertError } = await supabase
+      .from('personality_habits')
+      .insert({
+        user_id:    session.user.id,
+        habit_name: name.trim(),
+        category,
+        frequency,
+      })
+
+    if (insertError) {
+      setError(insertError.message)
+      setSaving(false)
+      return
+    }
+
     setName('')
     setCategory('mindset')
     setFrequency('daily')
@@ -106,12 +116,9 @@ function AddHabitModal({ onAdd }: { onAdd: () => void }) {
   }
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
+    <Dialog open={open} onOpenChange={(v) => { setOpen(v); if (!v) setError(null) }}>
       <DialogTrigger asChild>
-        <Button
-          size="sm"
-          className="bg-violet-600 hover:bg-violet-700 text-white gap-1.5"
-        >
+        <Button size="sm" className="bg-violet-600 hover:bg-violet-700 text-white gap-1.5">
           <Plus className="h-4 w-4" /> Add Habit
         </Button>
       </DialogTrigger>
@@ -122,7 +129,6 @@ function AddHabitModal({ onAdd }: { onAdd: () => void }) {
         </DialogHeader>
 
         <div className="space-y-4">
-          {/* Name */}
           <div className="space-y-1.5">
             <Label htmlFor="habit-name" className="text-slate-300">Habit name</Label>
             <Input
@@ -136,7 +142,6 @@ function AddHabitModal({ onAdd }: { onAdd: () => void }) {
             />
           </div>
 
-          {/* Category */}
           <div className="space-y-1.5">
             <Label className="text-slate-300">Category</Label>
             <div className="grid grid-cols-3 gap-2">
@@ -158,7 +163,6 @@ function AddHabitModal({ onAdd }: { onAdd: () => void }) {
             </div>
           </div>
 
-          {/* Frequency */}
           <div className="space-y-1.5">
             <Label className="text-slate-300">Frequency</Label>
             <div className="grid grid-cols-2 gap-2">
@@ -180,6 +184,13 @@ function AddHabitModal({ onAdd }: { onAdd: () => void }) {
             </div>
           </div>
 
+          {error && (
+            <div className="flex items-start gap-2 rounded-lg border border-red-500/20 bg-red-500/10 px-3 py-2">
+              <AlertCircle className="h-4 w-4 text-red-400 shrink-0 mt-0.5" />
+              <p className="text-xs text-red-400">{error}</p>
+            </div>
+          )}
+
           <Button
             className="w-full bg-violet-600 hover:bg-violet-700 text-white"
             onClick={handleAdd}
@@ -197,17 +208,34 @@ function AddHabitModal({ onAdd }: { onAdd: () => void }) {
 // ─── Main component ───────────────────────────────────────────
 
 export default function HabitTracker() {
-  const [habits, setHabits] = useState<Habit[]>([])
-  const [loading, setLoading] = useState(true)
+  const [habits, setHabits]     = useState<Habit[]>([])
+  const [loading, setLoading]   = useState(true)
+  const [fetchError, setFetchError] = useState<string | null>(null)
   const [markingId, setMarkingId] = useState<string | null>(null)
-  const supabase = createSupabaseBrowserClient()
 
   const fetchHabits = useCallback(async () => {
+    setFetchError(null)
+    const supabase = createSupabaseBrowserClient()
+
+    const { data: { session } } = await supabase.auth.getSession()
+    if (!session?.user) {
+      setFetchError('No active session — please sign out and sign in again.')
+      setLoading(false)
+      return
+    }
+
     const { data, error } = await supabase
       .from('personality_habits')
       .select('id, habit_name, category, frequency, streak_count, longest_streak, last_done_at')
+      .eq('user_id', session.user.id)
       .order('created_at', { ascending: true })
-    if (error) console.error('[HabitTracker] fetch error:', error)
+
+    if (error) {
+      setFetchError(error.message)
+      setLoading(false)
+      return
+    }
+
     setHabits((data as Habit[]) ?? [])
     setLoading(false)
   }, [])
@@ -216,15 +244,16 @@ export default function HabitTracker() {
 
   async function markDone(habit: Habit) {
     if (isDoneToday(habit) || markingId) return
+    const supabase = createSupabaseBrowserClient()
     setMarkingId(habit.id)
     const newStreak = computeStreak(habit.streak_count, habit.last_done_at, habit.frequency)
     await supabase
       .from('personality_habits')
       .update({
-        streak_count: newStreak,
+        streak_count:   newStreak,
         longest_streak: Math.max(newStreak, habit.longest_streak),
-        last_done_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
+        last_done_at:   new Date().toISOString(),
+        updated_at:     new Date().toISOString(),
       })
       .eq('id', habit.id)
     setMarkingId(null)
@@ -232,6 +261,7 @@ export default function HabitTracker() {
   }
 
   async function deleteHabit(id: string) {
+    const supabase = createSupabaseBrowserClient()
     await supabase.from('personality_habits').delete().eq('id', id)
     setHabits((prev) => prev.filter((h) => h.id !== id))
   }
@@ -244,12 +274,26 @@ export default function HabitTracker() {
     )
   }
 
-  const doneToday  = habits.filter(isDoneToday).length
-  const topStreak  = habits.reduce((m, h) => Math.max(m, h.streak_count), 0)
+  if (fetchError) {
+    return (
+      <div className="rounded-xl border border-red-500/20 bg-red-500/10 p-6 text-center space-y-3">
+        <AlertCircle className="h-8 w-8 text-red-400 mx-auto" />
+        <p className="text-sm text-red-400">{fetchError}</p>
+        <button
+          onClick={fetchHabits}
+          className="inline-flex items-center gap-1.5 text-xs text-slate-400 hover:text-white transition-colors"
+        >
+          <RefreshCw className="h-3.5 w-3.5" /> Retry
+        </button>
+      </div>
+    )
+  }
+
+  const doneToday = habits.filter(isDoneToday).length
+  const topStreak = habits.reduce((m, h) => Math.max(m, h.streak_count), 0)
 
   return (
     <div className="space-y-4">
-      {/* Header */}
       <div className="flex items-center justify-between">
         <div>
           <h2 className="font-semibold text-white">Habit Tracker</h2>
@@ -263,7 +307,6 @@ export default function HabitTracker() {
         <AddHabitModal onAdd={fetchHabits} />
       </div>
 
-      {/* Empty state */}
       {habits.length === 0 && (
         <div className="rounded-xl border border-dashed border-white/10 p-10 text-center">
           <Flame className="h-10 w-10 text-orange-400/40 mx-auto mb-3" />
@@ -272,12 +315,10 @@ export default function HabitTracker() {
         </div>
       )}
 
-      {/* Habit list */}
       <div className="space-y-2">
         {habits.map((habit) => {
           const done = isDoneToday(habit)
           const cat  = CATEGORY_STYLES[habit.category] ?? CATEGORY_STYLES.mindset
-
           return (
             <div
               key={habit.id}
@@ -288,7 +329,6 @@ export default function HabitTracker() {
                   : 'border-white/10 bg-white/5 hover:border-white/20'
               )}
             >
-              {/* Checkbox */}
               <button
                 onClick={() => markDone(habit)}
                 disabled={done || markingId === habit.id}
@@ -306,7 +346,6 @@ export default function HabitTracker() {
                 }
               </button>
 
-              {/* Info */}
               <div className="flex-1 min-w-0 space-y-0.5">
                 <p className={cn(
                   'text-sm font-medium truncate',
@@ -324,7 +363,6 @@ export default function HabitTracker() {
                 </div>
               </div>
 
-              {/* Streak badge */}
               {habit.streak_count > 0 && (
                 <div className="flex items-center gap-1 shrink-0">
                   <span className="text-orange-400">🔥</span>
@@ -335,7 +373,6 @@ export default function HabitTracker() {
                 </div>
               )}
 
-              {/* Delete */}
               <button
                 onClick={() => deleteHabit(habit.id)}
                 aria-label="Delete habit"

@@ -2,12 +2,10 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import { format } from 'date-fns'
-import { Sparkles, Loader2, Save, ChevronDown, ChevronUp } from 'lucide-react'
+import { Sparkles, Loader2, Save, ChevronDown, ChevronUp, AlertCircle } from 'lucide-react'
 import { createSupabaseBrowserClient } from '@/lib/supabase'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
-
-// ─── Types ────────────────────────────────────────────────────
 
 interface JournalEntry {
   id: string
@@ -17,17 +15,11 @@ interface JournalEntry {
   ai_feedback: string | null
 }
 
-// ─── Constants ────────────────────────────────────────────────
-
 const MOOD_EMOJIS = ['😔', '😟', '😕', '😐', '🙂', '😊', '😄', '😁', '🤩', '🥳']
-
-// ─── Past Entries ─────────────────────────────────────────────
 
 function PastEntries({ entries }: { entries: JournalEntry[] }) {
   const [expanded, setExpanded] = useState<string | null>(null)
-
   if (entries.length === 0) return null
-
   return (
     <div className="space-y-2">
       <h3 className="text-xs font-semibold uppercase tracking-wider text-slate-500">Past Entries</h3>
@@ -39,27 +31,20 @@ function PastEntries({ entries }: { entries: JournalEntry[] }) {
             className="w-full flex items-center justify-between px-4 py-3 text-left hover:bg-white/5 transition-colors"
           >
             <div className="flex items-center gap-3">
-              {entry.mood && (
-                <span className="text-lg">{MOOD_EMOJIS[entry.mood - 1]}</span>
-              )}
+              {entry.mood && <span className="text-lg">{MOOD_EMOJIS[entry.mood - 1]}</span>}
               <span className="text-sm font-medium text-white">
                 {format(new Date(entry.entry_date + 'T12:00:00'), 'EEEE, MMM d')}
               </span>
-              {entry.mood && (
-                <span className="text-xs text-slate-500">{entry.mood}/10</span>
-              )}
+              {entry.mood && <span className="text-xs text-slate-500">{entry.mood}/10</span>}
             </div>
             {expanded === entry.id
               ? <ChevronUp className="h-4 w-4 text-slate-500 shrink-0" />
               : <ChevronDown className="h-4 w-4 text-slate-500 shrink-0" />
             }
           </button>
-
           {expanded === entry.id && (
             <div className="px-4 pb-4 space-y-3 border-t border-white/5 pt-3">
-              <p className="text-sm text-slate-300 whitespace-pre-wrap leading-relaxed">
-                {entry.content}
-              </p>
+              <p className="text-sm text-slate-300 whitespace-pre-wrap leading-relaxed">{entry.content}</p>
               {entry.ai_feedback && (
                 <div className="rounded-lg border border-violet-500/20 bg-violet-500/5 px-3 py-2.5">
                   <p className="text-xs font-semibold text-violet-400 mb-1 flex items-center gap-1.5">
@@ -76,39 +61,46 @@ function PastEntries({ entries }: { entries: JournalEntry[] }) {
   )
 }
 
-// ─── Main component ───────────────────────────────────────────
-
 export default function Journal() {
   const today = new Date().toISOString().split('T')[0]
 
-  const [todayEntry, setTodayEntry]     = useState<JournalEntry | null>(null)
-  const [content, setContent]           = useState('')
-  const [mood, setMood]                 = useState(7)
-  const [pastEntries, setPastEntries]   = useState<JournalEntry[]>([])
-  const [loading, setLoading]           = useState(true)
-  const [saving, setSaving]             = useState(false)
+  const [todayEntry, setTodayEntry]           = useState<JournalEntry | null>(null)
+  const [content, setContent]                 = useState('')
+  const [mood, setMood]                       = useState(7)
+  const [pastEntries, setPastEntries]         = useState<JournalEntry[]>([])
+  const [loading, setLoading]                 = useState(true)
+  const [saving, setSaving]                   = useState(false)
+  const [saveError, setSaveError]             = useState<string | null>(null)
   const [loadingFeedback, setLoadingFeedback] = useState(false)
-  const [feedback, setFeedback]         = useState<string | null>(null)
-  const [showPast, setShowPast]         = useState(false)
-
-  const supabase = createSupabaseBrowserClient()
+  const [feedback, setFeedback]               = useState<string | null>(null)
+  const [showPast, setShowPast]               = useState(false)
 
   const fetchData = useCallback(async () => {
-    const [{ data: todayData, error: e1 }, { data: past, error: e2 }] = await Promise.all([
+    const supabase = createSupabaseBrowserClient()
+
+    const { data: { session } } = await supabase.auth.getSession()
+    if (!session?.user) {
+      setLoading(false)
+      return
+    }
+    const userId = session.user.id
+
+    const [{ data: todayData }, { data: past }] = await Promise.all([
       supabase
         .from('journal_entries')
         .select('*')
+        .eq('user_id', userId)
         .eq('entry_date', today)
         .maybeSingle(),
       supabase
         .from('journal_entries')
         .select('id, entry_date, content, mood, ai_feedback')
+        .eq('user_id', userId)
         .neq('entry_date', today)
         .order('entry_date', { ascending: false })
         .limit(10),
     ])
-    if (e1) console.error('[Journal] fetch today error:', e1)
-    if (e2) console.error('[Journal] fetch past error:', e2)
+
     if (todayData) {
       setTodayEntry(todayData)
       setContent(todayData.content ?? '')
@@ -124,25 +116,29 @@ export default function Journal() {
   async function saveEntry() {
     if (!content.trim()) return
     setSaving(true)
+    setSaveError(null)
+    const supabase = createSupabaseBrowserClient()
 
     if (todayEntry) {
-      const { data } = await supabase
+      const { data, error } = await supabase
         .from('journal_entries')
         .update({ content, mood, updated_at: new Date().toISOString() })
         .eq('id', todayEntry.id)
         .select()
         .single()
-      if (data) setTodayEntry(data)
+      if (error) setSaveError(error.message)
+      else if (data) setTodayEntry(data)
     } else {
-      const { data: { user } } = await supabase.auth.getUser()
-      if (user) {
-        const { data } = await supabase
-          .from('journal_entries')
-          .insert({ user_id: user.id, entry_date: today, content, mood })
-          .select()
-          .single()
-        if (data) { setTodayEntry(data); fetchData() }
-      }
+      const { data: { session } } = await supabase.auth.getSession()
+      if (!session?.user) { setSaveError('Not signed in'); setSaving(false); return }
+
+      const { data, error } = await supabase
+        .from('journal_entries')
+        .insert({ user_id: session.user.id, entry_date: today, content, mood })
+        .select()
+        .single()
+      if (error) setSaveError(error.message)
+      else if (data) { setTodayEntry(data); fetchData() }
     }
     setSaving(false)
   }
@@ -150,14 +146,16 @@ export default function Journal() {
   async function getAiFeedback() {
     if (!content.trim()) return
     setLoadingFeedback(true)
+    const supabase = createSupabaseBrowserClient()
 
     let entryId = todayEntry?.id
     if (!entryId) {
-      const { data: { user } } = await supabase.auth.getUser()
-      if (!user) { setLoadingFeedback(false); return }
+      const { data: { session } } = await supabase.auth.getSession()
+      if (!session?.user) { setLoadingFeedback(false); return }
+
       const { data } = await supabase
         .from('journal_entries')
-        .upsert({ user_id: user.id, entry_date: today, content, mood })
+        .upsert({ user_id: session.user.id, entry_date: today, content, mood })
         .select()
         .single()
       if (data) { setTodayEntry(data); entryId = data.id }
@@ -183,7 +181,6 @@ export default function Journal() {
 
   return (
     <div className="space-y-5">
-      {/* Today header */}
       <div className="flex items-center justify-between">
         <div>
           <h2 className="font-semibold text-white">Journal</h2>
@@ -203,9 +200,7 @@ export default function Journal() {
         )}
       </div>
 
-      {/* Entry card */}
       <div className="rounded-xl border border-white/10 bg-white/5 p-5 space-y-4">
-        {/* Mood selector */}
         <div className="space-y-2">
           <div className="flex items-center justify-between">
             <p className="text-xs font-medium text-slate-400">How are you feeling?</p>
@@ -237,7 +232,6 @@ export default function Journal() {
           </div>
         </div>
 
-        {/* Text area */}
         <textarea
           value={content}
           onChange={(e) => setContent(e.target.value)}
@@ -246,7 +240,13 @@ export default function Journal() {
           className="w-full rounded-lg border border-white/10 bg-white/5 px-4 py-3 text-sm text-white placeholder:text-slate-500 resize-none focus:outline-none focus:ring-2 focus:ring-violet-500 leading-relaxed"
         />
 
-        {/* Actions */}
+        {saveError && (
+          <div className="flex items-start gap-2 rounded-lg border border-red-500/20 bg-red-500/10 px-3 py-2">
+            <AlertCircle className="h-4 w-4 text-red-400 shrink-0 mt-0.5" />
+            <p className="text-xs text-red-400">{saveError}</p>
+          </div>
+        )}
+
         <div className="flex gap-2">
           <Button
             variant="outline"
@@ -275,7 +275,6 @@ export default function Journal() {
         </div>
       </div>
 
-      {/* AI Feedback */}
       {feedback && (
         <div className="rounded-xl border border-violet-500/20 bg-gradient-to-br from-violet-500/10 to-violet-500/5 p-5">
           <p className="text-xs font-semibold text-violet-400 mb-2 flex items-center gap-1.5">
@@ -285,7 +284,6 @@ export default function Journal() {
         </div>
       )}
 
-      {/* Past entries */}
       {showPast && <PastEntries entries={pastEntries} />}
     </div>
   )
