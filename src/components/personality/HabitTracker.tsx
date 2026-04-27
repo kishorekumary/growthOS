@@ -89,7 +89,10 @@ function AddHabitModal({ onAdd }: { onAdd: () => void }) {
   async function handleAdd() {
     if (!name.trim()) return
     setSaving(true)
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) { setSaving(false); return }
     await supabase.from('personality_habits').insert({
+      user_id: user.id,
       habit_name: name.trim(),
       category,
       frequency,
