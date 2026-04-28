@@ -100,35 +100,40 @@ export default function TodoList() {
     if (!newTitle.trim() || saving) return
     setSaving(true)
     const supabase = createSupabaseBrowserClient()
-    const { data: { session } } = await supabase.auth.getSession()
-    if (!session?.user) { setSaving(false); return }
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) { setSaving(false); return }
+
+    const capturedDate = newDate
+
     const { data } = await supabase
       .from('user_todos')
       .insert({
-        user_id:  session.user.id,
+        user_id:  user.id,
         title:    newTitle.trim(),
         notes:    newNotes.trim() || null,
         due_date: newDate || null,
       })
       .select()
       .single()
-    if (data) {
-      setTodos(prev => [data as Todo, ...prev])
-      if (newDate) {
-        const d = parseISO(newDate)
-        if (isAfter(d, addDays(startOfDay(new Date()), 7))) {
-          setFilter('all')
-        } else if (isAfter(d, endOfDay(new Date()))) {
-          setFilter('week')
-        }
-      }
-    }
+
     setNewTitle('')
     setNewDate('')
     setNewNotes('')
     setAdding(false)
     setSaving(false)
-    fetchTodos(true)
+
+    if (data) {
+      // Optimistic: insert returned the row, add it directly — no re-fetch needed.
+      setTodos(prev => [data as Todo, ...prev])
+      if (capturedDate) {
+        const d = parseISO(capturedDate)
+        if (isAfter(d, addDays(startOfDay(new Date()), 7))) setFilter('all')
+        else if (isAfter(d, endOfDay(new Date()))) setFilter('week')
+      }
+    } else {
+      // SELECT after INSERT returned nothing (RLS gap or transient error) — reload from DB.
+      fetchTodos()
+    }
   }
 
   async function handleComplete(id: string) {

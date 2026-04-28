@@ -45,13 +45,13 @@ export default function TodoWidget() {
     if (!newTitle.trim() || saving) return
     setSaving(true)
     const supabase = createSupabaseBrowserClient()
-    const { data: { session } } = await supabase.auth.getSession()
-    if (!session?.user) { setSaving(false); return }
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) { setSaving(false); return }
     const todayStr = format(new Date(), 'yyyy-MM-dd')
     const { data } = await supabase
       .from('user_todos')
       .insert({
-        user_id:  session.user.id,
+        user_id:  user.id,
         title:    newTitle.trim(),
         due_date: todayStr,
       })
@@ -59,7 +59,11 @@ export default function TodoWidget() {
       .single()
     setNewTitle('')
     setSaving(false)
-    fetchTodos()
+    if (data) {
+      setTodos(prev => [data as Todo, ...prev])
+    } else {
+      fetchTodos()
+    }
   }
 
   async function handleComplete(id: string) {
