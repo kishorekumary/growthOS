@@ -2,6 +2,14 @@ import { createServerClient, type CookieOptions } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
 
 export async function middleware(request: NextRequest) {
+  // If Supabase redirected a PKCE code to the wrong path (e.g. /**), forward it to the handler
+  const code = request.nextUrl.searchParams.get('code')
+  if (code && request.nextUrl.pathname !== '/auth/callback') {
+    const callbackUrl = new URL('/auth/callback', request.url)
+    callbackUrl.search = request.nextUrl.search
+    return NextResponse.redirect(callbackUrl)
+  }
+
   let response = NextResponse.next({
     request: { headers: request.headers },
   })
