@@ -112,7 +112,17 @@ export default function TodoList() {
       })
       .select()
       .single()
-    if (data) setTodos(prev => [data as Todo, ...prev])
+    if (data) {
+      setTodos(prev => [data as Todo, ...prev])
+      if (newDate) {
+        const d = parseISO(newDate)
+        if (isAfter(d, addDays(startOfDay(new Date()), 7))) {
+          setFilter('all')
+        } else if (isAfter(d, endOfDay(new Date()))) {
+          setFilter('week')
+        }
+      }
+    }
     setNewTitle('')
     setNewDate('')
     setNewNotes('')
