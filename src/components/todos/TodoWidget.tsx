@@ -23,13 +23,10 @@ export default function TodoWidget() {
 
   const fetchTodos = useCallback(async () => {
     const supabase = createSupabaseBrowserClient()
-    const { data: { session } } = await supabase.auth.getSession()
-    if (!session?.user) { setLoading(false); return }
     const todayStr = format(new Date(), 'yyyy-MM-dd')
     const { data } = await supabase
       .from('user_todos')
       .select('id, title, notes, due_date, is_completed')
-      .eq('user_id', session.user.id)
       .eq('is_completed', false)
       .or(`due_date.is.null,due_date.lte.${todayStr}`)
       .order('due_date', { ascending: true, nullsFirst: true })

@@ -67,12 +67,9 @@ export default function TodoList() {
   const fetchTodos = useCallback(async (silent = false) => {
     if (!silent) setLoading(true)
     const supabase = createSupabaseBrowserClient()
-    const { data: { session } } = await supabase.auth.getSession()
-    if (!session?.user) { if (!silent) setLoading(false); return }
     const { data } = await supabase
       .from('user_todos')
       .select('*')
-      .eq('user_id', session.user.id)
       .order('due_date', { ascending: true, nullsFirst: true })
       .order('created_at', { ascending: false })
     setTodos((data as Todo[]) ?? [])
