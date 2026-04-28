@@ -68,26 +68,13 @@ function LoginForm() {
     router.push(profile?.onboarding_done ? '/dashboard' : '/onboarding')
   }
 
-  async function handleGoogleLogin() {
+  function handleGoogleLogin() {
     setIsGoogleLoading(true)
     setServerError(null)
-    const supabase = createSupabaseBrowserClient()
-
-    try {
-      const { error } = await supabase.auth.signInWithOAuth({
-        provider: 'google',
-        options: { redirectTo: `${window.location.origin}/auth/callback` },
-      })
-
-      if (error) {
-        setServerError(error.message)
-        setIsGoogleLoading(false)
-      }
-      // on success the browser navigates away — loading state is naturally lost
-    } catch (err) {
-      setServerError('Google sign-in failed. Please try again.')
-      setIsGoogleLoading(false)
-    }
+    // Navigate to the server-side OAuth route so the PKCE verifier is
+    // written to a response cookie (not browser localStorage) before the
+    // cross-site redirect to Google begins.
+    window.location.href = '/api/auth/google'
   }
 
   return (
