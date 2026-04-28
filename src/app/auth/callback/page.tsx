@@ -4,58 +4,66 @@ import { useEffect, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { Loader2 } from 'lucide-react'
 import { createSupabaseBrowserClient } from '@/lib/supabase'
+import type { Session } from '@supabase/supabase-js'
 
 function CallbackHandler() {
   const router = useRouter()
   const searchParams = useSearchParams()
 
   useEffect(() => {
-    const code = searchParams.get('code')
-    const error = searchParams.get('error')
-    const errorDescription = searchParams.get('error_description')
-
-    if (error) {
-      router.replace(`/login?error=${encodeURIComponent(errorDescription ?? error)}`)
+    // Surface OAuth provider errors immediately
+    const oauthError = searchParams.get('error')
+    if (oauthError) {
+      const desc = searchParams.get('error_description') ?? oauthError
+      router.replace(`/login?error=${encodeURIComponent(desc)}`)
       return
     }
 
-    if (!code) {
-      router.replace('/login?error=missing_code')
-      return
-    }
-
-    // Exchange the PKCE code in the browser so createBrowserClient can read
-    // the code verifier from document.cookie directly — no server-cookie lookup needed.
     const supabase = createSupabaseBrowserClient()
+    let settled = false
 
-    supabase.auth.exchangeCodeForSession(code).then(async ({ data, error: sessionError }) => {
-      if (sessionError) {
-        router.replace(`/login?error=${encodeURIComponent(sessionError.message)}`)
-        return
-      }
-
-      const user = data.session?.user
-      if (!user) {
-        router.replace('/login?error=no_session')
-        return
-      }
-
+    async function finish(session: Session) {
+      if (settled) return
+      settled = true
       const { data: profile } = await supabase
         .from('user_profiles')
         .select('onboarding_done')
-        .eq('id', user.id)
+        .eq('id', session.user.id)
         .single()
-
       router.replace(profile?.onboarding_done ? '/dashboard' : '/onboarding')
+    }
+
+    // createBrowserClient sets detectSessionInUrl:true by default, so it
+    // auto-exchanges the PKCE code (reading the verifier from document.cookie)
+    // during client initialisation. We just need to react to the outcome.
+
+    // 1. Session may already be established if initialize() ran synchronously.
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (session) finish(session)
     })
+
+    // 2. Otherwise wait for the SIGNED_IN / INITIAL_SESSION event.
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      (_event, session) => {
+        if (session) finish(session)
+      }
+    )
+
+    // 3. Hard timeout — something went very wrong.
+    const timer = setTimeout(() => {
+      if (!settled) router.replace('/login?error=sign_in_failed')
+    }, 8000)
+
+    return () => {
+      subscription.unsubscribe()
+      clearTimeout(timer)
+    }
   }, [router, searchParams])
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-[#0f0f13]">
-      <div className="flex flex-col items-center gap-3">
-        <Loader2 className="h-6 w-6 animate-spin text-violet-400" />
-        <p className="text-sm text-slate-400">Signing you in…</p>
-      </div>
+    <div className="flex min-h-screen flex-col items-center justify-center gap-3 bg-[#0f0f13]">
+      <Loader2 className="h-6 w-6 animate-spin text-violet-400" />
+      <p className="text-sm text-slate-400">Signing you in…</p>
     </div>
   )
 }

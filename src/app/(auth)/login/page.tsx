@@ -68,13 +68,18 @@ function LoginForm() {
     router.push(profile?.onboarding_done ? '/dashboard' : '/onboarding')
   }
 
-  function handleGoogleLogin() {
+  async function handleGoogleLogin() {
     setIsGoogleLoading(true)
     setServerError(null)
-    // Navigate to the server-side OAuth route so the PKCE verifier is
-    // written to a response cookie (not browser localStorage) before the
-    // cross-site redirect to Google begins.
-    window.location.href = '/api/auth/google'
+    const supabase = createSupabaseBrowserClient()
+    const { error } = await supabase.auth.signInWithOAuth({
+      provider: 'google',
+      options: { redirectTo: `${window.location.origin}/auth/callback` },
+    })
+    if (error) {
+      setServerError(error.message)
+      setIsGoogleLoading(false)
+    }
   }
 
   return (
