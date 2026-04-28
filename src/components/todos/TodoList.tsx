@@ -64,11 +64,11 @@ export default function TodoList() {
   const [newNotes, setNewNotes] = useState('')
   const [saving, setSaving]     = useState(false)
 
-  const fetchTodos = useCallback(async () => {
-    setLoading(true)
+  const fetchTodos = useCallback(async (silent = false) => {
+    if (!silent) setLoading(true)
     const supabase = createSupabaseBrowserClient()
     const { data: { session } } = await supabase.auth.getSession()
-    if (!session?.user) { setLoading(false); return }
+    if (!session?.user) { if (!silent) setLoading(false); return }
     const { data } = await supabase
       .from('user_todos')
       .select('*')
@@ -76,7 +76,7 @@ export default function TodoList() {
       .order('due_date', { ascending: true, nullsFirst: true })
       .order('created_at', { ascending: false })
     setTodos((data as Todo[]) ?? [])
-    setLoading(false)
+    if (!silent) setLoading(false)
   }, [])
 
   useEffect(() => { fetchTodos() }, [fetchTodos])
@@ -128,6 +128,7 @@ export default function TodoList() {
     setNewNotes('')
     setAdding(false)
     setSaving(false)
+    fetchTodos(true)
   }
 
   async function handleComplete(id: string) {

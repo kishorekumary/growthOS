@@ -57,9 +57,9 @@ export default function TodoWidget() {
       })
       .select('id, title, notes, due_date, is_completed')
       .single()
-    if (data) setTodos(prev => [data as Todo, ...prev].slice(0, 6))
     setNewTitle('')
     setSaving(false)
+    fetchTodos()
   }
 
   async function handleComplete(id: string) {
