@@ -62,13 +62,9 @@ export default function NotificationSettings() {
 
   const loadSettings = useCallback(async () => {
     const supabase = createSupabaseBrowserClient()
-    const { data: { session } } = await supabase.auth.getSession()
-    if (!session?.user) { setLoading(false); return }
-
     const { data } = await supabase
       .from('notification_settings')
       .select('push_enabled, email_enabled, reminder_time_1, reminder_time_2, timezone')
-      .eq('user_id', session.user.id)
       .maybeSingle()
 
     if (data) {
@@ -162,12 +158,12 @@ export default function NotificationSettings() {
     setSaved(false)
     setError(null)
     const supabase = createSupabaseBrowserClient()
-    const { data: { session } } = await supabase.auth.getSession()
-    if (!session?.user) { setSaving(false); return }
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) { setSaving(false); setError('Not signed in.'); return }
 
     const { error: err } = await supabase.from('notification_settings').upsert(
       {
-        user_id:          session.user.id,
+        user_id:          user.id,
         push_enabled:     pushEnabled,
         email_enabled:    emailEnabled,
         reminder_time_1:  time1,
@@ -202,8 +198,6 @@ export default function NotificationSettings() {
       <Loader2 className="h-5 w-5 animate-spin text-slate-500" />
     </div>
   )
-
-  const canSave = pushEnabled || emailEnabled
 
   return (
     <div className="space-y-6">
@@ -341,17 +335,11 @@ export default function NotificationSettings() {
 
       <Button
         onClick={saveSettings}
-        disabled={saving || (!pushEnabled && !emailEnabled)}
+        disabled={saving}
         className="w-full bg-violet-600 hover:bg-violet-700 text-white"
       >
         {saving ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Saving...</> : 'Save Notification Settings'}
       </Button>
-
-      {!canSave && (
-        <p className="text-center text-xs text-slate-600">
-          Enable push or email notifications above to save settings.
-        </p>
-      )}
     </div>
   )
 }
