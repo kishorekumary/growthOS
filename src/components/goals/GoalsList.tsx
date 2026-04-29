@@ -531,11 +531,12 @@ function CompletedList({ goals, onDelete }: { goals: Goal[]; onDelete: (id: stri
 type TabView = 'timeframe' | 'category'
 
 export default function GoalsList() {
-  const [goals, setGoals]           = useState<Goal[]>([])
-  const [loading, setLoading]       = useState(true)
-  const [markingId, setMarkingId]   = useState<string | null>(null)
-  const [deletingId, setDeletingId] = useState<string | null>(null)
-  const [tab, setTab]               = useState<TabView>('timeframe')
+  const [goals, setGoals]               = useState<Goal[]>([])
+  const [loading, setLoading]           = useState(true)
+  const [markingId, setMarkingId]       = useState<string | null>(null)
+  const [deletingId, setDeletingId]     = useState<string | null>(null)
+  const [tab, setTab]                   = useState<TabView>('timeframe')
+  const [activeCategory, setActiveCat]  = useState<Category>('fitness')
 
   const fetchGoals = useCallback(async () => {
     const supabase = createSupabaseBrowserClient()
@@ -647,25 +648,50 @@ export default function GoalsList() {
       {/* ── By Category tab ── */}
       {tab === 'category' && (
         <div className="space-y-4">
-          {(['fitness', 'finance', 'books', 'general'] as Category[]).map(cat => (
-            <CategorySection
-              key={cat}
-              category={cat}
-              goals={byCategory(cat)}
-              onAdd={fetchGoals}
-              onComplete={markComplete}
-              onDelete={deleteGoal}
-              markingId={markingId}
-              deletingId={deletingId}
-            />
-          ))}
-          {active.length === 0 && (
-            <div className="rounded-xl border border-dashed border-white/10 p-12 text-center">
-              <Target className="h-10 w-10 text-violet-400/30 mx-auto mb-3" />
-              <p className="text-slate-400 text-sm">No active goals yet.</p>
-              <p className="text-slate-600 text-xs mt-1">Add a goal using the button above.</p>
-            </div>
-          )}
+          {/* Category sub-tabs */}
+          <div className="flex gap-1 rounded-lg border border-white/10 bg-white/3 p-1">
+            {(['fitness', 'finance', 'books', 'general'] as Category[]).map(cat => {
+              const cfg  = CATEGORY_CONFIG[cat]
+              const Icon = cfg.icon
+              const count = byCategory(cat).length
+              return (
+                <button
+                  key={cat}
+                  type="button"
+                  onClick={() => setActiveCat(cat)}
+                  className={cn(
+                    'flex flex-1 items-center justify-center gap-1.5 rounded-md py-1.5 text-xs font-medium transition-all',
+                    activeCategory === cat
+                      ? cn('text-white shadow', cfg.bg, cfg.border, 'border')
+                      : 'text-slate-400 hover:text-white'
+                  )}
+                >
+                  <Icon className={cn('h-3.5 w-3.5 shrink-0', activeCategory === cat ? cfg.color : '')} />
+                  <span className="hidden sm:inline">{cfg.label}</span>
+                  {count > 0 && (
+                    <span className={cn(
+                      'rounded-full px-1 text-[10px] font-bold leading-4',
+                      activeCategory === cat ? cn(cfg.bg, cfg.color) : 'bg-white/10 text-slate-400'
+                    )}>
+                      {count}
+                    </span>
+                  )}
+                </button>
+              )
+            })}
+          </div>
+
+          {/* Active category content */}
+          <CategorySection
+            category={activeCategory}
+            goals={byCategory(activeCategory)}
+            onAdd={fetchGoals}
+            onComplete={markComplete}
+            onDelete={deleteGoal}
+            markingId={markingId}
+            deletingId={deletingId}
+          />
+
           <CompletedList goals={completed} onDelete={deleteGoal} />
         </div>
       )}
