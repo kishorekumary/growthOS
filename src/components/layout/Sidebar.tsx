@@ -73,26 +73,23 @@ export default function Sidebar({ userName, userEmail, avatarUrl }: SidebarProps
             )
           })}
         </div>
-
-        {/* Settings — pinned at bottom of nav, above user section */}
-        <div className="mt-4 pt-4 border-t border-white/10">
-          <Link
-            href="/settings"
-            className={cn(
-              'flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors',
-              pathname === '/settings' || pathname.startsWith('/settings/')
-                ? 'bg-purple-600/20 text-purple-300'
-                : 'text-slate-400 hover:bg-white/5 hover:text-white'
-            )}
-          >
-            <Settings className="h-4 w-4 shrink-0" />
-            Settings
-          </Link>
-        </div>
       </nav>
 
-      {/* User + logout */}
+      {/* Bottom: Settings → User → Logout */}
       <div className="border-t border-white/10 p-3 space-y-1">
+        <Link
+          href="/settings"
+          className={cn(
+            'flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors',
+            pathname === '/settings' || pathname.startsWith('/settings/')
+              ? 'bg-purple-600/20 text-purple-300'
+              : 'text-slate-400 hover:bg-white/5 hover:text-white'
+          )}
+        >
+          <Settings className="h-4 w-4 shrink-0" />
+          Settings
+        </Link>
+
         <div className="flex items-center gap-3 rounded-lg px-3 py-2.5">
           {avatarUrl ? (
             <img src={avatarUrl} alt={userName} className="h-8 w-8 rounded-full object-cover" />
@@ -106,6 +103,7 @@ export default function Sidebar({ userName, userEmail, avatarUrl }: SidebarProps
             <p className="text-xs text-slate-500 truncate">{userEmail}</p>
           </div>
         </div>
+
         <button
           onClick={handleLogout}
           className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-slate-400 hover:bg-white/5 hover:text-white transition-colors"

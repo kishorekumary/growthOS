@@ -161,7 +161,7 @@ export default function NotificationSettings() {
 
   function addTime() {
     if (times.length >= 8) return
-    setTimes(prev => [...prev, '09:00'])
+    setTimes(prev => [...prev, '09:00'].sort())
   }
 
   function removeTime(index: number) {
@@ -169,7 +169,7 @@ export default function NotificationSettings() {
   }
 
   function updateTime(index: number, value: string) {
-    setTimes(prev => prev.map((t, i) => i === index ? value : t))
+    setTimes(prev => prev.map((t, i) => i === index ? value : t).sort())
   }
 
   async function saveSettings() {
