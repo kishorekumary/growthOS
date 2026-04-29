@@ -82,12 +82,46 @@ export async function GET(req: NextRequest) {
   const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'https://growthos.app'
   const admin  = createSupabaseAdminClient()
 
-  const { data: settings } = await admin
+  // Try new schema first; fall back to old columns if migration 010 hasn't been applied yet
+  // eslint-disable-next-line prefer-const
+  let { data: rawSettings, error: settingsError } = await admin
     .from('notification_settings')
     .select('user_id, push_enabled, email_enabled, reminder_times, sent_today, timezone')
     .or('push_enabled.eq.true,email_enabled.eq.true')
 
-  if (!settings?.length) return NextResponse.json({ ok: true, processed: 0 })
+  type SettingsRow = {
+    user_id: string
+    push_enabled: boolean
+    email_enabled: boolean
+    reminder_times: string[]
+    sent_today: Record<string, string>
+    timezone: string
+  }
+
+  let settings: SettingsRow[]
+
+  if (settingsError) {
+    // Migration 010 not yet applied — fall back to old two-slot schema
+    const { data: legacy } = await admin
+      .from('notification_settings')
+      .select('user_id, push_enabled, email_enabled, reminder_time_1, reminder_time_2, last_reminder_1_sent, last_reminder_2_sent, timezone')
+      .or('push_enabled.eq.true,email_enabled.eq.true')
+    settings = (legacy ?? []).map((s) => ({
+      user_id:        s.user_id,
+      push_enabled:   s.push_enabled,
+      email_enabled:  s.email_enabled,
+      timezone:       s.timezone,
+      reminder_times: [s.reminder_time_1 ?? '08:00', s.reminder_time_2 ?? '18:00'],
+      sent_today: {
+        [s.reminder_time_1 ?? '08:00']: s.last_reminder_1_sent ?? '',
+        [s.reminder_time_2 ?? '18:00']: s.last_reminder_2_sent ?? '',
+      },
+    }))
+  } else {
+    settings = (rawSettings ?? []) as SettingsRow[]
+  }
+
+  if (!settings.length) return NextResponse.json({ ok: true, processed: 0, error: settingsError?.message })
 
   let processed = 0
 
@@ -162,9 +196,19 @@ export async function GET(req: NextRequest) {
     const updatedSentToday = { ...sentToday }
     dueTimes.forEach(t => { updatedSentToday[t] = dateStr })
 
+    // Build update — use new columns if available, otherwise old two-slot columns
+    const updatePayload: Record<string, unknown> = { updated_at: new Date().toISOString() }
+    if (!settingsError) {
+      updatePayload.sent_today = updatedSentToday
+    } else {
+      const times = s.reminder_times as string[]
+      if (dueTimes.includes(times[0])) updatePayload.last_reminder_1_sent = dateStr
+      if (dueTimes.includes(times[1])) updatePayload.last_reminder_2_sent = dateStr
+    }
+
     await admin
       .from('notification_settings')
-      .update({ sent_today: updatedSentToday, updated_at: new Date().toISOString() })
+      .update(updatePayload)
       .eq('user_id', s.user_id)
 
     processed++
