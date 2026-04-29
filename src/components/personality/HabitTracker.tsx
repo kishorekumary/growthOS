@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
-import { Flame, Plus, Trash2, Check, Loader2, AlertCircle, RefreshCw } from 'lucide-react'
+import { Flame, Plus, Trash2, Check, Loader2, AlertCircle, RefreshCw, RotateCcw } from 'lucide-react'
 import { createSupabaseBrowserClient } from '@/lib/supabase'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -83,8 +83,6 @@ function AddHabitModal({ onAdd }: { onAdd: () => void }) {
     setError(null)
 
     const supabase = createSupabaseBrowserClient()
-
-    // Use getSession (local cache, no network) to get the user id
     const { data: { session }, error: sessionError } = await supabase.auth.getSession()
     if (sessionError || !session?.user) {
       setError('Not signed in. Please refresh and try again.')
@@ -208,8 +206,8 @@ function AddHabitModal({ onAdd }: { onAdd: () => void }) {
 // ─── Main component ───────────────────────────────────────────
 
 export default function HabitTracker() {
-  const [habits, setHabits]     = useState<Habit[]>([])
-  const [loading, setLoading]   = useState(true)
+  const [habits, setHabits]       = useState<Habit[]>([])
+  const [loading, setLoading]     = useState(true)
   const [fetchError, setFetchError] = useState<string | null>(null)
   const [markingId, setMarkingId] = useState<string | null>(null)
 
@@ -244,20 +242,52 @@ export default function HabitTracker() {
 
   async function markDone(habit: Habit) {
     if (isDoneToday(habit) || markingId) return
-    const supabase = createSupabaseBrowserClient()
     setMarkingId(habit.id)
     const newStreak = computeStreak(habit.streak_count, habit.last_done_at, habit.frequency)
+    const now = new Date().toISOString()
+
+    // Optimistic update
+    setHabits(prev => prev.map(h =>
+      h.id === habit.id
+        ? { ...h, streak_count: newStreak, longest_streak: Math.max(newStreak, h.longest_streak), last_done_at: now }
+        : h
+    ))
+    setMarkingId(null)
+
+    const supabase = createSupabaseBrowserClient()
     await supabase
       .from('personality_habits')
       .update({
         streak_count:   newStreak,
         longest_streak: Math.max(newStreak, habit.longest_streak),
-        last_done_at:   new Date().toISOString(),
-        updated_at:     new Date().toISOString(),
+        last_done_at:   now,
+        updated_at:     now,
       })
       .eq('id', habit.id)
+  }
+
+  async function markNotDone(habit: Habit) {
+    if (!isDoneToday(habit) || markingId) return
+    setMarkingId(habit.id)
+    const newStreak = Math.max(0, habit.streak_count - 1)
+
+    // Optimistic update
+    setHabits(prev => prev.map(h =>
+      h.id === habit.id
+        ? { ...h, streak_count: newStreak, last_done_at: null }
+        : h
+    ))
     setMarkingId(null)
-    fetchHabits()
+
+    const supabase = createSupabaseBrowserClient()
+    await supabase
+      .from('personality_habits')
+      .update({
+        streak_count: newStreak,
+        last_done_at: null,
+        updated_at:   new Date().toISOString(),
+      })
+      .eq('id', habit.id)
   }
 
   async function deleteHabit(id: string) {
@@ -289,6 +319,12 @@ export default function HabitTracker() {
     )
   }
 
+  // Pending habits first, completed habits sink to the bottom
+  const sortedHabits = [
+    ...habits.filter(h => !isDoneToday(h)),
+    ...habits.filter(h =>  isDoneToday(h)),
+  ]
+
   const doneToday = habits.filter(isDoneToday).length
   const topStreak = habits.reduce((m, h) => Math.max(m, h.streak_count), 0)
 
@@ -316,7 +352,7 @@ export default function HabitTracker() {
       )}
 
       <div className="space-y-2">
-        {habits.map((habit) => {
+        {sortedHabits.map((habit) => {
           const done = isDoneToday(habit)
           const cat  = CATEGORY_STYLES[habit.category] ?? CATEGORY_STYLES.mindset
           return (
@@ -329,21 +365,26 @@ export default function HabitTracker() {
                   : 'border-white/10 bg-white/5 hover:border-white/20'
               )}
             >
+              {/* Check / Undo button */}
               <button
-                onClick={() => markDone(habit)}
-                disabled={done || markingId === habit.id}
-                aria-label={done ? 'Done' : 'Mark done'}
+                onClick={() => done ? markNotDone(habit) : markDone(habit)}
+                disabled={markingId === habit.id}
+                aria-label={done ? 'Mark as not done' : 'Mark done'}
                 className={cn(
-                  'flex h-6 w-6 shrink-0 items-center justify-center rounded-full border-2 transition-all',
+                  'group/check flex h-6 w-6 shrink-0 items-center justify-center rounded-full border-2 transition-all',
                   done
-                    ? 'border-emerald-400 bg-emerald-400 cursor-default'
+                    ? 'border-emerald-400 bg-emerald-400 hover:bg-slate-700 hover:border-slate-500'
                     : 'border-slate-600 hover:border-emerald-400 cursor-pointer'
                 )}
               >
-                {markingId === habit.id
-                  ? <Loader2 className="h-3 w-3 animate-spin text-slate-400" />
-                  : done && <Check className="h-3 w-3 text-white" />
-                }
+                {markingId === habit.id ? (
+                  <Loader2 className="h-3 w-3 animate-spin text-slate-400" />
+                ) : done ? (
+                  <>
+                    <Check className="h-3 w-3 text-white group-hover/check:hidden" />
+                    <RotateCcw className="h-3 w-3 text-slate-300 hidden group-hover/check:block" />
+                  </>
+                ) : null}
               </button>
 
               <div className="flex-1 min-w-0 space-y-0.5">
@@ -360,6 +401,11 @@ export default function HabitTracker() {
                   <span className="text-xs text-slate-600">
                     {FREQUENCY_LABELS[habit.frequency]}
                   </span>
+                  {done && (
+                    <span className="text-xs text-slate-600 italic">
+                      · hover circle to undo
+                    </span>
+                  )}
                 </div>
               </div>
 
