@@ -2,14 +2,14 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { LayoutDashboard, CheckSquare, Dumbbell, Wallet, Target } from 'lucide-react'
+import { LayoutDashboard, CheckSquare, Dumbbell, Target, Timer } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 const NAV_ITEMS = [
   { href: '/dashboard',   label: 'Home',    icon: LayoutDashboard },
   { href: '/fitness',     label: 'Fitness', icon: Dumbbell },
   { href: '/goals',       label: 'Goals',   icon: Target },
-  { href: '/finance',     label: 'Finance', icon: Wallet },
+  { href: '/focus',       label: 'Focus',   icon: Timer },
   { href: '/todos',       label: 'Tasks',   icon: CheckSquare },
 ]
 
