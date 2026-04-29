@@ -3,6 +3,7 @@ import { createSupabaseAdminClient } from '@/lib/supabase-admin'
 import { createSupabaseServerClient } from '@/lib/supabase-server'
 import webpush from 'web-push'
 import { Resend } from 'resend'
+import twilio from 'twilio'
 
 // Returns current local time and date string in the given IANA timezone
 function localTime(timezone: string): { h: number; m: number; dateStr: string } {
@@ -85,6 +86,9 @@ export async function GET(req: NextRequest) {
   }
 
   const resend = process.env.RESEND_API_KEY ? new Resend(process.env.RESEND_API_KEY) : null
+  const twilioClient = process.env.TWILIO_ACCOUNT_SID && process.env.TWILIO_AUTH_TOKEN
+    ? twilio(process.env.TWILIO_ACCOUNT_SID, process.env.TWILIO_AUTH_TOKEN)
+    : null
   const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'https://growthos.app'
   const admin  = createSupabaseAdminClient()
 
@@ -92,13 +96,15 @@ export async function GET(req: NextRequest) {
   // eslint-disable-next-line prefer-const
   let { data: rawSettings, error: settingsError } = await admin
     .from('notification_settings')
-    .select('user_id, push_enabled, email_enabled, reminder_times, sent_today, timezone')
-    .or('push_enabled.eq.true,email_enabled.eq.true')
+    .select('user_id, push_enabled, email_enabled, call_enabled, phone_number, reminder_times, sent_today, timezone')
+    .or('push_enabled.eq.true,email_enabled.eq.true,call_enabled.eq.true')
 
   type SettingsRow = {
     user_id: string
     push_enabled: boolean
     email_enabled: boolean
+    call_enabled: boolean
+    phone_number: string | null
     reminder_times: string[]
     sent_today: Record<string, string>
     timezone: string
@@ -110,12 +116,14 @@ export async function GET(req: NextRequest) {
     // Migration 010 not yet applied — fall back to old two-slot schema
     const { data: legacy } = await admin
       .from('notification_settings')
-      .select('user_id, push_enabled, email_enabled, reminder_time_1, reminder_time_2, last_reminder_1_sent, last_reminder_2_sent, timezone')
+      .select('user_id, push_enabled, email_enabled, call_enabled, phone_number, reminder_time_1, reminder_time_2, last_reminder_1_sent, last_reminder_2_sent, timezone')
       .or('push_enabled.eq.true,email_enabled.eq.true')
     settings = (legacy ?? []).map((s) => ({
       user_id:        s.user_id,
       push_enabled:   s.push_enabled,
       email_enabled:  s.email_enabled,
+      call_enabled:   s.call_enabled  ?? false,
+      phone_number:   s.phone_number  ?? null,
       timezone:       s.timezone,
       reminder_times: [s.reminder_time_1 ?? '08:00', s.reminder_time_2 ?? '18:00'],
       sent_today: {
@@ -196,6 +204,16 @@ export async function GET(req: NextRequest) {
           html:    emailHtml(greeting, taskMsg, appUrl),
         }).catch(() => {})
       }
+    }
+
+    // Phone call
+    if (s.call_enabled && s.phone_number && twilioClient && process.env.TWILIO_FROM_NUMBER) {
+      const callUrl = `${appUrl}/api/voice/reminder?msg=${encodeURIComponent(taskMsg)}`
+      await twilioClient.calls.create({
+        to:   s.phone_number,
+        from: process.env.TWILIO_FROM_NUMBER,
+        url:  callUrl,
+      }).catch(() => {})
     }
 
     // Mark each fired time as sent today

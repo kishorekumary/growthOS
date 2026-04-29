@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import {
   Bell, BellOff, Mail, MailCheck, Clock, Loader2,
-  CheckCircle, AlertCircle, Send, Plus, X,
+  CheckCircle, AlertCircle, Send, Plus, X, Phone, PhoneOff,
 } from 'lucide-react'
 import { createSupabaseBrowserClient } from '@/lib/supabase'
 import { Button } from '@/components/ui/button'
@@ -59,6 +59,8 @@ export default function NotificationSettings() {
   const [pushPermission, setPushPermission] = useState<NotificationPermission>('default')
   const [pushEnabled, setPushEnabled]       = useState(false)
   const [emailEnabled, setEmailEnabled]     = useState(false)
+  const [callEnabled, setCallEnabled]       = useState(false)
+  const [phoneNumber, setPhoneNumber]       = useState('')
   const [times, setTimes]     = useState<string[]>(['08:00', '18:00'])
   const [timezone, setTimezone] = useState('UTC')
 
@@ -66,11 +68,13 @@ export default function NotificationSettings() {
     const supabase = createSupabaseBrowserClient()
     const { data } = await supabase
       .from('notification_settings')
-      .select('push_enabled, email_enabled, reminder_times, timezone')
+      .select('push_enabled, email_enabled, call_enabled, phone_number, reminder_times, timezone')
       .maybeSingle()
 
     if (data) {
       setEmailEnabled(data.email_enabled ?? false)
+      setCallEnabled(data.call_enabled ?? false)
+      setPhoneNumber(data.phone_number ?? '')
       setTimes((data.reminder_times as string[] | null) ?? ['08:00', '18:00'])
       setTimezone(data.timezone ?? Intl.DateTimeFormat().resolvedOptions().timeZone)
       if (data.push_enabled && 'serviceWorker' in navigator) {
@@ -176,6 +180,8 @@ export default function NotificationSettings() {
         user_id:        user.id,
         push_enabled:   pushEnabled,
         email_enabled:  emailEnabled,
+        call_enabled:   callEnabled,
+        phone_number:   phoneNumber.trim() || null,
         reminder_times: times,
         timezone,
         sent_today:     {},   // reset so updated times fire fresh
@@ -294,6 +300,40 @@ export default function NotificationSettings() {
           </div>
           <Toggle checked={emailEnabled} onChange={() => setEmailEnabled(v => !v)} />
         </div>
+      </div>
+
+      {/* Phone call */}
+      <div className="rounded-xl border border-white/8 bg-white/3 p-5 space-y-4">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-emerald-500/20">
+              {callEnabled
+                ? <Phone className="h-4 w-4 text-emerald-400" />
+                : <PhoneOff className="h-4 w-4 text-slate-500" />}
+            </div>
+            <div>
+              <p className="text-sm font-semibold text-white">Phone Call Reminders</p>
+              <p className="text-xs text-slate-500 mt-0.5">
+                {callEnabled ? 'Call reminders active' : 'Get a voice call at reminder times'}
+              </p>
+            </div>
+          </div>
+          <Toggle checked={callEnabled} onChange={() => setCallEnabled(v => !v)} />
+        </div>
+
+        {callEnabled && (
+          <div className="space-y-1.5">
+            <label className="text-xs font-medium text-slate-400">Phone number</label>
+            <input
+              type="tel"
+              value={phoneNumber}
+              onChange={e => setPhoneNumber(e.target.value)}
+              placeholder="+91 98765 43210"
+              className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-white placeholder:text-slate-600 focus:outline-none focus:ring-1 focus:ring-emerald-500"
+            />
+            <p className="text-[11px] text-slate-600">Include country code — e.g. +91 for India, +1 for US.</p>
+          </div>
+        )}
       </div>
 
       {/* Reminder times */}
