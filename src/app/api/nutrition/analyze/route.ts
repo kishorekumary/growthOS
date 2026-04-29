@@ -1,29 +1,32 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { openai } from '@/lib/openai'
+import { openai } from '@/lib/claude'
 import { createSupabaseServerClient } from '@/lib/supabase-server'
 
 export async function POST(req: NextRequest) {
-  const { data: { user } } = await createSupabaseServerClient().auth.getUser()
-  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  try {
+    const { data: { user } } = await createSupabaseServerClient().auth.getUser()
+    if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-  const { imageBase64, mediaType } = await req.json()
-  if (!imageBase64 || !mediaType) {
-    return NextResponse.json({ error: 'Missing image data' }, { status: 400 })
-  }
+    const { imageBase64, mediaType } = await req.json()
+    if (!imageBase64 || !mediaType) {
+      return NextResponse.json({ error: 'Missing image data' }, { status: 400 })
+    }
 
-  const response = await openai.chat.completions.create({
-    model: 'gpt-4o',
-    max_tokens: 512,
-    messages: [{
-      role: 'user',
-      content: [
-        {
-          type: 'image_url',
-          image_url: { url: `data:${mediaType};base64,${imageBase64}` },
-        },
-        {
-          type: 'text',
-          text: `You are a registered dietitian. Analyze this food image and estimate nutritional content for the portion shown.
+    let text: string
+    try {
+      const response = await openai.chat.completions.create({
+        model: 'gpt-4o',
+        max_tokens: 512,
+        messages: [{
+          role: 'user',
+          content: [
+            {
+              type: 'image_url',
+              image_url: { url: `data:${mediaType};base64,${imageBase64}` },
+            },
+            {
+              type: 'text',
+              text: `You are a registered dietitian. Analyze this food image and estimate nutritional content for the portion shown.
 
 Return ONLY a valid JSON object — no markdown, no explanation, no code fences:
 {
@@ -37,18 +40,31 @@ Return ONLY a valid JSON object — no markdown, no explanation, no code fences:
 }
 
 Be realistic. Sum all visible items. If uncertain, note it in the notes field.`,
-        },
-      ],
-    }],
-  })
+            },
+          ],
+        }],
+      })
+      text = response.choices[0]?.message?.content ?? ''
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err)
+      console.error('[nutrition/analyze] OpenAI error:', msg)
+      return NextResponse.json({ error: `AI error: ${msg}` }, { status: 502 })
+    }
 
-  const text = response.choices[0]?.message?.content ?? ''
-  const match = text.match(/\{[\s\S]*\}/)
-  if (!match) return NextResponse.json({ error: 'Could not parse nutritional data from image' }, { status: 500 })
+    const match = text.match(/\{[\s\S]*\}/)
+    if (!match) {
+      console.error('[nutrition/analyze] Unparseable response:', text.slice(0, 200))
+      return NextResponse.json({ error: 'Could not parse nutritional data from image' }, { status: 500 })
+    }
 
-  try {
-    return NextResponse.json(JSON.parse(match[0]))
-  } catch {
-    return NextResponse.json({ error: 'Invalid response from AI' }, { status: 500 })
+    try {
+      return NextResponse.json(JSON.parse(match[0]))
+    } catch {
+      return NextResponse.json({ error: 'Invalid JSON in AI response' }, { status: 500 })
+    }
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err)
+    console.error('[nutrition/analyze] Unexpected error:', msg)
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
 }
