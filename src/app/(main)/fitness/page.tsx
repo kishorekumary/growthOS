@@ -6,10 +6,11 @@ import { Loader2 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import GoalsWidget from '@/components/goals/GoalsWidget'
 
-const WorkoutPlan     = dynamic(() => import('@/components/fitness/WorkoutPlan'),     { loading: () => <Spinner /> })
-const WorkoutLogger   = dynamic(() => import('@/components/fitness/WorkoutLogger'),   { loading: () => <Spinner /> })
-const FitnessProgress = dynamic(() => import('@/components/fitness/FitnessProgress'), { loading: () => <Spinner /> })
-const AIChat          = dynamic(() => import('@/components/shared/AIChat'),            { loading: () => <Spinner /> })
+const WorkoutPlan     = dynamic(() => import('@/components/fitness/WorkoutPlan'),       { loading: () => <Spinner /> })
+const WorkoutLogger   = dynamic(() => import('@/components/fitness/WorkoutLogger'),     { loading: () => <Spinner /> })
+const FitnessProgress = dynamic(() => import('@/components/fitness/FitnessProgress'),   { loading: () => <Spinner /> })
+const NutritionTracker = dynamic(() => import('@/components/fitness/NutritionTracker'), { loading: () => <Spinner /> })
+const AIChat          = dynamic(() => import('@/components/shared/AIChat'),              { loading: () => <Spinner /> })
 
 function Spinner() {
   return (
@@ -19,7 +20,7 @@ function Spinner() {
   )
 }
 
-const TABS = ['Plan', 'Log Workout', 'Progress', 'Coach'] as const
+const TABS = ['Plan', 'Log Workout', 'Nutrition', 'Progress', 'Coach'] as const
 type Tab = typeof TABS[number]
 
 export default function FitnessPage() {
@@ -35,15 +36,15 @@ export default function FitnessPage() {
       {/* Goals widget */}
       <GoalsWidget category="fitness" />
 
-      {/* Tab bar */}
-      <div className="flex gap-1 rounded-xl bg-white/5 p-1 mb-6">
+      {/* Tab bar — scrollable for smaller screens */}
+      <div className="flex gap-1 rounded-xl bg-white/5 p-1 mb-6 overflow-x-auto scrollbar-hide">
         {TABS.map((t) => (
           <button
             key={t}
             type="button"
             onClick={() => setTab(t)}
             className={cn(
-              'flex-1 rounded-lg py-2 text-center text-sm font-medium transition-all',
+              'flex-shrink-0 rounded-lg px-3 py-2 text-center text-sm font-medium transition-all whitespace-nowrap',
               tab === t
                 ? 'bg-violet-600 text-white shadow-sm'
                 : 'text-slate-400 hover:text-white'
@@ -56,6 +57,7 @@ export default function FitnessPage() {
 
       {tab === 'Plan'        && <WorkoutPlan />}
       {tab === 'Log Workout' && <WorkoutLogger />}
+      {tab === 'Nutrition'   && <NutritionTracker />}
       {tab === 'Progress'    && <FitnessProgress />}
       {tab === 'Coach'       && <AIChat section="fitness" />}
     </div>
