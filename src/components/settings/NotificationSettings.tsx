@@ -1,7 +1,10 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
-import { Bell, BellOff, Mail, MailCheck, Clock, Loader2, CheckCircle, AlertCircle, Send } from 'lucide-react'
+import {
+  Bell, BellOff, Mail, MailCheck, Clock, Loader2,
+  CheckCircle, AlertCircle, Send, Plus, X, Info,
+} from 'lucide-react'
 import { createSupabaseBrowserClient } from '@/lib/supabase'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
@@ -56,23 +59,20 @@ export default function NotificationSettings() {
   const [pushPermission, setPushPermission] = useState<NotificationPermission>('default')
   const [pushEnabled, setPushEnabled]       = useState(false)
   const [emailEnabled, setEmailEnabled]     = useState(false)
-  const [time1, setTime1]   = useState('08:00')
-  const [time2, setTime2]   = useState('18:00')
+  const [times, setTimes]     = useState<string[]>(['08:00', '18:00'])
   const [timezone, setTimezone] = useState('UTC')
 
   const loadSettings = useCallback(async () => {
     const supabase = createSupabaseBrowserClient()
     const { data } = await supabase
       .from('notification_settings')
-      .select('push_enabled, email_enabled, reminder_time_1, reminder_time_2, timezone')
+      .select('push_enabled, email_enabled, reminder_times, timezone')
       .maybeSingle()
 
     if (data) {
       setEmailEnabled(data.email_enabled ?? false)
-      setTime1(data.reminder_time_1 ?? '08:00')
-      setTime2(data.reminder_time_2 ?? '18:00')
+      setTimes((data.reminder_times as string[] | null) ?? ['08:00', '18:00'])
       setTimezone(data.timezone ?? Intl.DateTimeFormat().resolvedOptions().timeZone)
-      // Only show push as enabled if we still have an active subscription
       if (data.push_enabled && 'serviceWorker' in navigator) {
         const reg = await navigator.serviceWorker.ready.catch(() => null)
         const sub = await reg?.pushManager.getSubscription().catch(() => null)
@@ -91,11 +91,8 @@ export default function NotificationSettings() {
   }, [loadSettings])
 
   async function handlePushToggle() {
-    if (pushEnabled) {
-      await unsubscribePush()
-    } else {
-      await subscribePush()
-    }
+    if (pushEnabled) await unsubscribePush()
+    else await subscribePush()
   }
 
   async function subscribePush() {
@@ -103,13 +100,13 @@ export default function NotificationSettings() {
     setSubscribing(true)
     try {
       if (!process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY) {
-        setError('Push notifications are not configured yet. Add NEXT_PUBLIC_VAPID_PUBLIC_KEY to your environment variables.')
+        setError('Push notifications are not configured yet.')
         return
       }
       const permission = await Notification.requestPermission()
       setPushPermission(permission)
       if (permission !== 'granted') {
-        setError('Notification permission was denied. Enable it in your browser settings.')
+        setError('Notification permission denied. Enable it in your browser settings.')
         return
       }
       const reg = await navigator.serviceWorker.ready
@@ -153,6 +150,19 @@ export default function NotificationSettings() {
     }
   }
 
+  function addTime() {
+    if (times.length >= 8) return
+    setTimes(prev => [...prev, '09:00'])
+  }
+
+  function removeTime(index: number) {
+    setTimes(prev => prev.filter((_, i) => i !== index))
+  }
+
+  function updateTime(index: number, value: string) {
+    setTimes(prev => prev.map((t, i) => i === index ? value : t))
+  }
+
   async function saveSettings() {
     setSaving(true)
     setSaved(false)
@@ -163,13 +173,13 @@ export default function NotificationSettings() {
 
     const { error: err } = await supabase.from('notification_settings').upsert(
       {
-        user_id:          user.id,
-        push_enabled:     pushEnabled,
-        email_enabled:    emailEnabled,
-        reminder_time_1:  time1,
-        reminder_time_2:  time2,
+        user_id:        user.id,
+        push_enabled:   pushEnabled,
+        email_enabled:  emailEnabled,
+        reminder_times: times,
         timezone,
-        updated_at:       new Date().toISOString(),
+        sent_today:     {},   // reset so updated times fire fresh
+        updated_at:     new Date().toISOString(),
       },
       { onConflict: 'user_id' }
     )
@@ -220,11 +230,9 @@ export default function NotificationSettings() {
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
             <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-violet-500/20">
-              {pushEnabled ? (
-                <Bell className="h-4 w-4 text-violet-400" />
-              ) : (
-                <BellOff className="h-4 w-4 text-slate-500" />
-              )}
+              {pushEnabled
+                ? <Bell className="h-4 w-4 text-violet-400" />
+                : <BellOff className="h-4 w-4 text-slate-500" />}
             </div>
             <div>
               <p className="text-sm font-semibold text-white">Push Notifications</p>
@@ -263,8 +271,7 @@ export default function NotificationSettings() {
           >
             {testing
               ? <><Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> Sending...</>
-              : <><Send className="mr-1.5 h-3.5 w-3.5" /> Send test notification</>
-            }
+              : <><Send className="mr-1.5 h-3.5 w-3.5" /> Send test notification</>}
           </Button>
         )}
       </div>
@@ -285,40 +292,52 @@ export default function NotificationSettings() {
               </p>
             </div>
           </div>
-          <Toggle
-            checked={emailEnabled}
-            onChange={() => setEmailEnabled(v => !v)}
-          />
+          <Toggle checked={emailEnabled} onChange={() => setEmailEnabled(v => !v)} />
         </div>
       </div>
 
       {/* Reminder times */}
       <div className="rounded-xl border border-white/8 bg-white/3 p-5 space-y-4">
-        <div className="flex items-center gap-2 mb-1">
-          <Clock className="h-4 w-4 text-amber-400" />
-          <p className="text-sm font-semibold text-white">Reminder Times</p>
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <Clock className="h-4 w-4 text-amber-400" />
+            <p className="text-sm font-semibold text-white">Reminder Times</p>
+          </div>
+          <span className="text-xs text-slate-500">{times.length}/8</span>
         </div>
 
-        <div className="grid grid-cols-2 gap-4">
-          <div className="space-y-1.5">
-            <label className="text-xs font-medium text-slate-400">Morning</label>
-            <input
-              type="time"
-              value={time1}
-              onChange={e => setTime1(e.target.value)}
-              className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-white focus:outline-none focus:ring-1 focus:ring-violet-500"
-            />
-          </div>
-          <div className="space-y-1.5">
-            <label className="text-xs font-medium text-slate-400">Evening</label>
-            <input
-              type="time"
-              value={time2}
-              onChange={e => setTime2(e.target.value)}
-              className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-white focus:outline-none focus:ring-1 focus:ring-violet-500"
-            />
-          </div>
+        <div className="space-y-2">
+          {times.map((t, i) => (
+            <div key={i} className="flex items-center gap-2">
+              <input
+                type="time"
+                value={t}
+                onChange={e => updateTime(i, e.target.value)}
+                className="flex-1 rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-white focus:outline-none focus:ring-1 focus:ring-violet-500"
+              />
+              {times.length > 1 && (
+                <button
+                  type="button"
+                  onClick={() => removeTime(i)}
+                  className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-white/10 text-slate-600 hover:border-red-500/30 hover:text-red-400 transition-colors"
+                >
+                  <X className="h-3.5 w-3.5" />
+                </button>
+              )}
+            </div>
+          ))}
         </div>
+
+        {times.length < 8 && (
+          <button
+            type="button"
+            onClick={addTime}
+            className="flex items-center gap-2 text-xs text-slate-500 hover:text-violet-400 transition-colors"
+          >
+            <Plus className="h-3.5 w-3.5" />
+            Add reminder time
+          </button>
+        )}
 
         <div className="space-y-1.5">
           <label className="text-xs font-medium text-slate-400">Your timezone</label>
@@ -331,6 +350,16 @@ export default function NotificationSettings() {
           />
           <p className="text-[11px] text-slate-600">Auto-detected. Use IANA format (e.g. Asia/Kolkata, America/New_York).</p>
         </div>
+
+        <div className="flex items-start gap-2.5 rounded-lg border border-amber-500/15 bg-amber-500/5 px-3 py-2.5">
+          <Info className="h-3.5 w-3.5 text-amber-400/70 shrink-0 mt-0.5" />
+          <p className="text-[11px] text-amber-400/70 leading-relaxed">
+            Reminders run hourly when triggered by an external scheduler. On the free Vercel plan,
+            the built-in cron fires twice daily (8 AM and 8 PM IST). For exact timing, set up a free
+            hourly cron at <span className="font-medium text-amber-400">cron-job.org</span> pointing
+            to <span className="font-mono">/api/cron/reminders</span>.
+          </p>
+        </div>
       </div>
 
       <Button
@@ -338,7 +367,9 @@ export default function NotificationSettings() {
         disabled={saving}
         className="w-full bg-violet-600 hover:bg-violet-700 text-white"
       >
-        {saving ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Saving...</> : 'Save Notification Settings'}
+        {saving
+          ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Saving...</>
+          : 'Save Notification Settings'}
       </Button>
     </div>
   )

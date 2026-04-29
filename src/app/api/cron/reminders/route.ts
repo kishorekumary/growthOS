@@ -3,7 +3,7 @@ import { createSupabaseAdminClient } from '@/lib/supabase-admin'
 import webpush from 'web-push'
 import { Resend } from 'resend'
 
-// Returns current HH:MM in a given IANA timezone
+// Returns current local time and date string in the given IANA timezone
 function localTime(timezone: string): { h: number; m: number; dateStr: string } {
   const now = new Date()
   const formatter = new Intl.DateTimeFormat('en-CA', {
@@ -19,13 +19,14 @@ function localTime(timezone: string): { h: number; m: number; dateStr: string } 
   }
 }
 
-// True if current local time is within 14 minutes past the scheduled time
+// True if the configured reminder time falls within the current 60-minute window.
+// Designed for hourly cron calls — each time is catchable within ±0-59 minutes.
 function isDue(reminderTime: string, timezone: string): boolean {
   const [rh, rm] = reminderTime.split(':').map(Number)
   const { h, m } = localTime(timezone)
   const reminderMins = rh * 60 + rm
   const currentMins  = h * 60 + m
-  return currentMins >= reminderMins && currentMins < reminderMins + 15
+  return currentMins >= reminderMins && currentMins < reminderMins + 60
 }
 
 function emailHtml(greeting: string, message: string, appUrl: string) {
@@ -63,7 +64,6 @@ function emailHtml(greeting: string, message: string, appUrl: string) {
 }
 
 export async function GET(req: NextRequest) {
-  // Verify cron secret
   const auth = req.headers.get('authorization')
   const cronSecret = process.env.CRON_SECRET
   if (cronSecret && auth !== `Bearer ${cronSecret}`) {
@@ -82,10 +82,9 @@ export async function GET(req: NextRequest) {
   const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'https://growthos.app'
   const admin  = createSupabaseAdminClient()
 
-  // Get all users with notifications enabled
   const { data: settings } = await admin
     .from('notification_settings')
-    .select('user_id, push_enabled, email_enabled, reminder_time_1, reminder_time_2, timezone, last_reminder_1_sent, last_reminder_2_sent')
+    .select('user_id, push_enabled, email_enabled, reminder_times, sent_today, timezone')
     .or('push_enabled.eq.true,email_enabled.eq.true')
 
   if (!settings?.length) return NextResponse.json({ ok: true, processed: 0 })
@@ -93,17 +92,22 @@ export async function GET(req: NextRequest) {
   let processed = 0
 
   for (const s of settings) {
-    const { h } = localTime(s.timezone)
+    const tz = s.timezone ?? 'UTC'
+    const { h, dateStr } = localTime(tz)
+
+    // Find which configured times are due now and haven't been sent yet today
+    const reminderTimes: string[] = s.reminder_times ?? ['08:00', '18:00']
+    const sentToday: Record<string, string> = s.sent_today ?? {}
+
+    const dueTimes = reminderTimes.filter(t =>
+      isDue(t, tz) && sentToday[t] !== dateStr
+    )
+
+    if (!dueTimes.length) continue
+
     const isEvening = h >= 12
-    const greeting = isEvening ? 'Good evening! 🌙' : 'Good morning! 🌅'
+    const greeting  = isEvening ? 'Good evening! 🌙' : 'Good morning! 🌅'
 
-    const { dateStr } = localTime(s.timezone)
-    const fireReminder1 = isDue(s.reminder_time_1, s.timezone) && s.last_reminder_1_sent !== dateStr
-    const fireReminder2 = isDue(s.reminder_time_2, s.timezone) && s.last_reminder_2_sent !== dateStr
-
-    if (!fireReminder1 && !fireReminder2) continue
-
-    // Count today's pending todos for this user
     const { count: todoCount } = await admin
       .from('user_todos')
       .select('id', { count: 'exact', head: true })
@@ -121,7 +125,6 @@ export async function GET(req: NextRequest) {
       url:   '/todos',
     })
 
-    // Push notifications
     if (s.push_enabled && process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY) {
       const { data: subs } = await admin
         .from('push_subscriptions')
@@ -135,7 +138,6 @@ export async function GET(req: NextRequest) {
               { endpoint: sub.endpoint, keys: { p256dh: sub.p256dh, auth: sub.auth_key } },
               pushPayload
             ).catch(() => {
-              // Remove expired subscriptions
               admin.from('push_subscriptions').delete().eq('endpoint', sub.endpoint)
             })
           )
@@ -143,7 +145,6 @@ export async function GET(req: NextRequest) {
       }
     }
 
-    // Email notifications
     if (s.email_enabled && resend) {
       const { data: authUser } = await admin.auth.admin.getUserById(s.user_id)
       const email = authUser?.user?.email
@@ -157,14 +158,13 @@ export async function GET(req: NextRequest) {
       }
     }
 
-    // Update last-sent dates
-    const update: Record<string, string> = { updated_at: new Date().toISOString() }
-    if (fireReminder1) update.last_reminder_1_sent = dateStr
-    if (fireReminder2) update.last_reminder_2_sent = dateStr
+    // Mark each fired time as sent today
+    const updatedSentToday = { ...sentToday }
+    dueTimes.forEach(t => { updatedSentToday[t] = dateStr })
 
     await admin
       .from('notification_settings')
-      .update(update)
+      .update({ sent_today: updatedSentToday, updated_at: new Date().toISOString() })
       .eq('user_id', s.user_id)
 
     processed++
