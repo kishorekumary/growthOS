@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import {
   Bell, BellOff, Mail, MailCheck, Clock, Loader2,
-  CheckCircle, AlertCircle, Send, Plus, X, Info,
+  CheckCircle, AlertCircle, Send, Plus, X,
 } from 'lucide-react'
 import { createSupabaseBrowserClient } from '@/lib/supabase'
 import { Button } from '@/components/ui/button'
@@ -351,15 +351,6 @@ export default function NotificationSettings() {
           <p className="text-[11px] text-slate-600">Auto-detected. Use IANA format (e.g. Asia/Kolkata, America/New_York).</p>
         </div>
 
-        <div className="flex items-start gap-2.5 rounded-lg border border-amber-500/15 bg-amber-500/5 px-3 py-2.5">
-          <Info className="h-3.5 w-3.5 text-amber-400/70 shrink-0 mt-0.5" />
-          <p className="text-[11px] text-amber-400/70 leading-relaxed">
-            Reminders run hourly when triggered by an external scheduler. On the free Vercel plan,
-            the built-in cron fires twice daily (8 AM and 8 PM IST). For exact timing, set up a free
-            hourly cron at <span className="font-medium text-amber-400">cron-job.org</span> pointing
-            to <span className="font-mono">/api/cron/reminders</span>.
-          </p>
-        </div>
       </div>
 
       <Button
