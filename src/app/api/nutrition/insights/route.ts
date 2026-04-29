@@ -63,7 +63,7 @@ export async function GET() {
     fat_g:     +(days.reduce((s, d) => s + d.fat_g,     0) / days.length).toFixed(1),
   }
 
-  const topFoods = [...new Set(logs.map(l => l.food_name))].slice(0, 12)
+  const topFoods = Array.from(new Set(logs.map(l => l.food_name))).slice(0, 12)
   const latestWeight = weights[0]?.weight_kg
   const weightTrend  = weights.length >= 2
     ? (Number(weights[0].weight_kg) - Number(weights[weights.length - 1].weight_kg)).toFixed(1)
