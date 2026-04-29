@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from 'next/server'
 import { createSupabaseAdminClient } from '@/lib/supabase-admin'
+import { createSupabaseServerClient } from '@/lib/supabase-server'
 import webpush from 'web-push'
 import { Resend } from 'resend'
 
@@ -66,9 +67,14 @@ function emailHtml(greeting: string, message: string, appUrl: string) {
 export async function GET(req: NextRequest) {
   const auth = req.headers.get('authorization')
   const cronSecret = process.env.CRON_SECRET
-  if (cronSecret && auth !== `Bearer ${cronSecret}`) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
+  // Accept the cron secret OR a valid logged-in session (for manual testing)
+  let authorized = !cronSecret || auth === `Bearer ${cronSecret}`
+  if (!authorized) {
+    const { data: { user } } = await createSupabaseServerClient().auth.getUser()
+    authorized = !!user
   }
+  if (!authorized) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   if (process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY && process.env.VAPID_PRIVATE_KEY) {
     webpush.setVapidDetails(
