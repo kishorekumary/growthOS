@@ -384,13 +384,18 @@ function GoalSection({
   markingId: string | null
   deletingId: string | null
 }) {
-  const cfg = TIMEFRAME_CONFIG[timeframe]
+  const [collapsed, setCollapsed] = useState(false)
+  const cfg  = TIMEFRAME_CONFIG[timeframe]
   const Icon = cfg.icon
 
   return (
-    <div className={cn('rounded-xl border p-4 space-y-3', cfg.sectionBg, cfg.sectionBorder)}>
-      {/* Section header */}
-      <div className="flex items-center justify-between">
+    <div className={cn('rounded-xl border transition-all', cfg.sectionBg, cfg.sectionBorder)}>
+      {/* Section header — click anywhere to toggle */}
+      <button
+        type="button"
+        onClick={() => setCollapsed(v => !v)}
+        className="flex w-full items-center justify-between px-4 py-3 text-left"
+      >
         <div className="flex items-center gap-2">
           <Icon className={cn('h-4 w-4', cfg.accentColor)} />
           <span className={cn('text-sm font-semibold', cfg.accentColor)}>{cfg.label}</span>
@@ -400,41 +405,51 @@ function GoalSection({
             </span>
           )}
         </div>
-        <AddGoalModal
-          onAdd={onAdd}
-          defaultTimeframe={timeframe}
-          trigger={
-            <button
-              type="button"
-              className={cn(
-                'flex items-center gap-1 text-xs font-medium transition-colors',
-                cfg.accentColor, 'opacity-70 hover:opacity-100'
-              )}
-            >
-              <Plus className="h-3.5 w-3.5" /> Add
-            </button>
+        <div className="flex items-center gap-3">
+          {/* Add button — stop propagation so it doesn't collapse the section */}
+          <AddGoalModal
+            onAdd={onAdd}
+            defaultTimeframe={timeframe}
+            trigger={
+              <span
+                role="button"
+                onClick={e => e.stopPropagation()}
+                className={cn(
+                  'flex items-center gap-1 text-xs font-medium transition-colors',
+                  cfg.accentColor, 'opacity-70 hover:opacity-100'
+                )}
+              >
+                <Plus className="h-3.5 w-3.5" /> Add
+              </span>
+            }
+          />
+          {collapsed
+            ? <ChevronDown className={cn('h-3.5 w-3.5', cfg.accentColor, 'opacity-60')} />
+            : <ChevronUp   className={cn('h-3.5 w-3.5', cfg.accentColor, 'opacity-60')} />
           }
-        />
-      </div>
-
-      {/* Goals */}
-      {goals.length > 0 ? (
-        <div className="space-y-2">
-          {goals.map(goal => (
-            <GoalCard
-              key={goal.id}
-              goal={goal}
-              onComplete={onComplete}
-              onDelete={onDelete}
-              markingId={markingId}
-              deletingId={deletingId}
-            />
-          ))}
         </div>
-      ) : (
-        <p className="text-xs text-slate-600 py-1">
-          No {cfg.label.toLowerCase()} goals yet — hit Add to set one.
-        </p>
+      </button>
+
+      {/* Goals — hidden when collapsed */}
+      {!collapsed && (
+        <div className="px-4 pb-4 space-y-2">
+          {goals.length > 0 ? (
+            goals.map(goal => (
+              <GoalCard
+                key={goal.id}
+                goal={goal}
+                onComplete={onComplete}
+                onDelete={onDelete}
+                markingId={markingId}
+                deletingId={deletingId}
+              />
+            ))
+          ) : (
+            <p className="text-xs text-slate-600 py-1">
+              No {cfg.label.toLowerCase()} goals yet — hit Add to set one.
+            </p>
+          )}
+        </div>
       )}
     </div>
   )
