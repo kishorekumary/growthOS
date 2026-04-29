@@ -213,12 +213,13 @@ function WeeklyScoreCard({ done, missed }: { done: number; missed: number }) {
 // ─── Main component ───────────────────────────────────────────
 
 export default function HabitTracker() {
-  const [habits, setHabits]         = useState<Habit[]>([])
-  const [weekLogs, setWeekLogs]     = useState<HabitLog[]>([])
-  const [userId, setUserId]         = useState<string | null>(null)
-  const [loading, setLoading]       = useState(true)
-  const [fetchError, setFetchError] = useState<string | null>(null)
-  const [markingId, setMarkingId]   = useState<string | null>(null)
+  const [habits, setHabits]               = useState<Habit[]>([])
+  const [weekLogs, setWeekLogs]           = useState<HabitLog[]>([])
+  const [logsUnavailable, setLogsUnavail] = useState(false)
+  const [userId, setUserId]               = useState<string | null>(null)
+  const [loading, setLoading]             = useState(true)
+  const [fetchError, setFetchError]       = useState<string | null>(null)
+  const [markingId, setMarkingId]         = useState<string | null>(null)
 
   const fetchData = useCallback(async () => {
     setFetchError(null)
@@ -242,29 +243,46 @@ export default function HabitTracker() {
       supabase
         .from('habit_logs')
         .select('habit_id, log_date, status')
+        .eq('user_id', session.user.id)
         .gte('log_date', weekStart),
     ])
 
     if (habitsRes.error) { setFetchError(habitsRes.error.message); setLoading(false); return }
     setHabits((habitsRes.data as Habit[]) ?? [])
-    setWeekLogs((logsRes.data as HabitLog[]) ?? [])
+
+    if (logsRes.error) {
+      // habit_logs table not yet created (migration pending) — fall back to last_done_at
+      setLogsUnavail(true)
+      setWeekLogs([])
+    } else {
+      setLogsUnavail(false)
+      setWeekLogs((logsRes.data as HabitLog[]) ?? [])
+    }
     setLoading(false)
   }, [])
 
   useEffect(() => { fetchData() }, [fetchData])
 
   function getStatus(habitId: string): LogStatus {
-    const log = weekLogs.find(l => l.habit_id === habitId && l.log_date === todayStr())
-    return log?.status ?? 'pending'
+    const today = todayStr()
+    const log = weekLogs.find(l => l.habit_id === habitId && l.log_date === today)
+    if (log) return log.status
+    // Fallback when habit_logs table unavailable: derive from last_done_at
+    if (logsUnavailable) {
+      const habit = habits.find(h => h.id === habitId)
+      if (habit?.last_done_at && habit.last_done_at.startsWith(today)) return 'done'
+    }
+    return 'pending'
   }
 
   async function markDone(habit: Habit) {
     if (getStatus(habit.id) !== 'pending' || markingId || !userId) return
     setMarkingId(habit.id)
     const newStreak = computeStreak(habit.streak_count, habit.last_done_at, habit.frequency)
-    const now = new Date().toISOString()
+    const now   = new Date().toISOString()
     const today = todayStr()
 
+    // Optimistic update
     setHabits(prev => prev.map(h => h.id === habit.id
       ? { ...h, streak_count: newStreak, longest_streak: Math.max(newStreak, h.longest_streak), last_done_at: now }
       : h
@@ -273,10 +291,9 @@ export default function HabitTracker() {
       ...prev.filter(l => !(l.habit_id === habit.id && l.log_date === today)),
       { habit_id: habit.id, log_date: today, status: 'done' },
     ])
-    setMarkingId(null)
 
     const supabase = createSupabaseBrowserClient()
-    await Promise.all([
+    const [, logsRes] = await Promise.all([
       supabase.from('personality_habits').update({
         streak_count:   newStreak,
         longest_streak: Math.max(newStreak, habit.longest_streak),
@@ -288,6 +305,10 @@ export default function HabitTracker() {
         { onConflict: 'habit_id,log_date' }
       ),
     ])
+
+    // If habit_logs table missing, mark as unavailable so fallback kicks in
+    if (logsRes.error) setLogsUnavail(true)
+    setMarkingId(null)
   }
 
   async function markMissed(habit: Habit) {
@@ -299,13 +320,14 @@ export default function HabitTracker() {
       ...prev.filter(l => !(l.habit_id === habit.id && l.log_date === today)),
       { habit_id: habit.id, log_date: today, status: 'missed' },
     ])
-    setMarkingId(null)
 
     const supabase = createSupabaseBrowserClient()
-    await supabase.from('habit_logs').upsert(
+    const { error } = await supabase.from('habit_logs').upsert(
       { user_id: userId, habit_id: habit.id, log_date: today, status: 'missed' },
       { onConflict: 'habit_id,log_date' }
     )
+    if (error) setLogsUnavail(true)
+    setMarkingId(null)
   }
 
   async function undoLog(habit: Habit) {
@@ -316,14 +338,13 @@ export default function HabitTracker() {
 
     setWeekLogs(prev => prev.filter(l => !(l.habit_id === habit.id && l.log_date === today)))
 
-    // If undoing a done, also roll back streak
+    const supabase = createSupabaseBrowserClient()
     if (status === 'done') {
       const newStreak = Math.max(0, habit.streak_count - 1)
       setHabits(prev => prev.map(h => h.id === habit.id
         ? { ...h, streak_count: newStreak, last_done_at: null }
         : h
       ))
-      const supabase = createSupabaseBrowserClient()
       await Promise.all([
         supabase.from('habit_logs').delete().eq('habit_id', habit.id).eq('log_date', today),
         supabase.from('personality_habits').update({
@@ -331,7 +352,6 @@ export default function HabitTracker() {
         }).eq('id', habit.id),
       ])
     } else {
-      const supabase = createSupabaseBrowserClient()
       await supabase.from('habit_logs').delete().eq('habit_id', habit.id).eq('log_date', today)
     }
 
