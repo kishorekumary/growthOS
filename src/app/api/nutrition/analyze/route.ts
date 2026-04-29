@@ -1,11 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
-import Anthropic from '@anthropic-ai/sdk'
+import { openai } from '@/lib/openai'
 import { createSupabaseServerClient } from '@/lib/supabase-server'
 
-const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
-
 export async function POST(req: NextRequest) {
-  // Require authenticated user
   const { data: { user } } = await createSupabaseServerClient().auth.getUser()
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
@@ -14,15 +11,15 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Missing image data' }, { status: 400 })
   }
 
-  const response = await client.messages.create({
-    model: 'claude-sonnet-4-6',
+  const response = await openai.chat.completions.create({
+    model: 'gpt-4o',
     max_tokens: 512,
     messages: [{
       role: 'user',
       content: [
         {
-          type: 'image',
-          source: { type: 'base64', media_type: mediaType as Anthropic.Base64ImageSource['media_type'], data: imageBase64 },
+          type: 'image_url',
+          image_url: { url: `data:${mediaType};base64,${imageBase64}` },
         },
         {
           type: 'text',
@@ -45,7 +42,7 @@ Be realistic. Sum all visible items. If uncertain, note it in the notes field.`,
     }],
   })
 
-  const text = response.content[0].type === 'text' ? response.content[0].text : ''
+  const text = response.choices[0]?.message?.content ?? ''
   const match = text.match(/\{[\s\S]*\}/)
   if (!match) return NextResponse.json({ error: 'Could not parse nutritional data from image' }, { status: 500 })
 

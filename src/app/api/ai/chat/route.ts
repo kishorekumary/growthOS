@@ -1,5 +1,5 @@
 import { createSupabaseServerClient } from '@/lib/supabase-server'
-import { anthropic } from '@/lib/anthropic'
+import { openai } from '@/lib/openai'
 
 type Section = 'personality' | 'fitness' | 'finance' | 'books'
 
@@ -102,11 +102,14 @@ Guidelines:
     tokens_used: null,
   })
 
-  const stream = anthropic.messages.stream({
-    model: 'claude-sonnet-4-6',
+  const stream = await openai.chat.completions.create({
+    model: 'gpt-4o',
     max_tokens: 1024,
-    system: systemPrompt,
-    messages: [{ role: 'user', content: message }],
+    stream: true,
+    messages: [
+      { role: 'system', content: systemPrompt },
+      { role: 'user', content: message },
+    ],
   })
 
   const encoder = new TextEncoder()
@@ -115,12 +118,9 @@ Guidelines:
   const readable = new ReadableStream({
     async start(controller) {
       try {
-        for await (const event of stream) {
-          if (
-            event.type === 'content_block_delta' &&
-            event.delta.type === 'text_delta'
-          ) {
-            const text = event.delta.text
+        for await (const chunk of stream) {
+          const text = chunk.choices[0]?.delta?.content ?? ''
+          if (text) {
             fullText += text
             controller.enqueue(encoder.encode(text))
           }

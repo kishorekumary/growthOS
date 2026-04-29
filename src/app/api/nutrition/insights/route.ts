@@ -1,9 +1,7 @@
 import { NextResponse } from 'next/server'
-import Anthropic from '@anthropic-ai/sdk'
+import { openai } from '@/lib/openai'
 import { createSupabaseServerClient } from '@/lib/supabase-server'
 import { createSupabaseAdminClient } from '@/lib/supabase-admin'
-
-const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
 
 export async function GET() {
   const { data: { user } } = await createSupabaseServerClient().auth.getUser()
@@ -101,13 +99,13 @@ Return ONLY a valid JSON object — no markdown, no explanation:
 
 Give 4-5 specific, personalised recommendations. Reference their actual data.`
 
-  const response = await client.messages.create({
-    model:      'claude-sonnet-4-6',
+  const response = await openai.chat.completions.create({
+    model: 'gpt-4o',
     max_tokens: 1024,
-    messages:   [{ role: 'user', content: prompt }],
+    messages: [{ role: 'user', content: prompt }],
   })
 
-  const text  = response.content[0].type === 'text' ? response.content[0].text : ''
+  const text  = response.choices[0]?.message?.content ?? ''
   const match = text.match(/\{[\s\S]*\}/)
   if (!match) return NextResponse.json({ error: 'Could not parse AI response' }, { status: 500 })
 
