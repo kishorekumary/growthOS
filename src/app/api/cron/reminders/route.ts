@@ -4,6 +4,7 @@ import { createSupabaseServerClient } from '@/lib/supabase-server'
 import webpush from 'web-push'
 import { Resend } from 'resend'
 import twilio from 'twilio'
+import { sendTelegramMessage } from '@/lib/telegram'
 
 // Returns current local time and date string in the given IANA timezone
 function localTime(timezone: string): { h: number; m: number; dateStr: string } {
@@ -96,8 +97,8 @@ export async function GET(req: NextRequest) {
   // eslint-disable-next-line prefer-const
   let { data: rawSettings, error: settingsError } = await admin
     .from('notification_settings')
-    .select('user_id, push_enabled, email_enabled, call_enabled, phone_number, reminder_times, sent_today, timezone')
-    .or('push_enabled.eq.true,email_enabled.eq.true,call_enabled.eq.true')
+    .select('user_id, push_enabled, email_enabled, call_enabled, phone_number, telegram_enabled, telegram_chat_id, reminder_times, sent_today, timezone')
+    .or('push_enabled.eq.true,email_enabled.eq.true,call_enabled.eq.true,telegram_enabled.eq.true')
 
   type SettingsRow = {
     user_id: string
@@ -105,6 +106,8 @@ export async function GET(req: NextRequest) {
     email_enabled: boolean
     call_enabled: boolean
     phone_number: string | null
+    telegram_enabled: boolean
+    telegram_chat_id: string | null
     reminder_times: string[]
     sent_today: Record<string, string>
     timezone: string
@@ -116,16 +119,18 @@ export async function GET(req: NextRequest) {
     // Migration 010 not yet applied — fall back to old two-slot schema
     const { data: legacy } = await admin
       .from('notification_settings')
-      .select('user_id, push_enabled, email_enabled, call_enabled, phone_number, reminder_time_1, reminder_time_2, last_reminder_1_sent, last_reminder_2_sent, timezone')
+      .select('user_id, push_enabled, email_enabled, call_enabled, phone_number, telegram_enabled, telegram_chat_id, reminder_time_1, reminder_time_2, last_reminder_1_sent, last_reminder_2_sent, timezone')
       .or('push_enabled.eq.true,email_enabled.eq.true')
     settings = (legacy ?? []).map((s) => ({
-      user_id:        s.user_id,
-      push_enabled:   s.push_enabled,
-      email_enabled:  s.email_enabled,
-      call_enabled:   s.call_enabled  ?? false,
-      phone_number:   s.phone_number  ?? null,
-      timezone:       s.timezone,
-      reminder_times: [s.reminder_time_1 ?? '08:00', s.reminder_time_2 ?? '18:00'],
+      user_id:          s.user_id,
+      push_enabled:     s.push_enabled,
+      email_enabled:    s.email_enabled,
+      call_enabled:     s.call_enabled      ?? false,
+      phone_number:     s.phone_number      ?? null,
+      telegram_enabled: s.telegram_enabled  ?? false,
+      telegram_chat_id: s.telegram_chat_id  ?? null,
+      timezone:         s.timezone,
+      reminder_times:   [s.reminder_time_1 ?? '08:00', s.reminder_time_2 ?? '18:00'],
       sent_today: {
         [s.reminder_time_1 ?? '08:00']: s.last_reminder_1_sent ?? '',
         [s.reminder_time_2 ?? '18:00']: s.last_reminder_2_sent ?? '',
@@ -214,6 +219,18 @@ export async function GET(req: NextRequest) {
         from: process.env.TWILIO_FROM_NUMBER,
         url:  callUrl,
       }).catch(() => {})
+    }
+
+    // Telegram
+    if (s.telegram_enabled && s.telegram_chat_id) {
+      const telegramText = [
+        `${isEvening ? '🌙' : '🌅'} <b>GrowthOS Reminder</b>`,
+        '',
+        taskMsg,
+        '',
+        `<a href="${appUrl}/todos">Open Tasks →</a>`,
+      ].join('\n')
+      await sendTelegramMessage(s.telegram_chat_id, telegramText)
     }
 
     // Mark each fired time as sent today

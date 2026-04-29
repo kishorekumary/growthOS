@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import {
   Bell, BellOff, Mail, MailCheck, Clock, Loader2,
-  CheckCircle, AlertCircle, Send, Plus, X, Phone, PhoneOff,
+  CheckCircle, AlertCircle, Send, Plus, X, Phone, PhoneOff, MessageCircle,
 } from 'lucide-react'
 import { createSupabaseBrowserClient } from '@/lib/supabase'
 import { Button } from '@/components/ui/button'
@@ -59,8 +59,11 @@ export default function NotificationSettings() {
   const [pushPermission, setPushPermission] = useState<NotificationPermission>('default')
   const [pushEnabled, setPushEnabled]       = useState(false)
   const [emailEnabled, setEmailEnabled]     = useState(false)
-  const [callEnabled, setCallEnabled]       = useState(false)
-  const [phoneNumber, setPhoneNumber]       = useState('')
+  const [callEnabled, setCallEnabled]         = useState(false)
+  const [phoneNumber, setPhoneNumber]         = useState('')
+  const [telegramEnabled, setTelegramEnabled] = useState(false)
+  const [telegramChatId, setTelegramChatId]   = useState('')
+  const [telegramTesting, setTelegramTesting] = useState(false)
   const [times, setTimes]     = useState<string[]>(['08:00', '18:00'])
   const [timezone, setTimezone] = useState('UTC')
 
@@ -68,13 +71,15 @@ export default function NotificationSettings() {
     const supabase = createSupabaseBrowserClient()
     const { data } = await supabase
       .from('notification_settings')
-      .select('push_enabled, email_enabled, call_enabled, phone_number, reminder_times, timezone')
+      .select('push_enabled, email_enabled, call_enabled, phone_number, telegram_enabled, telegram_chat_id, reminder_times, timezone')
       .maybeSingle()
 
     if (data) {
       setEmailEnabled(data.email_enabled ?? false)
       setCallEnabled(data.call_enabled ?? false)
       setPhoneNumber(data.phone_number ?? '')
+      setTelegramEnabled(data.telegram_enabled ?? false)
+      setTelegramChatId(data.telegram_chat_id ?? '')
       setTimes((data.reminder_times as string[] | null) ?? ['08:00', '18:00'])
       setTimezone(data.timezone ?? Intl.DateTimeFormat().resolvedOptions().timeZone)
       if (data.push_enabled && 'serviceWorker' in navigator) {
@@ -180,8 +185,10 @@ export default function NotificationSettings() {
         user_id:        user.id,
         push_enabled:   pushEnabled,
         email_enabled:  emailEnabled,
-        call_enabled:   callEnabled,
-        phone_number:   phoneNumber.trim() || null,
+        call_enabled:      callEnabled,
+        phone_number:      phoneNumber.trim()      || null,
+        telegram_enabled:  telegramEnabled,
+        telegram_chat_id:  telegramChatId.trim()   || null,
         reminder_times: times,
         timezone,
         sent_today:     {},   // reset so updated times fire fresh
@@ -196,6 +203,17 @@ export default function NotificationSettings() {
       setTimeout(() => setSaved(false), 3000)
     }
     setSaving(false)
+  }
+
+  async function sendTestTelegram() {
+    setTelegramTesting(true)
+    setError(null)
+    const res = await fetch('/api/telegram/test', { method: 'POST' })
+    if (!res.ok) {
+      const d = await res.json().catch(() => ({}))
+      setError(d.error ?? 'Failed to send Telegram message')
+    }
+    setTelegramTesting(false)
   }
 
   async function sendTestPush() {
@@ -332,6 +350,65 @@ export default function NotificationSettings() {
               className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-white placeholder:text-slate-600 focus:outline-none focus:ring-1 focus:ring-emerald-500"
             />
             <p className="text-[11px] text-slate-600">Include country code — e.g. +91 for India, +1 for US.</p>
+          </div>
+        )}
+      </div>
+
+      {/* Telegram */}
+      <div className="rounded-xl border border-white/8 bg-white/3 p-5 space-y-4">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-sky-500/20">
+              <MessageCircle className={cn('h-4 w-4', telegramEnabled ? 'text-sky-400' : 'text-slate-500')} />
+            </div>
+            <div>
+              <p className="text-sm font-semibold text-white">Telegram Reminders</p>
+              <p className="text-xs text-slate-500 mt-0.5">
+                {telegramEnabled ? 'Telegram messages enabled' : 'Free unlimited reminders via Telegram'}
+              </p>
+            </div>
+          </div>
+          <Toggle checked={telegramEnabled} onChange={() => setTelegramEnabled(v => !v)} />
+        </div>
+
+        {telegramEnabled && (
+          <div className="space-y-4">
+            {/* Setup steps */}
+            <div className="rounded-lg border border-sky-500/15 bg-sky-500/5 px-3 py-3 space-y-1.5">
+              <p className="text-xs font-medium text-sky-400">Setup (one-time)</p>
+              <ol className="space-y-1 text-[11px] text-slate-400 list-decimal list-inside">
+                <li>Open Telegram → search <span className="text-sky-300 font-medium">@BotFather</span> → send <code className="bg-white/10 px-1 rounded">/newbot</code> and follow the steps</li>
+                <li>Copy the bot token and add it to Vercel env as <code className="bg-white/10 px-1 rounded">TELEGRAM_BOT_TOKEN</code></li>
+                <li>Start a chat with your new bot (search its username and press Start)</li>
+                <li>Message <span className="text-sky-300 font-medium">@userinfobot</span> on Telegram — it replies with your Chat ID</li>
+                <li>Paste your Chat ID below, save, then hit the test button</li>
+              </ol>
+            </div>
+
+            <div className="space-y-1.5">
+              <label className="text-xs font-medium text-slate-400">Your Telegram Chat ID</label>
+              <input
+                type="text"
+                value={telegramChatId}
+                onChange={e => setTelegramChatId(e.target.value)}
+                placeholder="e.g. 123456789"
+                className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-white placeholder:text-slate-600 focus:outline-none focus:ring-1 focus:ring-sky-500"
+              />
+            </div>
+
+            {telegramChatId.trim() && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={sendTestTelegram}
+                disabled={telegramTesting}
+                className="border-white/10 bg-white/5 text-slate-300 hover:text-white text-xs h-8"
+              >
+                {telegramTesting
+                  ? <><Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> Sending...</>
+                  : <><Send className="mr-1.5 h-3.5 w-3.5" /> Send test message</>}
+              </Button>
+            )}
           </div>
         )}
       </div>
