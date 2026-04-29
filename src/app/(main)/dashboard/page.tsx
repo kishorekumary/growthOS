@@ -13,6 +13,8 @@ export default async function DashboardPage() {
 
   const weekStart = format(startOfWeek(new Date(), { weekStartsOn: 1 }), 'yyyy-MM-dd')
 
+  const todayStr = format(new Date(), 'yyyy-MM-dd')
+
   const [
     { data: profile },
     { data: habits },
@@ -20,6 +22,7 @@ export default async function DashboardPage() {
     { data: financeProfile },
     { data: completedBooks },
     { data: currentBook },
+    { data: todayTodos },
   ] = await Promise.all([
     supabase.from('user_profiles').select('full_name').eq('id', user.id).single(),
     supabase.from('personality_habits').select('streak_count').eq('user_id', user.id),
@@ -33,6 +36,15 @@ export default async function DashboardPage() {
       .eq('status', 'reading')
       .limit(1)
       .maybeSingle(),
+    supabase
+      .from('user_todos')
+      .select('id, title, notes, due_date, is_completed')
+      .eq('user_id', user.id)
+      .eq('is_completed', false)
+      .or(`due_date.is.null,due_date.lte.${todayStr}`)
+      .order('due_date', { ascending: true, nullsFirst: true })
+      .order('created_at', { ascending: false })
+      .limit(6),
   ])
 
   const activeHabits = habits?.filter((h) => h.streak_count > 0).length ?? 0
@@ -114,7 +126,7 @@ export default async function DashboardPage() {
 
       {/* Today's Tasks widget */}
       <div className="mb-6">
-        <TodoWidget />
+        <TodoWidget initialTodos={todayTodos ?? []} />
       </div>
 
       {/* Section cards — 2×2 grid */}

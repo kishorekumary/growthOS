@@ -1,10 +1,10 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState } from 'react'
 import Link from 'next/link'
-import { Plus, Check, ArrowRight, Loader2, CheckSquare } from 'lucide-react'
+import { Plus, ArrowRight, Loader2, CheckSquare } from 'lucide-react'
 import { createSupabaseBrowserClient } from '@/lib/supabase'
-import { format, isToday, isBefore, parseISO, startOfDay, endOfDay } from 'date-fns'
+import { format, isBefore, parseISO, startOfDay } from 'date-fns'
 import { cn } from '@/lib/utils'
 
 interface Todo {
@@ -15,28 +15,10 @@ interface Todo {
   is_completed: boolean
 }
 
-export default function TodoWidget() {
-  const [todos, setTodos]     = useState<Todo[]>([])
-  const [loading, setLoading] = useState(true)
+export default function TodoWidget({ initialTodos = [] }: { initialTodos?: Todo[] }) {
+  const [todos, setTodos]       = useState<Todo[]>(initialTodos)
   const [newTitle, setNewTitle] = useState('')
   const [saving, setSaving]     = useState(false)
-
-  const fetchTodos = useCallback(async () => {
-    const supabase = createSupabaseBrowserClient()
-    const todayStr = format(new Date(), 'yyyy-MM-dd')
-    const { data } = await supabase
-      .from('user_todos')
-      .select('id, title, notes, due_date, is_completed')
-      .eq('is_completed', false)
-      .or(`due_date.is.null,due_date.lte.${todayStr}`)
-      .order('due_date', { ascending: true, nullsFirst: true })
-      .order('created_at', { ascending: false })
-      .limit(6)
-    setTodos((data as Todo[]) ?? [])
-    setLoading(false)
-  }, [])
-
-  useEffect(() => { fetchTodos() }, [fetchTodos])
 
   async function handleAdd() {
     if (!newTitle.trim() || saving) return
@@ -47,45 +29,30 @@ export default function TodoWidget() {
     const todayStr = format(new Date(), 'yyyy-MM-dd')
     const { data } = await supabase
       .from('user_todos')
-      .insert({
-        user_id:  user.id,
-        title:    newTitle.trim(),
-        due_date: todayStr,
-      })
+      .insert({ user_id: user.id, title: newTitle.trim(), due_date: todayStr })
       .select('id, title, notes, due_date, is_completed')
       .single()
     setNewTitle('')
     setSaving(false)
     if (data) {
       setTodos(prev => [data as Todo, ...prev])
-    } else {
-      fetchTodos()
     }
   }
 
   async function handleComplete(id: string) {
-    const supabase = createSupabaseBrowserClient()
-    const { data: { session } } = await supabase.auth.getSession()
-    if (!session?.user) return
+    setTodos(prev => prev.filter(t => t.id !== id))
     const now = new Date().toISOString()
+    const supabase = createSupabaseBrowserClient()
     await supabase
       .from('user_todos')
       .update({ is_completed: true, completed_at: now, updated_at: now })
       .eq('id', id)
-      .eq('user_id', session.user.id)
-    setTodos(prev => prev.filter(t => t.id !== id))
   }
 
   function isOverdue(dateStr: string | null) {
     if (!dateStr) return false
     return isBefore(parseISO(dateStr), startOfDay(new Date()))
   }
-
-  if (loading) return (
-    <div className="rounded-2xl border border-white/8 bg-white/3 p-5 flex items-center justify-center">
-      <Loader2 className="h-4 w-4 animate-spin text-slate-500" />
-    </div>
-  )
 
   return (
     <div className="rounded-2xl border border-white/8 bg-white/3 p-5 space-y-4">

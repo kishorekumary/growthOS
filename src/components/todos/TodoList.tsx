@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState } from 'react'
 import {
   Plus, Check, Trash2, ChevronDown, ChevronUp,
   Loader2, StickyNote, Calendar, X,
@@ -51,9 +51,9 @@ function isOverdue(dateStr: string | null) {
   return isBefore(parseISO(dateStr), startOfDay(new Date()))
 }
 
-export default function TodoList() {
-  const [todos, setTodos]               = useState<Todo[]>([])
-  const [loading, setLoading]           = useState(true)
+export default function TodoList({ initialTodos = [] }: { initialTodos?: Todo[] }) {
+  const [todos, setTodos]               = useState<Todo[]>(initialTodos)
+  const [loading, setLoading]           = useState(false)
   const [filter, setFilter]             = useState<Filter>('today')
   const [expandedNotes, setExpandedNotes] = useState<Set<string>>(new Set())
   const [showCompleted, setShowCompleted] = useState(false)
@@ -64,31 +64,26 @@ export default function TodoList() {
   const [newNotes, setNewNotes] = useState('')
   const [saving, setSaving]     = useState(false)
 
-  const fetchTodos = useCallback(async (silent = false) => {
-    if (!silent) setLoading(true)
+  // Only called as a fallback when insert+select returns null.
+  async function refreshFromDb() {
+    setLoading(true)
     const supabase = createSupabaseBrowserClient()
     const { data } = await supabase
       .from('user_todos')
-      .select('*')
+      .select('id, title, notes, due_date, is_completed, completed_at, created_at')
       .order('due_date', { ascending: true, nullsFirst: true })
       .order('created_at', { ascending: false })
     setTodos((data as Todo[]) ?? [])
-    if (!silent) setLoading(false)
-  }, [])
-
-  useEffect(() => { fetchTodos() }, [fetchTodos])
+    setLoading(false)
+  }
 
   function applyFilter(list: Todo[]) {
     const todayEnd = endOfDay(new Date())
     const weekEnd  = addDays(startOfDay(new Date()), 7)
     return list.filter(t => {
       if (t.is_completed) return false
-      if (filter === 'today') {
-        return !t.due_date || !isAfter(parseISO(t.due_date), todayEnd)
-      }
-      if (filter === 'week') {
-        return !t.due_date || !isAfter(parseISO(t.due_date), weekEnd)
-      }
+      if (filter === 'today') return !t.due_date || !isAfter(parseISO(t.due_date), todayEnd)
+      if (filter === 'week')  return !t.due_date || !isAfter(parseISO(t.due_date), weekEnd)
       return true
     })
   }
@@ -110,7 +105,7 @@ export default function TodoList() {
         notes:    newNotes.trim() || null,
         due_date: newDate || null,
       })
-      .select()
+      .select('id, title, notes, due_date, is_completed, completed_at, created_at')
       .single()
 
     setNewTitle('')
@@ -120,7 +115,6 @@ export default function TodoList() {
     setSaving(false)
 
     if (data) {
-      // Optimistic: insert returned the row, add it directly — no re-fetch needed.
       setTodos(prev => [data as Todo, ...prev])
       if (capturedDate) {
         const d = parseISO(capturedDate)
@@ -128,47 +122,39 @@ export default function TodoList() {
         else if (isAfter(d, endOfDay(new Date()))) setFilter('week')
       }
     } else {
-      // SELECT after INSERT returned nothing (RLS gap or transient error) — reload from DB.
-      fetchTodos()
+      // Insert worked but select was blocked — re-fetch from DB.
+      refreshFromDb()
     }
   }
 
   async function handleComplete(id: string) {
-    const supabase = createSupabaseBrowserClient()
-    const { data: { session } } = await supabase.auth.getSession()
-    if (!session?.user) return
     const now = new Date().toISOString()
+    setTodos(prev => prev.map(t =>
+      t.id === id ? { ...t, is_completed: true, completed_at: now } : t
+    ))
+    const supabase = createSupabaseBrowserClient()
     await supabase
       .from('user_todos')
       .update({ is_completed: true, completed_at: now, updated_at: now })
       .eq('id', id)
-      .eq('user_id', session.user.id)
-    setTodos(prev => prev.map(t =>
-      t.id === id ? { ...t, is_completed: true, completed_at: now } : t
-    ))
   }
 
   async function handleUncomplete(id: string) {
-    const supabase = createSupabaseBrowserClient()
-    const { data: { session } } = await supabase.auth.getSession()
-    if (!session?.user) return
     const now = new Date().toISOString()
+    setTodos(prev => prev.map(t =>
+      t.id === id ? { ...t, is_completed: false, completed_at: null } : t
+    ))
+    const supabase = createSupabaseBrowserClient()
     await supabase
       .from('user_todos')
       .update({ is_completed: false, completed_at: null, updated_at: now })
       .eq('id', id)
-      .eq('user_id', session.user.id)
-    setTodos(prev => prev.map(t =>
-      t.id === id ? { ...t, is_completed: false, completed_at: null } : t
-    ))
   }
 
   async function handleDelete(id: string) {
-    const supabase = createSupabaseBrowserClient()
-    const { data: { session } } = await supabase.auth.getSession()
-    if (!session?.user) return
-    await supabase.from('user_todos').delete().eq('id', id).eq('user_id', session.user.id)
     setTodos(prev => prev.filter(t => t.id !== id))
+    const supabase = createSupabaseBrowserClient()
+    await supabase.from('user_todos').delete().eq('id', id)
   }
 
   function toggleNotes(id: string) {
@@ -279,7 +265,7 @@ export default function TodoList() {
       {filtered.length === 0 ? (
         <div className="rounded-xl border border-white/5 bg-white/2 py-12 text-center">
           <p className="text-slate-500 text-sm">
-            {filter === 'today' ? 'Nothing due today — great job! 🎉' : 'No tasks here yet'}
+            {filter === 'today' ? 'Nothing due today — add a task above' : 'No tasks here yet'}
           </p>
         </div>
       ) : (
@@ -293,7 +279,6 @@ export default function TodoList() {
               )}
             >
               <div className="flex items-start gap-3">
-                {/* Complete button */}
                 <button
                   type="button"
                   onClick={() => handleComplete(todo.id)}
