@@ -66,6 +66,43 @@ const TIMEFRAME_CONFIG: Record<Timeframe, {
 
 function todayStr() { return new Date().toISOString().split('T')[0] }
 
+// Derive which timeframe bucket a goal belongs to:
+// - If target_date falls within this week → 'week'
+// - If target_date falls within this month (excl. this week) → 'month'
+// - If target_date falls within this year (excl. this month) → 'year'
+// - Otherwise fall back to the stored timeframe column
+function effectiveTimeframe(goal: Goal): Timeframe {
+  if (!goal.target_date) return goal.timeframe
+
+  const date = parseISO(goal.target_date)
+  const now  = new Date()
+
+  // Week: Monday–Sunday of current week
+  const weekStart = new Date(now)
+  const dow = weekStart.getDay() || 7        // Mon=1 … Sun=7
+  weekStart.setDate(weekStart.getDate() - (dow - 1))
+  weekStart.setHours(0, 0, 0, 0)
+  const weekEnd = new Date(weekStart)
+  weekEnd.setDate(weekEnd.getDate() + 6)
+  weekEnd.setHours(23, 59, 59, 999)
+
+  if (date >= weekStart && date <= weekEnd) return 'week'
+
+  // Month: 1st–last day of current month
+  const monthStart = new Date(now.getFullYear(), now.getMonth(), 1)
+  const monthEnd   = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999)
+
+  if (date >= monthStart && date <= monthEnd) return 'month'
+
+  // Year: Jan 1–Dec 31 of current year
+  const yearStart = new Date(now.getFullYear(), 0, 1)
+  const yearEnd   = new Date(now.getFullYear(), 11, 31, 23, 59, 59, 999)
+
+  if (date >= yearStart && date <= yearEnd) return 'year'
+
+  return goal.timeframe
+}
+
 function DateStatus({ targetDate }: { targetDate: string }) {
   const date = parseISO(targetDate)
   const days = differenceInDays(date, new Date())
@@ -582,7 +619,7 @@ export default function GoalsList() {
   const active    = goals.filter(g => !g.is_completed)
   const completed = goals.filter(g => g.is_completed)
 
-  const byTimeframe = (tf: Timeframe) => active.filter(g => (g.timeframe ?? 'custom') === tf)
+  const byTimeframe = (tf: Timeframe) => active.filter(g => effectiveTimeframe(g) === tf)
   const byCategory  = (cat: Category) => active.filter(g => g.category === cat)
 
   const weekGoals   = byTimeframe('week')
