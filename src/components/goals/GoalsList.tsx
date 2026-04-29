@@ -403,14 +403,139 @@ function GoalSection({
   )
 }
 
+// ─── Category section (By Category tab) ──────────────────────
+
+function CategorySection({
+  category,
+  goals,
+  onAdd,
+  onComplete,
+  onDelete,
+  markingId,
+  deletingId,
+}: {
+  category: Category
+  goals: Goal[]
+  onAdd: () => void
+  onComplete: (id: string) => void
+  onDelete: (id: string) => void
+  markingId: string | null
+  deletingId: string | null
+}) {
+  const cfg  = CATEGORY_CONFIG[category]
+  const Icon = cfg.icon
+
+  return (
+    <div className={cn('rounded-xl border p-4 space-y-3', cfg.bg, cfg.border)}>
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <Icon className={cn('h-4 w-4', cfg.color)} />
+          <span className={cn('text-sm font-semibold', cfg.color)}>{cfg.label}</span>
+          {goals.length > 0 && (
+            <span className={cn('text-xs font-bold px-1.5 py-0.5 rounded-full', cfg.bg, cfg.color)}>
+              {goals.length}
+            </span>
+          )}
+        </div>
+        <AddGoalModal
+          onAdd={onAdd}
+          defaultTimeframe="custom"
+          trigger={
+            <button
+              type="button"
+              className={cn('flex items-center gap-1 text-xs font-medium opacity-70 hover:opacity-100 transition-colors', cfg.color)}
+            >
+              <Plus className="h-3.5 w-3.5" /> Add
+            </button>
+          }
+        />
+      </div>
+
+      {goals.length > 0 ? (
+        <div className="space-y-2">
+          {goals.map(goal => (
+            <GoalCard
+              key={goal.id}
+              goal={goal}
+              onComplete={onComplete}
+              onDelete={onDelete}
+              markingId={markingId}
+              deletingId={deletingId}
+            />
+          ))}
+        </div>
+      ) : (
+        <p className="text-xs text-slate-600 py-1">
+          No {cfg.label.toLowerCase()} goals yet — hit Add to set one.
+        </p>
+      )}
+    </div>
+  )
+}
+
+// ─── Completed list (shared) ──────────────────────────────────
+
+function CompletedList({ goals, onDelete }: { goals: Goal[]; onDelete: (id: string) => void }) {
+  const [show, setShow] = useState(false)
+  if (!goals.length) return null
+  return (
+    <div className="space-y-2 pt-2 border-t border-white/5">
+      <button
+        type="button"
+        onClick={() => setShow(v => !v)}
+        className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-slate-500 hover:text-slate-400 transition-colors"
+      >
+        {show ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
+        Completed ({goals.length})
+      </button>
+      {show && (
+        <div className="space-y-2">
+          {goals.map(goal => {
+            const cfg  = CATEGORY_CONFIG[goal.category]
+            const Icon = cfg.icon
+            return (
+              <div key={goal.id} className="group flex items-start gap-3 rounded-xl border border-white/5 bg-white/3 p-4 opacity-60">
+                <div className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-emerald-500/30 border-2 border-emerald-500">
+                  <Check className="h-3 w-3 text-emerald-400" />
+                </div>
+                <div className="flex-1 min-w-0 space-y-1">
+                  <div className="flex items-start gap-2 justify-between">
+                    <p className="text-sm font-medium text-slate-400 line-through leading-snug">{goal.title}</p>
+                    <span className={cn('flex items-center gap-1 text-xs px-1.5 py-0.5 rounded-full shrink-0', cfg.bg, cfg.color)}>
+                      <Icon className="h-3 w-3" />{cfg.label}
+                    </span>
+                  </div>
+                  {goal.completed_at && (
+                    <p className="text-xs text-emerald-600">✓ Completed {format(new Date(goal.completed_at), 'MMM d, yyyy')}</p>
+                  )}
+                </div>
+                <button
+                  type="button"
+                  onClick={() => onDelete(goal.id)}
+                  aria-label="Delete"
+                  className="shrink-0 mt-0.5 text-slate-700 opacity-0 group-hover:opacity-100 hover:text-red-400 transition-all"
+                >
+                  <Trash2 className="h-4 w-4" />
+                </button>
+              </div>
+            )
+          })}
+        </div>
+      )}
+    </div>
+  )
+}
+
 // ─── Main component ───────────────────────────────────────────
+
+type TabView = 'timeframe' | 'category'
 
 export default function GoalsList() {
   const [goals, setGoals]           = useState<Goal[]>([])
   const [loading, setLoading]       = useState(true)
   const [markingId, setMarkingId]   = useState<string | null>(null)
   const [deletingId, setDeletingId] = useState<string | null>(null)
-  const [showCompleted, setShowCompleted] = useState(false)
+  const [tab, setTab]               = useState<TabView>('timeframe')
 
   const fetchGoals = useCallback(async () => {
     const supabase = createSupabaseBrowserClient()
@@ -457,90 +582,91 @@ export default function GoalsList() {
   const completed = goals.filter(g => g.is_completed)
 
   const byTimeframe = (tf: Timeframe) => active.filter(g => (g.timeframe ?? 'custom') === tf)
+  const byCategory  = (cat: Category) => active.filter(g => g.category === cat)
 
   const weekGoals   = byTimeframe('week')
   const monthGoals  = byTimeframe('month')
   const yearGoals   = byTimeframe('year')
   const customGoals = byTimeframe('custom')
 
+  const TABS: { value: TabView; label: string }[] = [
+    { value: 'timeframe', label: 'By Timeframe' },
+    { value: 'category',  label: 'By Category'  },
+  ]
+
   return (
     <div className="space-y-4">
       {/* Header */}
       <div className="flex items-center justify-between">
-        <div>
-          <p className="text-xs text-slate-500">
-            {active.length} active goal{active.length !== 1 ? 's' : ''}
-            {completed.length > 0 && ` · ${completed.length} completed`}
-          </p>
-        </div>
+        <p className="text-xs text-slate-500">
+          {active.length} active goal{active.length !== 1 ? 's' : ''}
+          {completed.length > 0 && ` · ${completed.length} completed`}
+        </p>
         <AddGoalModal onAdd={fetchGoals} />
       </div>
 
-      {/* Highlighted sections */}
-      <GoalSection timeframe="week"   goals={weekGoals}   onAdd={fetchGoals} onComplete={markComplete} onDelete={deleteGoal} markingId={markingId} deletingId={deletingId} />
-      <GoalSection timeframe="month"  goals={monthGoals}  onAdd={fetchGoals} onComplete={markComplete} onDelete={deleteGoal} markingId={markingId} deletingId={deletingId} />
-      <GoalSection timeframe="year"   goals={yearGoals}   onAdd={fetchGoals} onComplete={markComplete} onDelete={deleteGoal} markingId={markingId} deletingId={deletingId} />
+      {/* Tabs */}
+      <div className="flex gap-1 rounded-lg border border-white/10 bg-white/3 p-1">
+        {TABS.map(t => (
+          <button
+            key={t.value}
+            type="button"
+            onClick={() => setTab(t.value)}
+            className={cn(
+              'flex-1 rounded-md py-1.5 text-xs font-medium transition-all',
+              tab === t.value
+                ? 'bg-violet-600 text-white shadow'
+                : 'text-slate-400 hover:text-white'
+            )}
+          >
+            {t.label}
+          </button>
+        ))}
+      </div>
 
-      {/* Custom / other goals */}
-      {customGoals.length > 0 && (
-        <GoalSection timeframe="custom" goals={customGoals} onAdd={fetchGoals} onComplete={markComplete} onDelete={deleteGoal} markingId={markingId} deletingId={deletingId} />
-      )}
-
-      {/* Empty state */}
-      {active.length === 0 && (
-        <div className="rounded-xl border border-dashed border-white/10 p-12 text-center">
-          <Target className="h-10 w-10 text-violet-400/30 mx-auto mb-3" />
-          <p className="text-slate-400 text-sm">No active goals yet.</p>
-          <p className="text-slate-600 text-xs mt-1">Add a weekly, monthly, or yearly goal above.</p>
+      {/* ── By Timeframe tab ── */}
+      {tab === 'timeframe' && (
+        <div className="space-y-4">
+          <GoalSection timeframe="week"   goals={weekGoals}   onAdd={fetchGoals} onComplete={markComplete} onDelete={deleteGoal} markingId={markingId} deletingId={deletingId} />
+          <GoalSection timeframe="month"  goals={monthGoals}  onAdd={fetchGoals} onComplete={markComplete} onDelete={deleteGoal} markingId={markingId} deletingId={deletingId} />
+          <GoalSection timeframe="year"   goals={yearGoals}   onAdd={fetchGoals} onComplete={markComplete} onDelete={deleteGoal} markingId={markingId} deletingId={deletingId} />
+          {customGoals.length > 0 && (
+            <GoalSection timeframe="custom" goals={customGoals} onAdd={fetchGoals} onComplete={markComplete} onDelete={deleteGoal} markingId={markingId} deletingId={deletingId} />
+          )}
+          {active.length === 0 && (
+            <div className="rounded-xl border border-dashed border-white/10 p-12 text-center">
+              <Target className="h-10 w-10 text-violet-400/30 mx-auto mb-3" />
+              <p className="text-slate-400 text-sm">No active goals yet.</p>
+              <p className="text-slate-600 text-xs mt-1">Add a weekly, monthly, or yearly goal above.</p>
+            </div>
+          )}
+          <CompletedList goals={completed} onDelete={deleteGoal} />
         </div>
       )}
 
-      {/* Completed goals */}
-      {completed.length > 0 && (
-        <div className="space-y-2 pt-2 border-t border-white/5">
-          <button
-            type="button"
-            onClick={() => setShowCompleted(v => !v)}
-            className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-slate-500 hover:text-slate-400 transition-colors"
-          >
-            {showCompleted ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
-            Completed ({completed.length})
-          </button>
-
-          {showCompleted && (
-            <div className="space-y-2">
-              {completed.map(goal => {
-                const cfg = CATEGORY_CONFIG[goal.category]
-                const Icon = cfg.icon
-                return (
-                  <div key={goal.id} className="group flex items-start gap-3 rounded-xl border border-white/5 bg-white/3 p-4 opacity-60">
-                    <div className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-emerald-500/30 border-2 border-emerald-500">
-                      <Check className="h-3 w-3 text-emerald-400" />
-                    </div>
-                    <div className="flex-1 min-w-0 space-y-1">
-                      <div className="flex items-start gap-2 justify-between">
-                        <p className="text-sm font-medium text-slate-400 line-through leading-snug">{goal.title}</p>
-                        <span className={cn('flex items-center gap-1 text-xs px-1.5 py-0.5 rounded-full shrink-0', cfg.bg, cfg.color)}>
-                          <Icon className="h-3 w-3" />{cfg.label}
-                        </span>
-                      </div>
-                      {goal.completed_at && (
-                        <p className="text-xs text-emerald-600">✓ Completed {format(new Date(goal.completed_at), 'MMM d, yyyy')}</p>
-                      )}
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => deleteGoal(goal.id)}
-                      aria-label="Delete"
-                      className="shrink-0 mt-0.5 text-slate-700 opacity-0 group-hover:opacity-100 hover:text-red-400 transition-all"
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </button>
-                  </div>
-                )
-              })}
+      {/* ── By Category tab ── */}
+      {tab === 'category' && (
+        <div className="space-y-4">
+          {(['fitness', 'finance', 'books', 'general'] as Category[]).map(cat => (
+            <CategorySection
+              key={cat}
+              category={cat}
+              goals={byCategory(cat)}
+              onAdd={fetchGoals}
+              onComplete={markComplete}
+              onDelete={deleteGoal}
+              markingId={markingId}
+              deletingId={deletingId}
+            />
+          ))}
+          {active.length === 0 && (
+            <div className="rounded-xl border border-dashed border-white/10 p-12 text-center">
+              <Target className="h-10 w-10 text-violet-400/30 mx-auto mb-3" />
+              <p className="text-slate-400 text-sm">No active goals yet.</p>
+              <p className="text-slate-600 text-xs mt-1">Add a goal using the button above.</p>
             </div>
           )}
+          <CompletedList goals={completed} onDelete={deleteGoal} />
         </div>
       )}
     </div>
