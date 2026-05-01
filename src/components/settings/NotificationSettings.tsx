@@ -80,7 +80,7 @@ export default function NotificationSettings() {
       setPhoneNumber(data.phone_number ?? '')
       setTelegramEnabled(data.telegram_enabled ?? false)
       setTelegramChatId(data.telegram_chat_id ?? '')
-      setTimes((data.reminder_times as string[] | null) ?? ['08:00', '18:00'])
+      setTimes(((data.reminder_times as string[] | null) ?? ['08:00', '18:00']).slice().sort())
       setTimezone(data.timezone ?? Intl.DateTimeFormat().resolvedOptions().timeZone)
       if (data.push_enabled && 'serviceWorker' in navigator) {
         const reg = await navigator.serviceWorker.ready.catch(() => null)
@@ -130,6 +130,15 @@ export default function NotificationSettings() {
       })
       if (!res.ok) throw new Error('Failed to save subscription')
       setPushEnabled(true)
+      // Immediately persist push_enabled=true so the cron can find this user
+      const supabase = createSupabaseBrowserClient()
+      const { data: { user } } = await supabase.auth.getUser()
+      if (user) {
+        await supabase.from('notification_settings').upsert(
+          { user_id: user.id, push_enabled: true, updated_at: new Date().toISOString() },
+          { onConflict: 'user_id' }
+        )
+      }
     } catch (e) {
       setError((e as Error).message ?? 'Failed to enable push notifications')
     } finally {
@@ -152,6 +161,14 @@ export default function NotificationSettings() {
         })
       }
       setPushEnabled(false)
+      const supabase = createSupabaseBrowserClient()
+      const { data: { user } } = await supabase.auth.getUser()
+      if (user) {
+        await supabase.from('notification_settings').upsert(
+          { user_id: user.id, push_enabled: false, updated_at: new Date().toISOString() },
+          { onConflict: 'user_id' }
+        )
+      }
     } catch (e) {
       setError((e as Error).message ?? 'Failed to disable push notifications')
     } finally {
@@ -161,6 +178,7 @@ export default function NotificationSettings() {
 
   function addTime() {
     if (times.length >= 8) return
+    // Insert, then sort so new entry appears in the right position
     setTimes(prev => [...prev, '09:00'].sort())
   }
 
@@ -169,7 +187,12 @@ export default function NotificationSettings() {
   }
 
   function updateTime(index: number, value: string) {
-    setTimes(prev => prev.map((t, i) => i === index ? value : t).sort())
+    // Do NOT sort while typing — sorting mid-keystroke jumps focus and swaps values
+    setTimes(prev => prev.map((t, i) => i === index ? value : t))
+  }
+
+  function sortTimes() {
+    setTimes(prev => [...prev].sort())
   }
 
   async function saveSettings() {
@@ -425,11 +448,12 @@ export default function NotificationSettings() {
 
         <div className="space-y-2">
           {times.map((t, i) => (
-            <div key={i} className="flex items-center gap-2">
+            <div key={t + i} className="flex items-center gap-2">
               <input
                 type="time"
                 value={t}
                 onChange={e => updateTime(i, e.target.value)}
+                onBlur={sortTimes}
                 className="flex-1 rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-white focus:outline-none focus:ring-1 focus:ring-violet-500"
               />
               {times.length > 1 && (

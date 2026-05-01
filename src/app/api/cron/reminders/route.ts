@@ -22,14 +22,17 @@ function localTime(timezone: string): { h: number; m: number; dateStr: string } 
   }
 }
 
-// True if the configured reminder time falls within the current 60-minute window.
-// Designed for hourly cron calls — each time is catchable within ±0-59 minutes.
+// True if the reminder time fell within the past 60 minutes (inclusive).
+// Designed for hourly cron. The inclusive upper bound means a reminder at exactly
+// T fires when the cron runs at T or up to T+60. Midnight wrap handled via modulo.
 function isDue(reminderTime: string, timezone: string): boolean {
   const [rh, rm] = reminderTime.split(':').map(Number)
   const { h, m } = localTime(timezone)
   const reminderMins = rh * 60 + rm
   const currentMins  = h * 60 + m
-  return currentMins >= reminderMins && currentMins < reminderMins + 60
+  // Number of minutes since the reminder time (wraps at midnight)
+  const minutesSince = (currentMins - reminderMins + 1440) % 1440
+  return minutesSince <= 60
 }
 
 function emailHtml(greeting: string, message: string, appUrl: string) {
