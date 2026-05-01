@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
-import { Loader2, Plus, Star, Sparkles, BookOpen, AlertCircle } from 'lucide-react'
+import { Loader2, Plus, Star, Sparkles, BookOpen, AlertCircle, GitBranch } from 'lucide-react'
 import { createSupabaseBrowserClient } from '@/lib/supabase'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -10,6 +10,9 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger,
 } from '@/components/ui/dialog'
 import { cn } from '@/lib/utils'
+import dynamic from 'next/dynamic'
+
+const BookMindMap = dynamic(() => import('./BookMindMap'), { ssr: false })
 
 type Status = 'want_to_read' | 'reading' | 'completed'
 
@@ -21,6 +24,7 @@ interface Book {
   status: Status
   rating: number | null
   ai_summary: string | null
+  key_lessons: string | null
 }
 
 interface AiData { summary: string; lessons: string[] }
@@ -331,6 +335,7 @@ export default function ReadingList() {
   const [loading, setLoading]           = useState(true)
   const [activeStatus, setActiveStatus] = useState<Status>('want_to_read')
   const [selected, setSelected]         = useState<Book | null>(null)
+  const [mindMapBook, setMindMapBook]   = useState<Book | null>(null)
 
   const fetchBooks = useCallback(async () => {
     const supabase = createSupabaseBrowserClient()
@@ -338,7 +343,7 @@ export default function ReadingList() {
     if (!session?.user) { setLoading(false); return }
     const { data } = await supabase
       .from('reading_log')
-      .select('id, book_title, author, genre, status, rating, ai_summary')
+      .select('id, book_title, author, genre, status, rating, ai_summary, key_lessons')
       .eq('user_id', session.user.id)
       .order('updated_at', { ascending: false })
     setBooks((data as Book[]) ?? [])
@@ -408,39 +413,59 @@ export default function ReadingList() {
       ) : (
         <div className="space-y-2">
           {filtered.map(book => (
-            <button
+            <div
               key={book.id}
-              type="button"
-              onClick={() => setSelected(book)}
-              className="w-full text-left rounded-xl border border-white/10 bg-white/5 px-4 py-3.5 hover:border-violet-500/30 hover:bg-violet-500/5 transition-all"
+              className="group flex items-center gap-1 rounded-xl border border-white/10 bg-white/5 hover:border-violet-500/30 hover:bg-violet-500/5 transition-all"
             >
-              <div className="flex items-center gap-3">
-                <div className="h-10 w-8 rounded bg-gradient-to-br from-violet-600 to-violet-800 flex items-center justify-center shrink-0">
-                  <BookOpen className="h-4 w-4 text-white/70" />
+              <button
+                type="button"
+                onClick={() => setSelected(book)}
+                className="flex-1 text-left px-4 py-3.5 min-w-0"
+              >
+                <div className="flex items-center gap-3">
+                  <div className="h-10 w-8 rounded bg-gradient-to-br from-violet-600 to-violet-800 flex items-center justify-center shrink-0">
+                    <BookOpen className="h-4 w-4 text-white/70" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium text-white truncate">{book.book_title}</p>
+                    <p className="text-xs text-slate-500 truncate">
+                      {book.author ?? 'Unknown author'}
+                      {book.genre ? ` · ${book.genre}` : ''}
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2 shrink-0">
+                    {book.ai_summary && (
+                      <span title="Summary available" className="text-violet-400">
+                        <Sparkles className="h-3.5 w-3.5" />
+                      </span>
+                    )}
+                    {book.key_lessons && book.key_lessons.startsWith('[') && (
+                      <span title="Mind map available" className="text-cyan-500">
+                        <GitBranch className="h-3.5 w-3.5" />
+                      </span>
+                    )}
+                    {book.status === 'completed' && book.rating && (
+                      <div className="flex items-center gap-0.5">
+                        {Array.from({ length: book.rating }).map((_, i) => (
+                          <Star key={i} className="h-3 w-3 fill-amber-400 text-amber-400" />
+                        ))}
+                      </div>
+                    )}
+                  </div>
                 </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium text-white truncate">{book.book_title}</p>
-                  <p className="text-xs text-slate-500 truncate">
-                    {book.author ?? 'Unknown author'}
-                    {book.genre ? ` · ${book.genre}` : ''}
-                  </p>
-                </div>
-                <div className="flex items-center gap-2 shrink-0">
-                  {book.ai_summary && (
-                    <span title="Summary available" className="text-violet-400">
-                      <Sparkles className="h-3.5 w-3.5" />
-                    </span>
-                  )}
-                  {book.status === 'completed' && book.rating && (
-                    <div className="flex items-center gap-0.5">
-                      {Array.from({ length: book.rating }).map((_, i) => (
-                        <Star key={i} className="h-3 w-3 fill-amber-400 text-amber-400" />
-                      ))}
-                    </div>
-                  )}
-                </div>
-              </div>
-            </button>
+              </button>
+
+              {/* Mind Map button */}
+              <button
+                type="button"
+                onClick={() => setMindMapBook(book)}
+                title="Open mind map"
+                className="shrink-0 mr-3 flex items-center gap-1 rounded-lg border border-cyan-500/30 bg-cyan-500/10 px-2.5 py-1.5 text-[11px] font-medium text-cyan-400 opacity-0 group-hover:opacity-100 hover:bg-cyan-500/20 transition-all"
+              >
+                <GitBranch className="h-3 w-3" />
+                Map
+              </button>
+            </div>
           ))}
         </div>
       )}
@@ -454,6 +479,19 @@ export default function ReadingList() {
             onClose={() => setSelected(null)}
           />
         </Dialog>
+      )}
+
+      {/* Mind Map overlay */}
+      {mindMapBook && (
+        <BookMindMap
+          bookId={mindMapBook.id}
+          bookTitle={mindMapBook.book_title}
+          initialJson={mindMapBook.key_lessons}
+          onClose={() => {
+            setMindMapBook(null)
+            fetchBooks()
+          }}
+        />
       )}
     </div>
   )
