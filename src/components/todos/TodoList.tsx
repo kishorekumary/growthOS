@@ -12,6 +12,7 @@ import {
 } from 'date-fns'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
+import TaskRewards from './TaskRewards'
 
 interface Todo {
   id: string
@@ -207,6 +208,9 @@ export default function TodoList({ initialTodos = [] }: { initialTodos?: Todo[] 
 
   return (
     <div className="space-y-4">
+      {/* Rewards widget */}
+      <TaskRewards todos={todos} />
+
       {/* Filter tabs */}
       <div className="flex gap-1 rounded-xl bg-white/5 p-1">
         {FILTERS.map(f => (

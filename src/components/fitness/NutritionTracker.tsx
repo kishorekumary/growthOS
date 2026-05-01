@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import {
   Camera, Loader2, Plus, Trash2, Flame, Trophy, Zap,
-  CheckCircle2, AlertCircle, Save, RefreshCw, ChevronDown, ChevronUp,
+  CheckCircle2, AlertCircle, Save, RefreshCw, ChevronDown, ChevronUp, Sparkles,
 } from 'lucide-react'
 import {
   LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, ReferenceLine,
@@ -213,19 +213,21 @@ function AddMealModal({ onSave, onClose }: {
   onClose: () => void
 }) {
   const fileRef = useRef<HTMLInputElement>(null)
-  const [preview, setPreview]       = useState<string | null>(null)
-  const [analyzing, setAnalyzing]   = useState(false)
-  const [analyzeErr, setAnalyzeErr] = useState<string | null>(null)
-  const [result, setResult]         = useState<NutritionEstimate | null>(null)
-  const [mealType, setMealType]     = useState<typeof MEAL_TYPES[number]>('snack')
-  const [saving, setSaving]         = useState(false)
-  const [foodName, setFoodName]     = useState('')
-  const [calories, setCalories]     = useState('')
-  const [protein, setProtein]       = useState('')
-  const [carbs, setCarbs]           = useState('')
-  const [fiber, setFiber]           = useState('')
-  const [fat, setFat]               = useState('')
-  const [notes, setNotes]           = useState('')
+  const [preview, setPreview]         = useState<string | null>(null)
+  const [analyzing, setAnalyzing]     = useState(false)
+  const [analyzeErr, setAnalyzeErr]   = useState<string | null>(null)
+  const [result, setResult]           = useState<NutritionEstimate | null>(null)
+  const [mealType, setMealType]       = useState<typeof MEAL_TYPES[number]>('snack')
+  const [saving, setSaving]           = useState(false)
+  const [foodName, setFoodName]       = useState('')
+  const [calories, setCalories]       = useState('')
+  const [protein, setProtein]         = useState('')
+  const [carbs, setCarbs]             = useState('')
+  const [fiber, setFiber]             = useState('')
+  const [fat, setFat]                 = useState('')
+  const [notes, setNotes]             = useState('')
+  const [autofilling, setAutofilling] = useState(false)
+  const [autofillErr, setAutofillErr] = useState<string | null>(null)
 
   useEffect(() => {
     const h = new Date().getHours()
@@ -236,6 +238,27 @@ function AddMealModal({ onSave, onClose }: {
     setFoodName(r.food_name); setCalories(String(r.calories))
     setProtein(String(r.protein_g)); setCarbs(String(r.carbs_g))
     setFiber(String(r.fiber_g)); setFat(String(r.fat_g)); setNotes(r.notes ?? '')
+  }
+
+  async function autofill() {
+    if (!foodName.trim() || autofilling) return
+    setAutofilling(true); setAutofillErr(null)
+    try {
+      const res  = await fetch('/api/nutrition/autofill', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ foodName: foodName.trim() }),
+      })
+      const text = await res.text()
+      let data: NutritionEstimate
+      try { data = JSON.parse(text) } catch {
+        throw new Error(res.ok ? 'Unexpected server response' : `Server error ${res.status}`)
+      }
+      if (!res.ok) throw new Error((data as unknown as { error: string }).error ?? 'Autofill failed')
+      setResult(data); fillFields(data)
+    } catch (e) {
+      setAutofillErr(e instanceof Error ? e.message : 'Autofill failed')
+    } finally { setAutofilling(false) }
   }
 
   function handleFile(file: File) {
@@ -334,9 +357,42 @@ function AddMealModal({ onSave, onClose }: {
               ))}
             </div>
             <div className="space-y-1">
-              <Label className="text-slate-400 text-xs">Food / Dish</Label>
-              <input value={foodName} onChange={e => setFoodName(e.target.value)} placeholder="e.g. Chicken biryani"
-                className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-white placeholder:text-slate-600 focus:outline-none focus:border-violet-500" />
+              <div className="flex items-center justify-between">
+                <Label className="text-slate-400 text-xs">Food / Dish</Label>
+                <span className="text-[10px] text-slate-600">Type a meal name → hit ✨ to auto-fill macros</span>
+              </div>
+              <div className="flex gap-2">
+                <input
+                  value={foodName}
+                  onChange={e => { setFoodName(e.target.value); setAutofillErr(null) }}
+                  onKeyDown={e => { if (e.key === 'Enter' && foodName.trim().length >= 3) autofill() }}
+                  placeholder="e.g. bowl of rice with chicken"
+                  className="flex-1 rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-white placeholder:text-slate-600 focus:outline-none focus:border-violet-500"
+                />
+                <button
+                  type="button"
+                  onClick={autofill}
+                  disabled={autofilling || !foodName.trim()}
+                  title="Auto-fill macros with AI"
+                  className={cn(
+                    'shrink-0 flex items-center gap-1 rounded-lg border px-3 py-2 text-xs font-medium transition-all',
+                    autofilling
+                      ? 'border-violet-500/30 bg-violet-500/10 text-violet-400'
+                      : foodName.trim()
+                        ? 'border-violet-500/50 bg-violet-500/15 text-violet-300 hover:bg-violet-500/25'
+                        : 'border-white/10 bg-white/5 text-slate-600 cursor-not-allowed'
+                  )}
+                >
+                  {autofilling
+                    ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                    : <Sparkles className="h-3.5 w-3.5" />}
+                </button>
+              </div>
+              {autofillErr && (
+                <p className="text-[11px] text-red-400 flex items-center gap-1">
+                  <AlertCircle className="h-3 w-3 shrink-0" />{autofillErr}
+                </p>
+              )}
             </div>
             <div className="grid grid-cols-2 gap-2">
               {[['Calories (kcal)', calories, setCalories], ['Protein (g)', protein, setProtein],
@@ -732,7 +788,7 @@ export default function NutritionTracker() {
               <div className="rounded-xl border border-dashed border-white/8 p-8 text-center">
                 <Camera className="h-8 w-8 text-slate-700 mx-auto mb-2" />
                 <p className="text-sm text-slate-500">No meals logged yet.</p>
-                <p className="text-xs text-slate-600 mt-1">Snap a photo to get started.</p>
+                <p className="text-xs text-slate-600 mt-1">Type a meal name and let AI fill in the macros.</p>
               </div>
             ) : todayLogs.map(log => (
               <div key={log.id}

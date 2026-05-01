@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import {
   Target, Plus, Check, Trash2, Loader2, AlertCircle,
-  Dumbbell, Wallet, BookOpen, Sparkles,
+  Dumbbell, Wallet, BookOpen, Sparkles, Briefcase,
   ChevronDown, ChevronUp, CalendarDays, CalendarRange, TrendingUp, Pencil, RotateCcw,
 } from 'lucide-react'
 import { createSupabaseBrowserClient } from '@/lib/supabase'
@@ -16,7 +16,7 @@ import {
 import { cn } from '@/lib/utils'
 import { format, differenceInDays, isPast, parseISO } from 'date-fns'
 
-type Category  = 'fitness' | 'finance' | 'books' | 'general'
+type Category  = 'fitness' | 'finance' | 'books' | 'general' | 'career'
 type Timeframe = 'week' | 'month' | 'year' | 'custom'
 
 interface Goal {
@@ -35,7 +35,8 @@ const CATEGORY_CONFIG: Record<Category, { label: string; icon: typeof Target; co
   fitness: { label: 'Fitness', icon: Dumbbell,  color: 'text-emerald-400', bg: 'bg-emerald-500/10', border: 'border-emerald-500/20' },
   finance: { label: 'Finance', icon: Wallet,    color: 'text-sky-400',     bg: 'bg-sky-500/10',     border: 'border-sky-500/20'     },
   books:   { label: 'Books',   icon: BookOpen,  color: 'text-amber-400',   bg: 'bg-amber-500/10',   border: 'border-amber-500/20'   },
-  general: { label: 'General', icon: Sparkles,  color: 'text-violet-400',  bg: 'bg-violet-500/10',  border: 'border-violet-500/20'  },
+  general: { label: 'General', icon: Sparkles,   color: 'text-violet-400', bg: 'bg-violet-500/10', border: 'border-violet-500/20' },
+  career:  { label: 'Career',  icon: Briefcase,  color: 'text-rose-400',   bg: 'bg-rose-500/10',   border: 'border-rose-500/20'   },
 }
 
 const TIMEFRAME_CONFIG: Record<Timeframe, {
@@ -926,7 +927,7 @@ export default function GoalsList() {
         <div className="space-y-4">
           {/* Category sub-tabs */}
           <div className="flex gap-1 rounded-lg border border-white/10 bg-white/3 p-1">
-            {(['fitness', 'finance', 'books', 'general'] as Category[]).map(cat => {
+            {(['fitness', 'finance', 'books', 'general', 'career'] as Category[]).map(cat => {
               const cfg  = CATEGORY_CONFIG[cat]
               const Icon = cfg.icon
               const count = byCategory(cat).length
