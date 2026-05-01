@@ -341,12 +341,25 @@ export default function ReadingList() {
     const supabase = createSupabaseBrowserClient()
     const { data: { session } } = await supabase.auth.getSession()
     if (!session?.user) { setLoading(false); return }
-    const { data } = await supabase
+
+    const { data, error } = await supabase
       .from('reading_log')
       .select('id, book_title, author, genre, status, rating, ai_summary, key_lessons')
       .eq('user_id', session.user.id)
       .order('updated_at', { ascending: false })
-    setBooks((data as Book[]) ?? [])
+
+    if (error) {
+      // key_lessons column may not exist yet in this DB instance — fall back to the
+      // original columns so the list still renders.
+      const { data: fallback } = await supabase
+        .from('reading_log')
+        .select('id, book_title, author, genre, status, rating, ai_summary')
+        .eq('user_id', session.user.id)
+        .order('updated_at', { ascending: false })
+      setBooks(((fallback ?? []) as Book[]).map(b => ({ ...b, key_lessons: null })))
+    } else {
+      setBooks((data as Book[]) ?? [])
+    }
     setLoading(false)
   }, [])
 

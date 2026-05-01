@@ -64,6 +64,7 @@ export default function BookMindMap({ bookId, bookTitle, initialJson, onClose }:
   const [editLabel, setEditLabel] = useState('')
   const [saving, setSaving] = useState(false)
   const [savedFlash, setSavedFlash] = useState(false)
+  const [saveError, setSaveError] = useState<string | null>(null)
 
   // Using refs for drag state to avoid stale closures during fast mouse moves
   const moveRef = useRef<{
@@ -160,11 +161,16 @@ export default function BookMindMap({ bookId, bookTitle, initialJson, onClose }:
   async function save() {
     setSaving(true)
     const supabase = createSupabaseBrowserClient()
-    await supabase
+    const { error } = await supabase
       .from('reading_log')
       .update({ key_lessons: JSON.stringify(nodesRef.current), updated_at: new Date().toISOString() })
       .eq('id', bookId)
     setSaving(false)
+    if (error) {
+      // key_lessons column missing — surface the required migration to the user
+      setSaveError('Run in Supabase SQL editor: ALTER TABLE reading_log ADD COLUMN IF NOT EXISTS key_lessons TEXT;')
+      return
+    }
     setSavedFlash(true)
     setTimeout(() => setSavedFlash(false), 2000)
   }
@@ -205,14 +211,23 @@ export default function BookMindMap({ bookId, bookTitle, initialJson, onClose }:
         </button>
       </div>
 
-      {/* ── Hint bar ── */}
-      <div className="px-4 py-1.5 border-b border-white/5 bg-white/[0.015] shrink-0">
-        <p className="text-[11px] text-slate-600">
-          Drag the <span className="text-violet-500">●</span> handle on any node right to draw a branch &nbsp;·&nbsp;
-          Click <span className="text-violet-500">✎</span> to edit label &nbsp;·&nbsp;
-          Drag node body to reposition
-        </p>
-      </div>
+      {/* ── Hint / error bar ── */}
+      {saveError ? (
+        <div className="px-4 py-2 border-b border-red-500/20 bg-red-500/10 shrink-0 flex items-start gap-2">
+          <p className="text-[11px] text-red-400 flex-1">{saveError}</p>
+          <button onClick={() => setSaveError(null)} className="text-red-500 hover:text-red-300 shrink-0">
+            <X className="h-3.5 w-3.5" />
+          </button>
+        </div>
+      ) : (
+        <div className="px-4 py-1.5 border-b border-white/5 bg-white/[0.015] shrink-0">
+          <p className="text-[11px] text-slate-600">
+            Drag the <span className="text-violet-500">●</span> handle on any node right to draw a branch &nbsp;·&nbsp;
+            Click <span className="text-violet-500">✎</span> to edit label &nbsp;·&nbsp;
+            Drag node body to reposition
+          </p>
+        </div>
+      )}
 
       {/* ── Scrollable canvas ── */}
       <div className="flex-1 overflow-auto">
