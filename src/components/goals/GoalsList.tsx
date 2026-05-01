@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback } from 'react'
 import {
   Target, Plus, Check, Trash2, Loader2, AlertCircle,
   Dumbbell, Wallet, BookOpen, Sparkles,
-  ChevronDown, ChevronUp, CalendarDays, CalendarRange, TrendingUp,
+  ChevronDown, ChevronUp, CalendarDays, CalendarRange, TrendingUp, Pencil, RotateCcw,
 } from 'lucide-react'
 import { createSupabaseBrowserClient } from '@/lib/supabase'
 import { Button } from '@/components/ui/button'
@@ -300,18 +300,197 @@ function AddGoalModal({
   )
 }
 
+// ─── Edit Goal Modal ──────────────────────────────────────────
+
+function EditGoalModal({
+  goal,
+  onSave,
+  trigger,
+}: {
+  goal: Goal
+  onSave: () => void
+  trigger?: React.ReactNode
+}) {
+  const [open, setOpen]             = useState(false)
+  const [title, setTitle]           = useState('')
+  const [description, setDesc]      = useState('')
+  const [category, setCategory]     = useState<Category>('general')
+  const [timeframe, setTimeframe]   = useState<Timeframe>('custom')
+  const [targetDate, setTargetDate] = useState('')
+  const [saving, setSaving]         = useState(false)
+  const [error, setError]           = useState<string | null>(null)
+
+  function handleOpenChange(v: boolean) {
+    setOpen(v)
+    if (v) {
+      setTitle(goal.title)
+      setDesc(goal.description ?? '')
+      setCategory(goal.category)
+      setTimeframe(goal.timeframe)
+      setTargetDate(goal.target_date ?? '')
+      setError(null)
+    }
+  }
+
+  async function handleSave() {
+    if (!title.trim()) return
+    setSaving(true)
+    setError(null)
+    const supabase = createSupabaseBrowserClient()
+    const now = new Date().toISOString()
+    const { error: err } = await supabase.from('user_goals').update({
+      title:       title.trim(),
+      description: description.trim() || null,
+      category,
+      timeframe,
+      target_date: timeframe === 'custom' ? (targetDate || null) : null,
+      updated_at:  now,
+    }).eq('id', goal.id)
+    if (err) { setError(err.message); setSaving(false); return }
+    setSaving(false)
+    setOpen(false)
+    onSave()
+  }
+
+  const TIMEFRAME_OPTIONS: { value: Timeframe; label: string }[] = [
+    { value: 'week',   label: '🗓 This Week'  },
+    { value: 'month',  label: '📅 This Month' },
+    { value: 'year',   label: '📈 This Year'  },
+    { value: 'custom', label: '📌 Custom'     },
+  ]
+
+  return (
+    <Dialog open={open} onOpenChange={handleOpenChange}>
+      <DialogTrigger asChild>
+        {trigger ?? (
+          <button type="button" className="text-slate-600 hover:text-slate-400 transition-colors">
+            <Pencil className="h-3.5 w-3.5" />
+          </button>
+        )}
+      </DialogTrigger>
+
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Edit Goal</DialogTitle>
+        </DialogHeader>
+
+        <div className="space-y-4">
+          <div className="space-y-1.5">
+            <Label className="text-slate-300">Timeframe</Label>
+            <div className="grid grid-cols-4 gap-2">
+              {TIMEFRAME_OPTIONS.map(({ value, label }) => (
+                <button
+                  key={value}
+                  type="button"
+                  onClick={() => setTimeframe(value)}
+                  className={cn(
+                    'rounded-lg border py-2 px-1 text-xs font-medium transition-all text-center',
+                    timeframe === value
+                      ? 'border-violet-500 bg-violet-500/20 text-white'
+                      : 'border-white/10 bg-white/5 text-slate-400 hover:border-white/20'
+                  )}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="space-y-1.5">
+            <Label className="text-slate-300">Goal</Label>
+            <Input
+              autoFocus
+              placeholder="Goal title..."
+              value={title}
+              onChange={e => setTitle(e.target.value)}
+              onKeyDown={e => { if (e.key === 'Enter') handleSave() }}
+              className="border-white/20 bg-white/5 text-white placeholder:text-slate-500 focus-visible:ring-violet-500"
+            />
+          </div>
+
+          <div className="space-y-1.5">
+            <Label className="text-slate-300">Category</Label>
+            <div className="grid grid-cols-4 gap-2">
+              {(Object.entries(CATEGORY_CONFIG) as [Category, typeof CATEGORY_CONFIG[Category]][]).map(([key, cfg]) => {
+                const Icon = cfg.icon
+                return (
+                  <button
+                    key={key}
+                    type="button"
+                    onClick={() => setCategory(key)}
+                    className={cn(
+                      'flex flex-col items-center gap-1.5 rounded-lg border py-2.5 px-2 text-xs font-medium transition-all',
+                      category === key
+                        ? 'border-violet-500 bg-violet-500/20 text-white'
+                        : 'border-white/10 bg-white/5 text-slate-400 hover:border-white/20'
+                    )}
+                  >
+                    <Icon className={cn('h-4 w-4', category === key ? 'text-white' : cfg.color)} />
+                    {cfg.label}
+                  </button>
+                )
+              })}
+            </div>
+          </div>
+
+          {timeframe === 'custom' && (
+            <div className="space-y-1.5">
+              <Label className="text-slate-300">Target date (optional)</Label>
+              <input
+                type="date"
+                value={targetDate}
+                onChange={e => setTargetDate(e.target.value)}
+                className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-violet-500"
+              />
+            </div>
+          )}
+
+          <div className="space-y-1.5">
+            <Label className="text-slate-300">Description (optional)</Label>
+            <textarea
+              value={description}
+              onChange={e => setDesc(e.target.value)}
+              placeholder="Why is this goal important to you?"
+              rows={2}
+              className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-white placeholder:text-slate-500 resize-none focus:outline-none focus:ring-2 focus:ring-violet-500"
+            />
+          </div>
+
+          {error && (
+            <div className="flex items-start gap-2 rounded-lg border border-red-500/20 bg-red-500/10 px-3 py-2">
+              <AlertCircle className="h-4 w-4 text-red-400 shrink-0 mt-0.5" />
+              <p className="text-xs text-red-400">{error}</p>
+            </div>
+          )}
+
+          <Button
+            className="w-full bg-violet-600 hover:bg-violet-700 text-white"
+            onClick={handleSave}
+            disabled={saving || !title.trim()}
+          >
+            {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+            Save Changes
+          </Button>
+        </div>
+      </DialogContent>
+    </Dialog>
+  )
+}
+
 // ─── Goal card ────────────────────────────────────────────────
 
 function GoalCard({
   goal,
   onComplete,
   onDelete,
+  onEdit,
   markingId,
   deletingId,
 }: {
   goal: Goal
   onComplete: (id: string) => void
   onDelete: (id: string) => void
+  onEdit: () => void
   markingId: string | null
   deletingId: string | null
 }) {
@@ -338,7 +517,22 @@ function GoalCard({
 
       <div className="flex-1 min-w-0 space-y-1">
         <div className="flex items-start gap-2 justify-between">
-          <p className="text-sm font-medium text-white leading-snug">{goal.title}</p>
+          <div className="flex items-center gap-1.5 min-w-0">
+            <p className="text-sm font-medium text-white leading-snug">{goal.title}</p>
+            <EditGoalModal
+              goal={goal}
+              onSave={onEdit}
+              trigger={
+                <button
+                  type="button"
+                  className="opacity-0 group-hover:opacity-100 text-slate-600 hover:text-slate-400 transition-all shrink-0"
+                  aria-label="Edit goal"
+                >
+                  <Pencil className="h-3 w-3" />
+                </button>
+              }
+            />
+          </div>
           <span className={cn('flex items-center gap-1 text-xs px-1.5 py-0.5 rounded-full shrink-0 border', cat.bg, cat.color, cat.border)}>
             <CatIcon className="h-3 w-3" />
             {cat.label}
@@ -373,6 +567,7 @@ function GoalSection({
   onAdd,
   onComplete,
   onDelete,
+  onEdit,
   markingId,
   deletingId,
 }: {
@@ -381,6 +576,7 @@ function GoalSection({
   onAdd: () => void
   onComplete: (id: string) => void
   onDelete: (id: string) => void
+  onEdit: () => void
   markingId: string | null
   deletingId: string | null
 }) {
@@ -440,6 +636,7 @@ function GoalSection({
                 goal={goal}
                 onComplete={onComplete}
                 onDelete={onDelete}
+                onEdit={onEdit}
                 markingId={markingId}
                 deletingId={deletingId}
               />
@@ -463,6 +660,7 @@ function CategorySection({
   onAdd,
   onComplete,
   onDelete,
+  onEdit,
   markingId,
   deletingId,
 }: {
@@ -471,6 +669,7 @@ function CategorySection({
   onAdd: () => void
   onComplete: (id: string) => void
   onDelete: (id: string) => void
+  onEdit: () => void
   markingId: string | null
   deletingId: string | null
 }) {
@@ -511,6 +710,7 @@ function CategorySection({
               goal={goal}
               onComplete={onComplete}
               onDelete={onDelete}
+              onEdit={onEdit}
               markingId={markingId}
               deletingId={deletingId}
             />
@@ -527,7 +727,15 @@ function CategorySection({
 
 // ─── Completed list (shared) ──────────────────────────────────
 
-function CompletedList({ goals, onDelete }: { goals: Goal[]; onDelete: (id: string) => void }) {
+function CompletedList({
+  goals,
+  onDelete,
+  onUncomplete,
+}: {
+  goals: Goal[]
+  onDelete: (id: string) => void
+  onUncomplete: (id: string) => void
+}) {
   const [show, setShow] = useState(false)
   if (!goals.length) return null
   return (
@@ -546,10 +754,17 @@ function CompletedList({ goals, onDelete }: { goals: Goal[]; onDelete: (id: stri
             const cfg  = CATEGORY_CONFIG[goal.category]
             const Icon = cfg.icon
             return (
-              <div key={goal.id} className="group flex items-start gap-3 rounded-xl border border-white/5 bg-white/3 p-4 opacity-60">
-                <div className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-emerald-500/30 border-2 border-emerald-500">
-                  <Check className="h-3 w-3 text-emerald-400" />
-                </div>
+              <div key={goal.id} className="group flex items-start gap-3 rounded-xl border border-white/5 bg-white/3 p-4 opacity-60 hover:opacity-80 transition-opacity">
+                <button
+                  type="button"
+                  onClick={() => onUncomplete(goal.id)}
+                  title="Move back to goals"
+                  aria-label="Move back to goals"
+                  className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-emerald-500/30 border-2 border-emerald-500 hover:bg-slate-500/30 hover:border-slate-500 transition-all cursor-pointer"
+                >
+                  <Check className="h-3 w-3 text-emerald-400 group-hover:hidden" />
+                  <RotateCcw className="h-3 w-3 text-slate-400 hidden group-hover:block" />
+                </button>
                 <div className="flex-1 min-w-0 space-y-1">
                   <div className="flex items-start gap-2 justify-between">
                     <p className="text-sm font-medium text-slate-400 line-through leading-snug">{goal.title}</p>
@@ -617,6 +832,15 @@ export default function GoalsList() {
     setMarkingId(null)
   }
 
+  async function markUncomplete(id: string) {
+    setGoals(prev => prev.map(g => g.id === id ? { ...g, is_completed: false, completed_at: null } : g))
+    const supabase = createSupabaseBrowserClient()
+    const now = new Date().toISOString()
+    await supabase.from('user_goals')
+      .update({ is_completed: false, completed_at: null, updated_at: now })
+      .eq('id', id)
+  }
+
   async function deleteGoal(id: string) {
     setDeletingId(id)
     setGoals(prev => prev.filter(g => g.id !== id))
@@ -680,11 +904,11 @@ export default function GoalsList() {
       {/* ── By Timeframe tab ── */}
       {tab === 'timeframe' && (
         <div className="space-y-4">
-          <GoalSection timeframe="week"   goals={weekGoals}   onAdd={fetchGoals} onComplete={markComplete} onDelete={deleteGoal} markingId={markingId} deletingId={deletingId} />
-          <GoalSection timeframe="month"  goals={monthGoals}  onAdd={fetchGoals} onComplete={markComplete} onDelete={deleteGoal} markingId={markingId} deletingId={deletingId} />
-          <GoalSection timeframe="year"   goals={yearGoals}   onAdd={fetchGoals} onComplete={markComplete} onDelete={deleteGoal} markingId={markingId} deletingId={deletingId} />
+          <GoalSection timeframe="week"   goals={weekGoals}   onAdd={fetchGoals} onComplete={markComplete} onDelete={deleteGoal} onEdit={fetchGoals} markingId={markingId} deletingId={deletingId} />
+          <GoalSection timeframe="month"  goals={monthGoals}  onAdd={fetchGoals} onComplete={markComplete} onDelete={deleteGoal} onEdit={fetchGoals} markingId={markingId} deletingId={deletingId} />
+          <GoalSection timeframe="year"   goals={yearGoals}   onAdd={fetchGoals} onComplete={markComplete} onDelete={deleteGoal} onEdit={fetchGoals} markingId={markingId} deletingId={deletingId} />
           {customGoals.length > 0 && (
-            <GoalSection timeframe="custom" goals={customGoals} onAdd={fetchGoals} onComplete={markComplete} onDelete={deleteGoal} markingId={markingId} deletingId={deletingId} />
+            <GoalSection timeframe="custom" goals={customGoals} onAdd={fetchGoals} onComplete={markComplete} onDelete={deleteGoal} onEdit={fetchGoals} markingId={markingId} deletingId={deletingId} />
           )}
           {active.length === 0 && (
             <div className="rounded-xl border border-dashed border-white/10 p-12 text-center">
@@ -693,7 +917,7 @@ export default function GoalsList() {
               <p className="text-slate-600 text-xs mt-1">Add a weekly, monthly, or yearly goal above.</p>
             </div>
           )}
-          <CompletedList goals={completed} onDelete={deleteGoal} />
+          <CompletedList goals={completed} onDelete={deleteGoal} onUncomplete={markUncomplete} />
         </div>
       )}
 
@@ -740,11 +964,12 @@ export default function GoalsList() {
             onAdd={fetchGoals}
             onComplete={markComplete}
             onDelete={deleteGoal}
+            onEdit={fetchGoals}
             markingId={markingId}
             deletingId={deletingId}
           />
 
-          <CompletedList goals={completed} onDelete={deleteGoal} />
+          <CompletedList goals={completed} onDelete={deleteGoal} onUncomplete={markUncomplete} />
         </div>
       )}
     </div>

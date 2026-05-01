@@ -42,16 +42,27 @@ const CATEGORY_STYLES: Record<Category, { label: string; badge: string }> = {
 
 const FREQUENCY_LABELS: Record<Frequency, string> = { daily: 'Daily', weekly: 'Weekly' }
 
-function todayStr() {
-  return new Date().toISOString().split('T')[0]
+function localDateStr(d = new Date()): string {
+  return [
+    d.getFullYear(),
+    String(d.getMonth() + 1).padStart(2, '0'),
+    String(d.getDate()).padStart(2, '0'),
+  ].join('-')
 }
+
+function todayStr() { return localDateStr() }
 
 function getWeekStart(): string {
   const d = new Date()
-  const day = d.getDay() || 7     // Mon=1 … Sun=7
+  const day = d.getDay() || 7    // Mon=1 … Sun=7
   d.setDate(d.getDate() - (day - 1))
-  d.setHours(0, 0, 0, 0)
-  return d.toISOString().split('T')[0]
+  return localDateStr(d)
+}
+
+// Mon=1 … Sun=7 in local time
+function daysElapsedThisWeek(): number {
+  const d = new Date().getDay()
+  return d === 0 ? 7 : d
 }
 
 function computeStreak(current: number, lastDoneAt: string | null, frequency: Frequency): number {

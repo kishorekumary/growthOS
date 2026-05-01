@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import {
   Plus, Check, Trash2, ChevronDown, ChevronUp,
-  Loader2, StickyNote, Calendar, X,
+  Loader2, StickyNote, Calendar, X, Pencil,
 } from 'lucide-react'
 import { createSupabaseBrowserClient } from '@/lib/supabase'
 import {
@@ -63,6 +63,12 @@ export default function TodoList({ initialTodos = [] }: { initialTodos?: Todo[] 
   const [newDate, setNewDate]   = useState('')
   const [newNotes, setNewNotes] = useState('')
   const [saving, setSaving]     = useState(false)
+
+  const [editingId, setEditingId]   = useState<string | null>(null)
+  const [editTitle, setEditTitle]   = useState('')
+  const [editDate, setEditDate]     = useState('')
+  const [editNotes, setEditNotes]   = useState('')
+  const [editSaving, setEditSaving] = useState(false)
 
   // Only called as a fallback when insert+select returns null.
   async function refreshFromDb() {
@@ -125,6 +131,31 @@ export default function TodoList({ initialTodos = [] }: { initialTodos?: Todo[] 
       // Insert worked but select was blocked — re-fetch from DB.
       refreshFromDb()
     }
+  }
+
+  function startEdit(todo: Todo) {
+    setEditingId(todo.id)
+    setEditTitle(todo.title)
+    setEditDate(todo.due_date ?? '')
+    setEditNotes(todo.notes ?? '')
+  }
+
+  async function handleEditSave() {
+    if (!editingId || !editTitle.trim() || editSaving) return
+    setEditSaving(true)
+    const supabase = createSupabaseBrowserClient()
+    const now = new Date().toISOString()
+    await supabase
+      .from('user_todos')
+      .update({ title: editTitle.trim(), notes: editNotes.trim() || null, due_date: editDate || null, updated_at: now })
+      .eq('id', editingId)
+    setTodos(prev => prev.map(t =>
+      t.id === editingId
+        ? { ...t, title: editTitle.trim(), notes: editNotes.trim() || null, due_date: editDate || null }
+        : t
+    ))
+    setEditingId(null)
+    setEditSaving(false)
   }
 
   async function handleComplete(id: string) {
@@ -274,59 +305,128 @@ export default function TodoList({ initialTodos = [] }: { initialTodos?: Todo[] 
             <div
               key={todo.id}
               className={cn(
-                'rounded-xl border bg-white/3 px-4 py-3 transition-all',
-                isOverdue(todo.due_date) ? 'border-red-500/20' : 'border-white/8'
+                'rounded-xl border bg-white/3 px-4 py-3 transition-all group',
+                isOverdue(todo.due_date) ? 'border-red-500/20' : 'border-white/8',
+                editingId === todo.id && 'border-violet-500/30'
               )}
             >
               <div className="flex items-start gap-3">
-                <button
-                  type="button"
-                  onClick={() => handleComplete(todo.id)}
-                  className="mt-0.5 h-4 w-4 shrink-0 rounded-full border border-white/20 hover:border-violet-400 hover:bg-violet-500/20 transition-all"
-                />
+                {editingId !== todo.id && (
+                  <button
+                    type="button"
+                    onClick={() => handleComplete(todo.id)}
+                    className="mt-0.5 h-4 w-4 shrink-0 rounded-full border border-white/20 hover:border-violet-400 hover:bg-violet-500/20 transition-all"
+                  />
+                )}
 
                 <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <span className="text-sm text-white font-medium">{todo.title}</span>
-                    {todo.due_date && (
-                      <span className={cn(
-                        'text-[10px] font-medium px-1.5 py-0.5 rounded-full border',
-                        dueDateStyle(todo.due_date)
-                      )}>
-                        {isOverdue(todo.due_date) ? '⚠ ' : ''}{formatDueDate(todo.due_date)}
-                      </span>
-                    )}
-                  </div>
-
-                  {todo.notes && (
+                  {editingId === todo.id ? (
+                    <div className="space-y-2">
+                      <input
+                        value={editTitle}
+                        onChange={e => setEditTitle(e.target.value)}
+                        onKeyDown={e => { if (e.key === 'Enter') handleEditSave(); if (e.key === 'Escape') setEditingId(null) }}
+                        autoFocus
+                        className="w-full bg-transparent text-white text-sm font-medium focus:outline-none border-b border-violet-500/40 pb-0.5"
+                      />
+                      <div className="flex items-center gap-1.5">
+                        <Calendar className="h-3.5 w-3.5 text-slate-600 shrink-0" />
+                        <input
+                          type="date"
+                          value={editDate}
+                          onChange={e => setEditDate(e.target.value)}
+                          className="bg-transparent text-slate-400 text-xs focus:outline-none"
+                        />
+                      </div>
+                      <div className="flex items-start gap-1.5">
+                        <StickyNote className="h-3.5 w-3.5 text-slate-600 shrink-0 mt-0.5" />
+                        <textarea
+                          value={editNotes}
+                          onChange={e => setEditNotes(e.target.value)}
+                          placeholder="Notes..."
+                          rows={2}
+                          className="flex-1 bg-transparent text-slate-400 placeholder:text-slate-700 text-xs resize-none focus:outline-none"
+                        />
+                      </div>
+                      <div className="flex gap-2">
+                        <Button
+                          onClick={handleEditSave}
+                          disabled={editSaving || !editTitle.trim()}
+                          size="sm"
+                          className="bg-violet-600 hover:bg-violet-700 text-white h-7 px-3 text-xs"
+                        >
+                          {editSaving ? <Loader2 className="h-3 w-3 animate-spin" /> : 'Save'}
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => setEditingId(null)}
+                          className="border-white/10 bg-transparent text-slate-400 hover:text-white h-7 px-3 text-xs"
+                        >
+                          Cancel
+                        </Button>
+                      </div>
+                    </div>
+                  ) : (
                     <>
-                      <button
-                        type="button"
-                        onClick={() => toggleNotes(todo.id)}
-                        className="mt-1 flex items-center gap-1 text-[11px] text-slate-600 hover:text-slate-400 transition-colors"
-                      >
-                        <StickyNote className="h-3 w-3" />
-                        {expandedNotes.has(todo.id) ? 'Hide note' : 'View note'}
-                        {expandedNotes.has(todo.id)
-                          ? <ChevronUp className="h-3 w-3" />
-                          : <ChevronDown className="h-3 w-3" />}
-                      </button>
-                      {expandedNotes.has(todo.id) && (
-                        <p className="mt-1.5 text-xs text-slate-400 leading-relaxed border-l-2 border-white/10 pl-2.5">
-                          {todo.notes}
-                        </p>
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <button
+                          type="button"
+                          onClick={() => startEdit(todo)}
+                          className="text-sm text-white font-medium hover:text-violet-300 transition-colors text-left"
+                        >
+                          {todo.title}
+                        </button>
+                        {todo.due_date && (
+                          <span className={cn(
+                            'text-[10px] font-medium px-1.5 py-0.5 rounded-full border',
+                            dueDateStyle(todo.due_date)
+                          )}>
+                            {isOverdue(todo.due_date) ? '⚠ ' : ''}{formatDueDate(todo.due_date)}
+                          </span>
+                        )}
+                        <button
+                          type="button"
+                          onClick={() => startEdit(todo)}
+                          className="opacity-0 group-hover:opacity-100 text-slate-600 hover:text-slate-400 transition-all"
+                        >
+                          <Pencil className="h-3 w-3" />
+                        </button>
+                      </div>
+
+                      {todo.notes && (
+                        <>
+                          <button
+                            type="button"
+                            onClick={() => toggleNotes(todo.id)}
+                            className="mt-1 flex items-center gap-1 text-[11px] text-slate-600 hover:text-slate-400 transition-colors"
+                          >
+                            <StickyNote className="h-3 w-3" />
+                            {expandedNotes.has(todo.id) ? 'Hide note' : 'View note'}
+                            {expandedNotes.has(todo.id)
+                              ? <ChevronUp className="h-3 w-3" />
+                              : <ChevronDown className="h-3 w-3" />}
+                          </button>
+                          {expandedNotes.has(todo.id) && (
+                            <p className="mt-1.5 text-xs text-slate-400 leading-relaxed border-l-2 border-white/10 pl-2.5">
+                              {todo.notes}
+                            </p>
+                          )}
+                        </>
                       )}
                     </>
                   )}
                 </div>
 
-                <button
-                  type="button"
-                  onClick={() => handleDelete(todo.id)}
-                  className="text-slate-700 hover:text-red-400 transition-colors shrink-0"
-                >
-                  <Trash2 className="h-3.5 w-3.5" />
-                </button>
+                {editingId !== todo.id && (
+                  <button
+                    type="button"
+                    onClick={() => handleDelete(todo.id)}
+                    className="text-slate-700 hover:text-red-400 transition-colors shrink-0"
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </button>
+                )}
               </div>
             </div>
           ))}
