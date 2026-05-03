@@ -61,10 +61,11 @@ function BookCover({ title, index }: { title: string; index: number }) {
 }
 
 export default function BookDiscover() {
-  const [books, setBooks]   = useState<RecommendedBook[]>([])
-  const [loading, setLoading] = useState(false)
-  const [saved, setSaved]   = useState<Set<number>>(new Set())
-  const [saving, setSaving] = useState<number | null>(null)
+  const [books, setBooks]       = useState<RecommendedBook[]>([])
+  const [loading, setLoading]   = useState(false)
+  const [saved, setSaved]       = useState<Set<number>>(new Set())
+  const [saving, setSaving]     = useState<number | null>(null)
+  const [saveErrors, setSaveErrors] = useState<Record<number, string>>({})
   async function getRecommendations() {
     setLoading(true)
     setSaved(new Set())
@@ -76,18 +77,26 @@ export default function BookDiscover() {
 
   async function saveBook(book: RecommendedBook, idx: number) {
     setSaving(idx)
+    setSaveErrors(prev => { const n = { ...prev }; delete n[idx]; return n })
     const supabase = createSupabaseBrowserClient()
     const { data: { session } } = await supabase.auth.getSession()
-    if (session?.user) {
-      await supabase.from('reading_log').insert({
-        user_id: session.user.id,
-        book_title: book.title,
-        author: book.author,
-        genre: book.genre,
-        status: 'want_to_read',
-      })
+    if (!session?.user) {
+      setSaveErrors(prev => ({ ...prev, [idx]: 'Not signed in' }))
+      setSaving(null)
+      return
     }
-    setSaved(prev => new Set(Array.from(prev).concat(idx)))
+    const { error } = await supabase.from('reading_log').insert({
+      user_id:    session.user.id,
+      book_title: book.title,
+      author:     book.author,
+      genre:      book.genre,
+      status:     'want_to_read',
+    })
+    if (error) {
+      setSaveErrors(prev => ({ ...prev, [idx]: error.message }))
+    } else {
+      setSaved(prev => new Set(Array.from(prev).concat(idx)))
+    }
     setSaving(null)
   }
 
@@ -149,14 +158,18 @@ export default function BookDiscover() {
                   'w-full text-xs',
                   saved.has(i)
                     ? 'bg-emerald-600/20 text-emerald-300 border border-emerald-500/30 cursor-default'
-                    : 'bg-violet-600 hover:bg-violet-700 text-white'
+                    : saveErrors[i]
+                      ? 'bg-red-600/20 text-red-300 border border-red-500/30'
+                      : 'bg-violet-600 hover:bg-violet-700 text-white'
                 )}
               >
                 {saving === i
                   ? <Loader2 className="h-3 w-3 animate-spin" />
                   : saved.has(i)
                     ? <><Check className="h-3 w-3 mr-1" /> Saved</>
-                    : '+ Save to List'
+                    : saveErrors[i]
+                      ? 'Save failed — retry'
+                      : '+ Save to List'
                 }
               </Button>
             </div>

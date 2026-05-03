@@ -333,34 +333,44 @@ function BookDetailDialog({ book, onUpdate, onClose }: { book: Book; onUpdate: (
 export default function ReadingList() {
   const [books, setBooks]               = useState<Book[]>([])
   const [loading, setLoading]           = useState(true)
+  const [fetchError, setFetchError]     = useState<string | null>(null)
   const [activeStatus, setActiveStatus] = useState<Status>('want_to_read')
   const [selected, setSelected]         = useState<Book | null>(null)
   const [mindMapBook, setMindMapBook]   = useState<Book | null>(null)
 
   const fetchBooks = useCallback(async () => {
-    const supabase = createSupabaseBrowserClient()
-    const { data: { session } } = await supabase.auth.getSession()
-    if (!session?.user) { setLoading(false); return }
+    setFetchError(null)
+    try {
+      const supabase = createSupabaseBrowserClient()
+      const { data: { session } } = await supabase.auth.getSession()
+      if (!session?.user) { setLoading(false); return }
 
-    const { data, error } = await supabase
-      .from('reading_log')
-      .select('id, book_title, author, genre, status, rating, ai_summary, key_lessons')
-      .eq('user_id', session.user.id)
-      .order('updated_at', { ascending: false })
-
-    if (error) {
-      // key_lessons column may not exist yet in this DB instance — fall back to the
-      // original columns so the list still renders.
-      const { data: fallback } = await supabase
+      const { data, error } = await supabase
         .from('reading_log')
-        .select('id, book_title, author, genre, status, rating, ai_summary')
+        .select('id, book_title, author, genre, status, rating, ai_summary, key_lessons')
         .eq('user_id', session.user.id)
         .order('updated_at', { ascending: false })
-      setBooks(((fallback ?? []) as Book[]).map(b => ({ ...b, key_lessons: null })))
-    } else {
-      setBooks((data as Book[]) ?? [])
+
+      if (error) {
+        // key_lessons column missing — fall back without it
+        const { data: fallback, error: fallbackError } = await supabase
+          .from('reading_log')
+          .select('id, book_title, author, genre, status, rating, ai_summary')
+          .eq('user_id', session.user.id)
+          .order('updated_at', { ascending: false })
+        if (fallbackError) {
+          setFetchError(fallbackError.message)
+        } else {
+          setBooks(((fallback ?? []) as Book[]).map(b => ({ ...b, key_lessons: null })))
+        }
+      } else {
+        setBooks((data as Book[]) ?? [])
+      }
+    } catch (err) {
+      setFetchError(err instanceof Error ? err.message : 'Failed to load books')
+    } finally {
+      setLoading(false)
     }
-    setLoading(false)
   }, [])
 
   useEffect(() => { fetchBooks() }, [fetchBooks])
@@ -369,6 +379,19 @@ export default function ReadingList() {
     return (
       <div className="flex items-center justify-center py-12">
         <Loader2 className="h-5 w-5 animate-spin text-slate-500" />
+      </div>
+    )
+  }
+
+  if (fetchError) {
+    return (
+      <div className="rounded-xl border border-red-500/20 bg-red-500/10 p-6 text-center space-y-2">
+        <AlertCircle className="h-6 w-6 text-red-400 mx-auto" />
+        <p className="text-sm text-red-400">Failed to load books</p>
+        <p className="text-xs text-red-400/70">{fetchError}</p>
+        <button onClick={fetchBooks} className="text-xs text-slate-400 hover:text-white underline">
+          Retry
+        </button>
       </div>
     )
   }
