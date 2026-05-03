@@ -1,0 +1,12 @@
+.git
+.next
+node_modules
+.env.local
+.env*.local
+npm-debug.log*
+README.md
+android
+.vercel
+docker
+supabase
+*.md
