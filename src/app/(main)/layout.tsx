@@ -46,6 +46,9 @@ export default async function MainLayout({ children }: { children: React.ReactNo
       </main>
       <BottomNav />
       <ServiceWorkerRegister />
+      <div className="fixed bottom-1.5 right-2 text-[9px] text-slate-700 font-mono select-none pointer-events-none z-50 hidden md:block">
+        {process.env.NEXT_PUBLIC_GIT_BRANCH}/{process.env.NEXT_PUBLIC_GIT_COMMIT}
+      </div>
     </div>
   )
 }
