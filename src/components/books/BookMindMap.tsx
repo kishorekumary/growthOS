@@ -5,9 +5,14 @@ import { X, Trash2, GitBranch, Loader2, Check, Pencil, Upload } from 'lucide-rea
 import { createSupabaseBrowserClient } from '@/lib/supabase'
 import { cn } from '@/lib/utils'
 
-const NODE_W = 160
 const NODE_H = 40
+const MIN_W  = 160
+const MAX_W  = 320
 const DEPTH_COLORS = ['#7c3aed', '#06b6d4', '#10b981', '#f59e0b', '#ef4444', '#3b82f6']
+
+function nodeWidth(label: string): number {
+  return Math.max(MIN_W, Math.min(MAX_W, label.length * 7 + 56))
+}
 
 export interface MindNode {
   id: string
@@ -22,7 +27,7 @@ function uid() {
 }
 
 function bezier(p: MindNode, c: MindNode): string {
-  const x1 = p.x + NODE_W
+  const x1 = p.x + nodeWidth(p.label)
   const y1 = p.y + NODE_H / 2
   const x2 = c.x
   const y2 = c.y + NODE_H / 2
@@ -87,7 +92,7 @@ function parseImportText(text: string): TreeNode | null {
 }
 
 function treeToNodes(tree: TreeNode, rootId: string, originX: number): MindNode[] {
-  const H_GAP = 220
+  const H_GAP = 380
   const V_GAP = 56
   const result: MindNode[] = []
   let leafCounter = 0
@@ -189,14 +194,14 @@ export default function BookMindMap({ bookId, bookTitle, initialJson, onClose }:
       const { x, y } = canvasXY(e)
       const from = nodesRef.current.find(n => n.id === fromId)
       if (from) {
-        const dist = Math.hypot(x - (from.x + NODE_W), y - (from.y + NODE_H / 2))
+        const dist = Math.hypot(x - (from.x + nodeWidth(from.label)), y - (from.y + NODE_H / 2))
         if (dist > 24) {
           const newId = uid()
           const newNode: MindNode = {
             id: newId,
             label: 'New point',
             parentId: fromId,
-            x: Math.max(8, x - NODE_W / 2),
+            x: Math.max(8, x - MIN_W / 2),
             y: Math.max(8, y - NODE_H / 2),
           }
           setNodes(prev => [...prev, newNode])
@@ -431,7 +436,7 @@ export default function BookMindMap({ bookId, bookTitle, initialJson, onClose }:
                 id: '__tmp__',
                 label: '',
                 parentId: null,
-                x: connPos.x - NODE_W / 2,
+                x: connPos.x - MIN_W / 2,
                 y: connPos.y - NODE_H / 2,
               }
               return (
@@ -454,19 +459,21 @@ export default function BookMindMap({ bookId, bookTitle, initialJson, onClose }:
             const d = getDepth(node.id, nodes)
             const color = DEPTH_COLORS[d % DEPTH_COLORS.length]
 
+            const nw = nodeWidth(node.label)
+
             return (
               <div
                 key={node.id}
                 className={cn(
                   'absolute group flex items-center gap-1 rounded-lg border px-2.5',
                   'transition-shadow duration-150',
-                  'hover:shadow-[0_0_16px_rgba(124,58,237,0.35)]',
+                  'hover:shadow-[0_0_16px_rgba(124,58,237,0.35)] hover:z-10',
                   isRoot ? 'cursor-default' : 'cursor-move',
                 )}
                 style={{
                   left: node.x,
                   top: node.y,
-                  width: NODE_W,
+                  width: nw,
                   height: NODE_H,
                   borderColor: isRoot ? 'rgba(124,58,237,0.55)' : color + '44',
                   background: isRoot
@@ -476,6 +483,16 @@ export default function BookMindMap({ bookId, bookTitle, initialJson, onClose }:
                 }}
                 onMouseDown={isRoot ? undefined : e => startMove(e, node)}
               >
+                {/* Full-text tooltip — shown on hover when text is clipped */}
+                {!isEditing && nw === MAX_W && (
+                  <div
+                    className="pointer-events-none absolute left-0 bottom-[calc(100%+5px)] hidden group-hover:block z-20 max-w-[360px] rounded-lg border border-white/15 bg-slate-800/95 px-3 py-2 text-xs leading-relaxed shadow-xl backdrop-blur-sm whitespace-normal break-words"
+                    style={{ color }}
+                  >
+                    {node.label}
+                  </div>
+                )}
+
                 {/* Label / inline input */}
                 {isEditing ? (
                   <input
