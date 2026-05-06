@@ -338,10 +338,15 @@ export default function BookMindMap({ bookId, bookTitle, initialJson, onClose }:
               </button>
             </div>
 
-            <div className="rounded-lg border border-white/5 bg-white/[0.03] p-3 space-y-1">
+            <div className="rounded-lg border border-white/5 bg-white/[0.03] p-3 space-y-2">
               <p className="text-[11px] font-medium text-slate-400">How to get the text from NotebookLM</p>
-              <p className="text-[11px] text-slate-500">Open your mind map → click the outline/text view → select all → paste below.</p>
-              <p className="text-[11px] text-slate-500">Supports: <span className="text-slate-400">indented text, Markdown headings (# ## ###), bullet lists (- *)</span></p>
+              <p className="text-[11px] text-slate-500">NotebookLM's mind map is visual-only. In the NotebookLM chat, type:</p>
+              <div
+                className="rounded bg-black/40 border border-white/10 px-2.5 py-1.5 text-[11px] text-violet-300 font-mono cursor-text select-all"
+              >
+                Give me the mind map as an indented text outline with all topics and subtopics
+              </div>
+              <p className="text-[11px] text-slate-500">Copy the response and paste it below. Also supports Markdown headings (# ## ###) and bullet lists (- *).</p>
             </div>
 
             <textarea
