@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
-import { Loader2, Plus, Star, Sparkles, BookOpen, AlertCircle, GitBranch } from 'lucide-react'
+import { Loader2, Plus, Star, Sparkles, BookOpen, AlertCircle, GitBranch, Trash2 } from 'lucide-react'
 import { createSupabaseBrowserClient } from '@/lib/supabase'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -337,6 +337,18 @@ export default function ReadingList() {
   const [activeStatus, setActiveStatus] = useState<Status>('want_to_read')
   const [selected, setSelected]         = useState<Book | null>(null)
   const [mindMapBook, setMindMapBook]   = useState<Book | null>(null)
+  const [deleteTarget, setDeleteTarget] = useState<Book | null>(null)
+  const [deleting, setDeleting]         = useState(false)
+
+  async function handleDelete() {
+    if (!deleteTarget) return
+    setDeleting(true)
+    const supabase = createSupabaseBrowserClient()
+    await supabase.from('reading_log').delete().eq('id', deleteTarget.id)
+    setDeleting(false)
+    setDeleteTarget(null)
+    fetchBooks()
+  }
 
   const fetchBooks = useCallback(async () => {
     setFetchError(null)
@@ -496,10 +508,20 @@ export default function ReadingList() {
                 type="button"
                 onClick={() => setMindMapBook(book)}
                 title="Open mind map"
-                className="shrink-0 mr-3 flex items-center gap-1 rounded-lg border border-cyan-500/30 bg-cyan-500/10 px-2.5 py-1.5 text-[11px] font-medium text-cyan-400 opacity-0 group-hover:opacity-100 hover:bg-cyan-500/20 transition-all"
+                className="shrink-0 flex items-center gap-1 rounded-lg border border-cyan-500/30 bg-cyan-500/10 px-2.5 py-1.5 text-[11px] font-medium text-cyan-400 opacity-0 group-hover:opacity-100 hover:bg-cyan-500/20 transition-all"
               >
                 <GitBranch className="h-3 w-3" />
                 Map
+              </button>
+
+              {/* Delete button */}
+              <button
+                type="button"
+                onClick={() => setDeleteTarget(book)}
+                title="Delete book"
+                className="shrink-0 mr-3 flex items-center justify-center rounded-lg border border-red-500/30 bg-red-500/10 p-1.5 text-red-400 opacity-0 group-hover:opacity-100 hover:bg-red-500/20 transition-all"
+              >
+                <Trash2 className="h-3.5 w-3.5" />
               </button>
             </div>
           ))}
@@ -516,6 +538,36 @@ export default function ReadingList() {
           />
         </Dialog>
       )}
+
+      {/* Delete confirmation */}
+      <Dialog open={!!deleteTarget} onOpenChange={open => !open && setDeleteTarget(null)}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Delete book?</DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-slate-400">
+            <span className="text-white font-medium">{deleteTarget?.book_title}</span> will be permanently removed from your reading list.
+          </p>
+          <div className="flex gap-2 pt-1">
+            <Button
+              variant="outline"
+              className="flex-1 border-white/10 text-slate-300 hover:bg-white/5"
+              onClick={() => setDeleteTarget(null)}
+              disabled={deleting}
+            >
+              Cancel
+            </Button>
+            <Button
+              className="flex-1 bg-red-600 hover:bg-red-700 text-white"
+              onClick={handleDelete}
+              disabled={deleting}
+            >
+              {deleting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+              Delete
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {/* Mind Map overlay */}
       {mindMapBook && (
