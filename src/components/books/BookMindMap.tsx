@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useRef } from 'react'
-import { X, Trash2, GitBranch, Loader2, Check, Pencil } from 'lucide-react'
+import { X, Trash2, GitBranch, Loader2, Check, Pencil, Upload } from 'lucide-react'
 import { createSupabaseBrowserClient } from '@/lib/supabase'
 import { cn } from '@/lib/utils'
 
@@ -41,6 +41,77 @@ function getDepth(id: string, nodes: MindNode[]): number {
   return d
 }
 
+// ─── Import helpers ──────────────────────────────────────────
+
+interface TreeNode { label: string; children: TreeNode[] }
+
+function parseImportText(text: string): TreeNode | null {
+  const lines = text.split('\n').filter(l => l.trim())
+  if (!lines.length) return null
+
+  const isMarkdown = lines.some(l => /^#{1,6}\s/.test(l))
+
+  function getIndent(line: string) {
+    return (line.match(/^(\s*)/)?.[1].length ?? 0)
+  }
+  function stripMarkers(line: string) {
+    return line.trim().replace(/^#{1,6}\s+/, '').replace(/^[-*•]\s+/, '')
+  }
+  function getDepth(line: string) {
+    if (isMarkdown) {
+      const m = line.match(/^(#{1,6})\s/)
+      return m ? m[1].length - 1 : 0
+    }
+    return Math.floor(getIndent(line) / 2)
+  }
+
+  const root: TreeNode = { label: '', children: [] }
+  const stack: { node: TreeNode; depth: number }[] = [{ node: root, depth: -1 }]
+
+  for (const line of lines) {
+    if (!line.trim()) continue
+    const depth = getDepth(line)
+    const label = stripMarkers(line)
+    if (!label) continue
+    const node: TreeNode = { label, children: [] }
+    while (stack.length > 1 && stack[stack.length - 1].depth >= depth) stack.pop()
+    stack[stack.length - 1].node.children.push(node)
+    stack.push({ node, depth })
+  }
+
+  if (root.children.length === 1) return root.children[0]
+  if (root.children.length > 1) {
+    return { label: root.children[0].label, children: root.children.slice(1) }
+  }
+  return null
+}
+
+function treeToNodes(tree: TreeNode, rootId: string, originX: number): MindNode[] {
+  const H_GAP = 220
+  const V_GAP = 56
+  const result: MindNode[] = []
+  let leafCounter = 0
+
+  function place(node: TreeNode, parentId: string | null, depth: number): number {
+    const id = parentId === null ? rootId : uid()
+    if (node.children.length === 0) {
+      result.push({ id, label: node.label, parentId, x: depth * H_GAP + originX, y: leafCounter * V_GAP + 40 })
+      return leafCounter++
+    }
+    const childAvgs: number[] = []
+    const thisId = id
+    for (const child of node.children) childAvgs.push(place(child, thisId, depth + 1))
+    const avg = (childAvgs[0] + childAvgs[childAvgs.length - 1]) / 2
+    result.push({ id, label: node.label, parentId, x: depth * H_GAP + originX, y: avg * V_GAP + 40 })
+    return avg
+  }
+
+  place(tree, null, 0)
+  return result
+}
+
+// ─── Props ────────────────────────────────────────────────────
+
 interface Props {
   bookId: string
   bookTitle: string
@@ -65,6 +136,23 @@ export default function BookMindMap({ bookId, bookTitle, initialJson, onClose }:
   const [saving, setSaving] = useState(false)
   const [savedFlash, setSavedFlash] = useState(false)
   const [saveError, setSaveError] = useState<string | null>(null)
+  const [showImport, setShowImport] = useState(false)
+  const [importText, setImportText] = useState('')
+  const [importError, setImportError] = useState<string | null>(null)
+
+  function handleImport() {
+    const tree = parseImportText(importText)
+    if (!tree) { setImportError('Could not parse the text. Paste an indented outline or Markdown headings.'); return }
+    const root = nodesRef.current.find(n => n.id === 'root')
+    const newNodes = treeToNodes(tree, 'root', root?.x ?? 60)
+    // keep root label as book title
+    const rootNode = newNodes.find(n => n.id === 'root')
+    if (rootNode) rootNode.label = bookTitle
+    setNodes(newNodes)
+    setImportText('')
+    setImportError(null)
+    setShowImport(false)
+  }
 
   // Using refs for drag state to avoid stale closures during fast mouse moves
   const moveRef = useRef<{
@@ -187,6 +275,13 @@ export default function BookMindMap({ bookId, bookTitle, initialJson, onClose }:
         <p className="text-sm font-semibold text-white truncate flex-1">{bookTitle}</p>
         <span className="hidden sm:block text-xs text-slate-500 shrink-0">Mind Map</span>
         <button
+          onClick={() => { setShowImport(true); setImportError(null) }}
+          className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium bg-white/5 hover:bg-white/10 text-slate-300 border border-white/10 transition-all shrink-0"
+        >
+          <Upload className="h-3 w-3" />
+          Import
+        </button>
+        <button
           onClick={save}
           disabled={saving}
           className={cn(
@@ -226,6 +321,57 @@ export default function BookMindMap({ bookId, bookTitle, initialJson, onClose }:
             Click <span className="text-violet-500">✎</span> to edit label &nbsp;·&nbsp;
             Drag node body to reposition
           </p>
+        </div>
+      )}
+
+      {/* ── Import overlay ── */}
+      {showImport && (
+        <div className="absolute inset-0 z-20 flex items-center justify-center bg-black/70 backdrop-blur-sm">
+          <div className="w-full max-w-lg mx-4 rounded-2xl border border-white/10 bg-slate-900 shadow-2xl p-5 space-y-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-semibold text-white">Import from NotebookLM</p>
+                <p className="text-xs text-slate-500 mt-0.5">Replaces the current mind map</p>
+              </div>
+              <button onClick={() => setShowImport(false)} className="text-slate-500 hover:text-white transition-colors">
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            <div className="rounded-lg border border-white/5 bg-white/[0.03] p-3 space-y-1">
+              <p className="text-[11px] font-medium text-slate-400">How to get the text from NotebookLM</p>
+              <p className="text-[11px] text-slate-500">Open your mind map → click the outline/text view → select all → paste below.</p>
+              <p className="text-[11px] text-slate-500">Supports: <span className="text-slate-400">indented text, Markdown headings (# ## ###), bullet lists (- *)</span></p>
+            </div>
+
+            <textarea
+              autoFocus
+              value={importText}
+              onChange={e => { setImportText(e.target.value); setImportError(null) }}
+              placeholder={`# Book Title\n## Chapter 1\n### Key idea\n### Another idea\n## Chapter 2`}
+              className="w-full h-48 rounded-lg border border-white/10 bg-white/5 px-3 py-2.5 text-xs text-slate-200 placeholder:text-slate-700 font-mono focus:outline-none focus:border-violet-500/50 resize-none"
+            />
+
+            {importError && (
+              <p className="text-xs text-red-400">{importError}</p>
+            )}
+
+            <div className="flex gap-2">
+              <button
+                onClick={() => setShowImport(false)}
+                className="flex-1 rounded-lg border border-white/10 py-2 text-xs text-slate-400 hover:bg-white/5 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleImport}
+                disabled={!importText.trim()}
+                className="flex-1 rounded-lg bg-violet-600 hover:bg-violet-700 disabled:opacity-40 py-2 text-xs font-medium text-white transition-colors"
+              >
+                Import & Replace
+              </button>
+            </div>
+          </div>
         </div>
       )}
 
