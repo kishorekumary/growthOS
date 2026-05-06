@@ -4,7 +4,6 @@ import { useEffect, useRef } from 'react'
 import { createSupabaseBrowserClient } from '@/lib/supabase'
 
 interface Settings {
-  push_enabled: boolean
   reminder_times: string[] | null
   timezone: string | null
 }
@@ -42,7 +41,7 @@ export function useReminderNotifications() {
       if (!session?.user) return
       const { data } = await supabase
         .from('notification_settings')
-        .select('push_enabled, reminder_times, timezone')
+        .select('reminder_times, timezone')
         .maybeSingle()
       if (data) settingsRef.current = data as Settings
     }
@@ -51,7 +50,7 @@ export function useReminderNotifications() {
 
     function check() {
       const s = settingsRef.current
-      if (!s?.push_enabled || !s.reminder_times?.length) return
+      if (!s?.reminder_times?.length) return
       if (Notification.permission !== 'granted') return
 
       const tz = s.timezone || Intl.DateTimeFormat().resolvedOptions().timeZone
