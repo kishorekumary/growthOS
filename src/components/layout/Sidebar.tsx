@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
-import { LayoutDashboard, Brain, Dumbbell, Wallet, BookOpen, Target, CheckSquare, Timer, Smile, ListChecks, Newspaper, NotebookPen, CalendarCheck, Settings, LogOut } from 'lucide-react'
+import { LayoutDashboard, Brain, Dumbbell, Wallet, BookOpen, Target, CheckSquare, Timer, Smile, ListChecks, Newspaper, NotebookPen, CalendarCheck, Flame, Settings, LogOut } from 'lucide-react'
 import { createSupabaseBrowserClient } from '@/lib/supabase'
 import { cn } from '@/lib/utils'
 
@@ -20,6 +20,7 @@ const NAV_ITEMS = [
   { href: '/digest',      label: 'Digest',      icon: Newspaper },
   { href: '/journal',     label: 'Journal',     icon: NotebookPen },
   { href: '/retro',       label: 'Retro',       icon: CalendarCheck },
+  { href: '/challenges',  label: 'Challenges',  icon: Flame },
 ]
 
 interface SidebarProps {
