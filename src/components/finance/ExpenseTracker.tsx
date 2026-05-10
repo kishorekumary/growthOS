@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import {
-  Loader2, Plus, Trash2,
+  Loader2, Plus, Trash2, Pencil,
   UtensilsCrossed, Home, Car, Tv, Heart, ShoppingBag, Zap, Package,
   Briefcase, Laptop, TrendingUp, Gift, PiggyBank, Target, Shield,
   ArrowUpRight, ArrowDownRight,
@@ -80,17 +80,31 @@ function todayStr() {
   return new Date().toISOString().split('T')[0]
 }
 
-// ─── Add Transaction Modal ────────────────────────────────────
+// ─── Add / Edit Transaction Modal ────────────────────────────
 
-function AddModal({ onAdd }: { onAdd: () => void }) {
+function TxnModal({ initial, onSave, trigger }: {
+  initial?: Transaction
+  onSave: () => void
+  trigger: React.ReactNode
+}) {
+  const isEdit = !!initial
   const [open, setOpen]         = useState(false)
-  const [type, setType]         = useState<TxnType>('expense')
-  const [category, setCategory] = useState<string>(Object.keys(EXPENSE_CAT)[0])
-  const [amount, setAmount]     = useState('')
-  const [description, setDesc]  = useState('')
-  const [date, setDate]         = useState(todayStr())
+  const [type, setType]         = useState<TxnType>(initial?.type ?? 'expense')
+  const [category, setCategory] = useState<string>(initial?.category ?? Object.keys(EXPENSE_CAT)[0])
+  const [amount, setAmount]     = useState(initial ? String(initial.amount) : '')
+  const [description, setDesc]  = useState(initial?.description ?? '')
+  const [date, setDate]         = useState(initial?.txn_date ?? todayStr())
   const [saving, setSaving]     = useState(false)
   const [error, setError]       = useState<string | null>(null)
+
+  // Sync state when initial changes (re-opening for different row)
+  useEffect(() => {
+    if (open && initial) {
+      setType(initial.type); setCategory(initial.category)
+      setAmount(String(initial.amount)); setDesc(initial.description ?? '')
+      setDate(initial.txn_date)
+    }
+  }, [open, initial])
 
   const catKeys = type === 'income'
     ? Object.keys(INCOME_CAT)
@@ -104,7 +118,7 @@ function AddModal({ onAdd }: { onAdd: () => void }) {
     setCategory(keys[0])
   }
 
-  async function handleAdd() {
+  async function handleSave() {
     const n = parseFloat(amount)
     if (!n || isNaN(n)) return
     setSaving(true)
@@ -116,55 +130,35 @@ function AddModal({ onAdd }: { onAdd: () => void }) {
       setSaving(false)
       return
     }
-    const { error: insertError } = await supabase.from('transactions').insert({
-      user_id: session.user.id,
-      txn_date: date,
-      type,
-      category,
-      amount: n,
-      description: description.trim() || null,
-    })
-    if (insertError) {
-      setError(insertError.message)
-      setSaving(false)
-      return
-    }
-    setAmount(''); setDesc(''); setDate(todayStr())
+    const payload = { txn_date: date, type, category, amount: n, description: description.trim() || null }
+    const { error: dbError } = isEdit
+      ? await supabase.from('transactions').update(payload).eq('id', initial!.id)
+      : await supabase.from('transactions').insert({ ...payload, user_id: session.user.id })
+    if (dbError) { setError(dbError.message); setSaving(false); return }
+    if (!isEdit) { setAmount(''); setDesc(''); setDate(todayStr()) }
     setSaving(false)
     setOpen(false)
-    onAdd()
+    onSave()
   }
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>
-        <Button size="sm" className="bg-violet-600 hover:bg-violet-700 text-white gap-1.5">
-          <Plus className="h-4 w-4" /> Add Transaction
-        </Button>
-      </DialogTrigger>
-
+    <Dialog open={open} onOpenChange={v => { setOpen(v); if (!v) setError(null) }}>
+      <DialogTrigger asChild>{trigger}</DialogTrigger>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>New Transaction</DialogTitle>
+          <DialogTitle>{isEdit ? 'Edit Transaction' : 'New Transaction'}</DialogTitle>
         </DialogHeader>
-
         <div className="space-y-4">
           {/* Type */}
           <div className="space-y-1.5">
             <Label className="text-slate-300 text-xs">Type</Label>
             <div className="grid grid-cols-3 gap-2">
               {(['expense', 'income', 'savings'] as TxnType[]).map(t => (
-                <button
-                  key={t}
-                  type="button"
-                  onClick={() => changeType(t)}
+                <button key={t} type="button" onClick={() => changeType(t)}
                   className={cn(
                     'flex items-center justify-center gap-1.5 rounded-lg border py-2 text-sm font-medium capitalize transition-all',
-                    type === t
-                      ? 'border-violet-500 bg-violet-500/20 text-white'
-                      : 'border-white/10 bg-white/5 text-slate-400 hover:border-white/20'
-                  )}
-                >
+                    type === t ? 'border-violet-500 bg-violet-500/20 text-white' : 'border-white/10 bg-white/5 text-slate-400 hover:border-white/20'
+                  )}>
                   {t === 'income'  && <ArrowUpRight className="h-3.5 w-3.5" />}
                   {t === 'expense' && <ArrowDownRight className="h-3.5 w-3.5" />}
                   {t === 'savings' && <PiggyBank className="h-3.5 w-3.5" />}
@@ -173,7 +167,6 @@ function AddModal({ onAdd }: { onAdd: () => void }) {
               ))}
             </div>
           </div>
-
           {/* Category */}
           <div className="space-y-1.5">
             <Label className="text-slate-300 text-xs">Category</Label>
@@ -182,17 +175,11 @@ function AddModal({ onAdd }: { onAdd: () => void }) {
                 const style = getCatStyle(type, c)
                 const Icon  = style.icon
                 return (
-                  <button
-                    key={c}
-                    type="button"
-                    onClick={() => setCategory(c)}
+                  <button key={c} type="button" onClick={() => setCategory(c)}
                     className={cn(
                       'flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-medium transition-all',
-                      category === c
-                        ? 'border-violet-500 bg-violet-500/20 text-white'
-                        : 'border-white/10 bg-white/5 text-slate-400 hover:border-white/20'
-                    )}
-                  >
+                      category === c ? 'border-violet-500 bg-violet-500/20 text-white' : 'border-white/10 bg-white/5 text-slate-400 hover:border-white/20'
+                    )}>
                     <Icon className={cn('h-3 w-3', category === c ? '' : style.color)} />
                     {c}
                   </button>
@@ -200,54 +187,32 @@ function AddModal({ onAdd }: { onAdd: () => void }) {
               })}
             </div>
           </div>
-
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1.5">
               <Label className="text-slate-300 text-xs">Amount (₹)</Label>
-              <Input
-                type="number"
-                min="0.01"
-                step="0.01"
-                placeholder="0.00"
-                value={amount}
-                onChange={e => setAmount(e.target.value)}
+              <Input type="number" min="0.01" step="0.01" placeholder="0.00"
+                value={amount} onChange={e => setAmount(e.target.value)}
                 className="border-white/20 bg-white/5 text-white placeholder:text-slate-500 focus-visible:ring-violet-500"
               />
             </div>
             <div className="space-y-1.5">
               <Label className="text-slate-300 text-xs">Date</Label>
-              <input
-                type="date"
-                value={date}
-                max={todayStr()}
-                onChange={e => setDate(e.target.value)}
-                className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-violet-500"
+              <input type="date" value={date} max={todayStr()} onChange={e => setDate(e.target.value)}
+                className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-violet-500 [color-scheme:dark]"
               />
             </div>
           </div>
-
           <div className="space-y-1.5">
             <Label className="text-slate-300 text-xs">Description (optional)</Label>
-            <Input
-              placeholder="e.g. Grocery run"
-              value={description}
-              onChange={e => setDesc(e.target.value)}
-              onKeyDown={e => { if (e.key === 'Enter') handleAdd() }}
+            <Input placeholder="e.g. Grocery run" value={description} onChange={e => setDesc(e.target.value)}
+              onKeyDown={e => { if (e.key === 'Enter') handleSave() }}
               className="border-white/20 bg-white/5 text-white placeholder:text-slate-500 focus-visible:ring-violet-500"
             />
           </div>
-
-          {error && (
-            <p className="rounded-lg border border-red-500/20 bg-red-500/10 px-3 py-2 text-xs text-red-400">{error}</p>
-          )}
-
-          <Button
-            className="w-full bg-violet-600 hover:bg-violet-700 text-white"
-            onClick={handleAdd}
-            disabled={saving || !amount}
-          >
+          {error && <p className="rounded-lg border border-red-500/20 bg-red-500/10 px-3 py-2 text-xs text-red-400">{error}</p>}
+          <Button className="w-full bg-violet-600 hover:bg-violet-700 text-white" onClick={handleSave} disabled={saving || !amount}>
             {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-            Add Transaction
+            {isEdit ? 'Save Changes' : 'Add Transaction'}
           </Button>
         </div>
       </DialogContent>
@@ -311,7 +276,11 @@ export default function ExpenseTracker({ start, end }: { start: string; end: str
           <h3 className="font-semibold text-white">Transactions</h3>
           <p className="text-xs text-slate-500 mt-0.5">{txns.length} {txns.length === 1 ? 'entry' : 'entries'}</p>
         </div>
-        <AddModal onAdd={fetchTxns} />
+        <TxnModal onSave={fetchTxns} trigger={
+          <Button size="sm" className="bg-violet-600 hover:bg-violet-700 text-white gap-1.5">
+            <Plus className="h-4 w-4" /> Add Transaction
+          </Button>
+        } />
       </div>
 
       {txns.length === 0 && (
@@ -372,7 +341,13 @@ export default function ExpenseTracker({ start, end }: { start: string; end: str
                         {TYPE_SIGN[txn.type]}₹{Number(txn.amount).toLocaleString()}
                       </p>
 
-                      {/* Delete */}
+                      {/* Edit / Delete */}
+                      <TxnModal initial={txn} onSave={fetchTxns} trigger={
+                        <button type="button" aria-label="Edit transaction"
+                          className="shrink-0 text-slate-700 opacity-0 group-hover:opacity-100 hover:text-violet-400 transition-all">
+                          <Pencil className="h-4 w-4" />
+                        </button>
+                      } />
                       <button
                         type="button"
                         onClick={() => deleteTxn(txn.id)}

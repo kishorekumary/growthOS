@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import {
   Flame, Plus, Trash2, Check, Loader2, AlertCircle,
-  RefreshCw, RotateCcw, XCircle, Trophy,
+  RefreshCw, RotateCcw, XCircle, Trophy, Pencil,
 } from 'lucide-react'
 import { createSupabaseBrowserClient } from '@/lib/supabase'
 import { Button } from '@/components/ui/button'
@@ -177,6 +177,94 @@ function AddHabitModal({ onAdd }: { onAdd: () => void }) {
   )
 }
 
+// ─── Edit Habit Modal ─────────────────────────────────────────
+
+function EditHabitModal({ habit, onClose, onSave }: {
+  habit: Habit
+  onClose: () => void
+  onSave: () => void
+}) {
+  const [name, setName]           = useState(habit.habit_name)
+  const [category, setCategory]   = useState<Category>(habit.category)
+  const [frequency, setFrequency] = useState<Frequency>(habit.frequency)
+  const [saving, setSaving]       = useState(false)
+  const [error, setError]         = useState<string | null>(null)
+
+  async function handleSave() {
+    if (!name.trim()) return
+    setSaving(true)
+    setError(null)
+    const supabase = createSupabaseBrowserClient()
+    const { error: updateError } = await supabase
+      .from('personality_habits')
+      .update({ habit_name: name.trim(), category, frequency, updated_at: new Date().toISOString() })
+      .eq('id', habit.id)
+    if (updateError) { setError(updateError.message); setSaving(false); return }
+    setSaving(false)
+    onSave()
+  }
+
+  return (
+    <Dialog open onOpenChange={open => { if (!open) onClose() }}>
+      <DialogContent>
+        <DialogHeader><DialogTitle>Edit Habit</DialogTitle></DialogHeader>
+        <div className="space-y-4">
+          <div className="space-y-1.5">
+            <Label htmlFor="edit-habit-name" className="text-slate-300">Habit name</Label>
+            <Input
+              id="edit-habit-name" autoFocus
+              value={name} onChange={e => setName(e.target.value)}
+              onKeyDown={e => { if (e.key === 'Enter') handleSave() }}
+              className="border-white/20 bg-white/5 text-white placeholder:text-slate-500 focus-visible:ring-violet-500"
+            />
+          </div>
+          <div className="space-y-1.5">
+            <Label className="text-slate-300">Category</Label>
+            <div className="grid grid-cols-3 gap-2">
+              {(Object.entries(CATEGORY_STYLES) as [Category, typeof CATEGORY_STYLES[Category]][]).map(([key, val]) => (
+                <button key={key} type="button" onClick={() => setCategory(key)}
+                  className={cn('rounded-lg border py-2 px-3 text-xs font-medium transition-all',
+                    category === key
+                      ? 'border-violet-500 bg-violet-500/20 text-white'
+                      : 'border-white/10 bg-white/5 text-slate-400 hover:border-white/20'
+                  )}>
+                  {val.label}
+                </button>
+              ))}
+            </div>
+          </div>
+          <div className="space-y-1.5">
+            <Label className="text-slate-300">Frequency</Label>
+            <div className="grid grid-cols-2 gap-2">
+              {(['daily', 'weekly'] as Frequency[]).map(f => (
+                <button key={f} type="button" onClick={() => setFrequency(f)}
+                  className={cn('rounded-lg border py-2.5 text-sm font-medium transition-all capitalize',
+                    frequency === f
+                      ? 'border-violet-500 bg-violet-500/20 text-white'
+                      : 'border-white/10 bg-white/5 text-slate-400 hover:border-white/20'
+                  )}>
+                  {f}
+                </button>
+              ))}
+            </div>
+          </div>
+          {error && (
+            <div className="flex items-start gap-2 rounded-lg border border-red-500/20 bg-red-500/10 px-3 py-2">
+              <AlertCircle className="h-4 w-4 text-red-400 shrink-0 mt-0.5" />
+              <p className="text-xs text-red-400">{error}</p>
+            </div>
+          )}
+          <Button className="w-full bg-violet-600 hover:bg-violet-700 text-white"
+            onClick={handleSave} disabled={saving || !name.trim()}>
+            {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+            Save Changes
+          </Button>
+        </div>
+      </DialogContent>
+    </Dialog>
+  )
+}
+
 // ─── Weekly Score Card ────────────────────────────────────────
 
 function WeeklyScoreCard({ done, missed }: { done: number; missed: number }) {
@@ -231,6 +319,7 @@ export default function HabitTracker() {
   const [loading, setLoading]             = useState(true)
   const [fetchError, setFetchError]       = useState<string | null>(null)
   const [markingId, setMarkingId]         = useState<string | null>(null)
+  const [editTarget, setEditTarget]       = useState<Habit | null>(null)
 
   const fetchData = useCallback(async () => {
     setFetchError(null)
@@ -405,6 +494,15 @@ export default function HabitTracker() {
 
   return (
     <div className="space-y-4">
+      {/* Edit modal (controlled) */}
+      {editTarget && (
+        <EditHabitModal
+          habit={editTarget}
+          onClose={() => setEditTarget(null)}
+          onSave={() => { fetchData(); setEditTarget(null) }}
+        />
+      )}
+
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
@@ -531,7 +629,14 @@ export default function HabitTracker() {
                 </div>
               )}
 
-              {/* Delete */}
+              {/* Edit / Delete */}
+              <button
+                onClick={() => setEditTarget(habit)}
+                aria-label="Edit habit"
+                className="shrink-0 text-slate-700 opacity-0 group-hover:opacity-100 hover:text-violet-400 transition-all"
+              >
+                <Pencil className="h-4 w-4" />
+              </button>
               <button
                 onClick={() => deleteHabit(habit.id)}
                 aria-label="Delete habit"

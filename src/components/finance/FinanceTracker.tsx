@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
-import { Loader2, Plus, ArrowUpRight, ArrowDownRight, PiggyBank } from 'lucide-react'
+import { Loader2, Plus, Trash2, Pencil, ArrowUpRight, ArrowDownRight, PiggyBank } from 'lucide-react'
 import { createSupabaseBrowserClient } from '@/lib/supabase'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -37,14 +37,27 @@ function todayStr() {
   return new Date().toISOString().split('T')[0]
 }
 
-function AddTransactionModal({ onAdd }: { onAdd: () => void }) {
+function TxnModal({ initial, onSave, trigger }: {
+  initial?: Transaction
+  onSave: () => void
+  trigger: React.ReactNode
+}) {
+  const isEdit = !!initial
   const [open, setOpen]         = useState(false)
-  const [type, setType]         = useState<TxnType>('expense')
-  const [category, setCategory] = useState(EXPENSE_CATEGORIES[0])
-  const [amount, setAmount]     = useState('')
-  const [description, setDesc]  = useState('')
-  const [date, setDate]         = useState(todayStr())
+  const [type, setType]         = useState<TxnType>(initial?.type ?? 'expense')
+  const [category, setCategory] = useState(initial?.category ?? EXPENSE_CATEGORIES[0])
+  const [amount, setAmount]     = useState(initial ? String(initial.amount) : '')
+  const [description, setDesc]  = useState(initial?.description ?? '')
+  const [date, setDate]         = useState(initial?.txn_date ?? todayStr())
   const [saving, setSaving]     = useState(false)
+
+  useEffect(() => {
+    if (open && initial) {
+      setType(initial.type); setCategory(initial.category)
+      setAmount(String(initial.amount)); setDesc(initial.description ?? '')
+      setDate(initial.txn_date)
+    }
+  }, [open, initial])
 
   const categories = type === 'income' ? INCOME_CATEGORIES : type === 'savings' ? SAVINGS_CATEGORIES : EXPENSE_CATEGORIES
 
@@ -53,125 +66,83 @@ function AddTransactionModal({ onAdd }: { onAdd: () => void }) {
     setCategory(t === 'income' ? INCOME_CATEGORIES[0] : t === 'savings' ? SAVINGS_CATEGORIES[0] : EXPENSE_CATEGORIES[0])
   }
 
-  async function handleAdd() {
+  async function handleSave() {
     if (!amount || !category) return
     setSaving(true)
     const supabase = createSupabaseBrowserClient()
     const { data: { session } } = await supabase.auth.getSession()
     if (!session?.user) { setSaving(false); return }
-    await supabase.from('transactions').insert({
-      user_id: session.user.id,
-      txn_date: date,
-      type,
-      category,
-      amount: Number(amount),
-      description: description.trim() || null,
-    })
-    setAmount(''); setDesc(''); setDate(todayStr())
+    const payload = { txn_date: date, type, category, amount: Number(amount), description: description.trim() || null }
+    if (isEdit) {
+      await supabase.from('transactions').update(payload).eq('id', initial!.id)
+    } else {
+      await supabase.from('transactions').insert({ ...payload, user_id: session.user.id })
+      setAmount(''); setDesc(''); setDate(todayStr())
+    }
     setSaving(false)
     setOpen(false)
-    onAdd()
+    onSave()
   }
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>
-        <Button size="sm" className="bg-violet-600 hover:bg-violet-700 text-white gap-1.5">
-          <Plus className="h-4 w-4" /> Add
-        </Button>
-      </DialogTrigger>
+      <DialogTrigger asChild>{trigger}</DialogTrigger>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>Add Transaction</DialogTitle>
+          <DialogTitle>{isEdit ? 'Edit Transaction' : 'Add Transaction'}</DialogTitle>
         </DialogHeader>
         <div className="space-y-4">
-          {/* Type */}
           <div className="space-y-1.5">
             <Label className="text-slate-300">Type</Label>
             <div className="grid grid-cols-3 gap-2">
               {(['expense', 'income', 'savings'] as TxnType[]).map(t => (
-                <button
-                  key={t}
-                  type="button"
-                  onClick={() => handleTypeChange(t)}
-                  className={cn(
-                    'rounded-lg border py-2 text-sm font-medium capitalize transition-all',
-                    type === t
-                      ? 'border-violet-500 bg-violet-500/20 text-white'
-                      : 'border-white/10 bg-white/5 text-slate-400 hover:border-white/20'
-                  )}
-                >
+                <button key={t} type="button" onClick={() => handleTypeChange(t)}
+                  className={cn('rounded-lg border py-2 text-sm font-medium capitalize transition-all',
+                    type === t ? 'border-violet-500 bg-violet-500/20 text-white' : 'border-white/10 bg-white/5 text-slate-400 hover:border-white/20'
+                  )}>
                   {t}
                 </button>
               ))}
             </div>
           </div>
-
-          {/* Category */}
           <div className="space-y-1.5">
             <Label className="text-slate-300">Category</Label>
             <div className="flex flex-wrap gap-1.5">
               {categories.map(c => (
-                <button
-                  key={c}
-                  type="button"
-                  onClick={() => setCategory(c)}
-                  className={cn(
-                    'rounded-full border px-3 py-1 text-xs font-medium transition-all',
-                    category === c
-                      ? 'border-violet-500 bg-violet-500/20 text-white'
-                      : 'border-white/10 bg-white/5 text-slate-400 hover:border-white/20'
-                  )}
-                >
+                <button key={c} type="button" onClick={() => setCategory(c)}
+                  className={cn('rounded-full border px-3 py-1 text-xs font-medium transition-all',
+                    category === c ? 'border-violet-500 bg-violet-500/20 text-white' : 'border-white/10 bg-white/5 text-slate-400 hover:border-white/20'
+                  )}>
                   {c}
                 </button>
               ))}
             </div>
           </div>
-
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1.5">
               <Label className="text-slate-300">Amount (₹)</Label>
-              <Input
-                type="number"
-                min="0.01"
-                step="0.01"
-                placeholder="0.00"
-                value={amount}
-                onChange={e => setAmount(e.target.value)}
+              <Input type="number" min="0.01" step="0.01" placeholder="0.00"
+                value={amount} onChange={e => setAmount(e.target.value)}
                 className="border-white/20 bg-white/5 text-white placeholder:text-slate-500 focus-visible:ring-violet-500"
               />
             </div>
             <div className="space-y-1.5">
               <Label className="text-slate-300">Date</Label>
-              <input
-                type="date"
-                value={date}
-                max={todayStr()}
-                onChange={e => setDate(e.target.value)}
-                className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-violet-500"
+              <input type="date" value={date} max={todayStr()} onChange={e => setDate(e.target.value)}
+                className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-violet-500 [color-scheme:dark]"
               />
             </div>
           </div>
-
           <div className="space-y-1.5">
             <Label className="text-slate-300">Description (optional)</Label>
-            <Input
-              placeholder="e.g. Monthly rent"
-              value={description}
-              onChange={e => setDesc(e.target.value)}
-              onKeyDown={e => { if (e.key === 'Enter') handleAdd() }}
+            <Input placeholder="e.g. Monthly rent" value={description} onChange={e => setDesc(e.target.value)}
+              onKeyDown={e => { if (e.key === 'Enter') handleSave() }}
               className="border-white/20 bg-white/5 text-white placeholder:text-slate-500 focus-visible:ring-violet-500"
             />
           </div>
-
-          <Button
-            className="w-full bg-violet-600 hover:bg-violet-700 text-white"
-            onClick={handleAdd}
-            disabled={saving || !amount}
-          >
+          <Button className="w-full bg-violet-600 hover:bg-violet-700 text-white" onClick={handleSave} disabled={saving || !amount}>
             {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-            Add Transaction
+            {isEdit ? 'Save Changes' : 'Add Transaction'}
           </Button>
         </div>
       </DialogContent>
@@ -180,8 +151,9 @@ function AddTransactionModal({ onAdd }: { onAdd: () => void }) {
 }
 
 export default function FinanceTracker() {
-  const [txns, setTxns]   = useState<Transaction[]>([])
-  const [loading, setLoading] = useState(true)
+  const [txns, setTxns]         = useState<Transaction[]>([])
+  const [loading, setLoading]   = useState(true)
+  const [deletingId, setDel]    = useState<string | null>(null)
 
   const fetchTxns = useCallback(async () => {
     const supabase = createSupabaseBrowserClient()
@@ -196,6 +168,14 @@ export default function FinanceTracker() {
     setTxns((data as Transaction[]) ?? [])
     setLoading(false)
   }, [])
+
+  async function deleteTxn(id: string) {
+    setDel(id)
+    const supabase = createSupabaseBrowserClient()
+    await supabase.from('transactions').delete().eq('id', id)
+    setTxns(prev => prev.filter(t => t.id !== id))
+    setDel(null)
+  }
 
   useEffect(() => { fetchTxns() }, [fetchTxns])
 
@@ -221,7 +201,11 @@ export default function FinanceTracker() {
           <h2 className="font-semibold text-white">Transactions</h2>
           <p className="text-xs text-slate-500 mt-0.5">Last 30 entries</p>
         </div>
-        <AddTransactionModal onAdd={fetchTxns} />
+        <TxnModal onSave={fetchTxns} trigger={
+          <Button size="sm" className="bg-violet-600 hover:bg-violet-700 text-white gap-1.5">
+            <Plus className="h-4 w-4" /> Add
+          </Button>
+        } />
       </div>
 
       {txns.length === 0 && (
@@ -256,7 +240,7 @@ export default function FinanceTracker() {
                   return (
                     <div
                       key={txn.id}
-                      className="flex items-center gap-3 rounded-xl border border-white/10 bg-white/5 px-4 py-3"
+                      className="group flex items-center gap-3 rounded-xl border border-white/10 bg-white/5 px-4 py-3 hover:border-white/20 transition-all"
                     >
                       <div className={cn('flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-white/5', cfg.color)}>
                         <Icon className="h-4 w-4" />
@@ -272,6 +256,17 @@ export default function FinanceTracker() {
                       <p className={cn('text-sm font-semibold shrink-0', cfg.color)}>
                         {txn.type === 'income' ? '+' : '-'}₹{Number(txn.amount).toLocaleString()}
                       </p>
+                      <TxnModal initial={txn} onSave={fetchTxns} trigger={
+                        <button type="button" aria-label="Edit transaction"
+                          className="shrink-0 text-slate-700 opacity-0 group-hover:opacity-100 hover:text-violet-400 transition-all">
+                          <Pencil className="h-4 w-4" />
+                        </button>
+                      } />
+                      <button type="button" onClick={() => deleteTxn(txn.id)} disabled={deletingId === txn.id}
+                        aria-label="Delete transaction"
+                        className="shrink-0 text-slate-700 opacity-0 group-hover:opacity-100 hover:text-red-400 transition-all disabled:opacity-50">
+                        {deletingId === txn.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
+                      </button>
                     </div>
                   )
                 })}
