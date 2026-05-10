@@ -1,7 +1,7 @@
 import Link from 'next/link'
 import { redirect } from 'next/navigation'
 import { formatDistanceToNow } from 'date-fns'
-import { Brain, Sparkles, RefreshCw, NotebookPen, Repeat2, Smile } from 'lucide-react'
+import { Brain, Flame, Sparkles, ArrowRight, RefreshCw } from 'lucide-react'
 import { createSupabaseServerClient } from '@/lib/supabase-server'
 import { MBTI_TYPES } from '@/lib/mbti'
 
@@ -10,16 +10,33 @@ export default async function PersonalityOverviewPage() {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/login')
 
-  const { data: assessment } = await supabase
-    .from('personality_assessments')
-    .select('mbti_type, created_at')
-    .eq('user_id', user.id)
-    .order('created_at', { ascending: false })
-    .limit(1)
-    .maybeSingle()
+  const today = new Date().toISOString().split('T')[0]
+
+  const [{ data: assessment }, { data: habits }, { data: todayJournal }] = await Promise.all([
+    supabase
+      .from('personality_assessments')
+      .select('mbti_type, created_at')
+      .eq('user_id', user.id)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle(),
+    supabase
+      .from('personality_habits')
+      .select('id, habit_name, streak_count, last_done_at')
+      .eq('user_id', user.id)
+      .order('streak_count', { ascending: false }),
+    supabase
+      .from('journal_entries')
+      .select('id, mood')
+      .eq('user_id', user.id)
+      .eq('entry_date', today)
+      .maybeSingle(),
+  ])
 
   const mbtiType = assessment?.mbti_type
   const typeData = mbtiType ? MBTI_TYPES[mbtiType] : null
+  const topStreak = habits?.reduce((m, h) => Math.max(m, h.streak_count), 0) ?? 0
+  const activeHabits = habits?.filter((h) => h.streak_count > 0).length ?? 0
 
   return (
     <div className="space-y-4">
@@ -89,29 +106,22 @@ export default async function PersonalityOverviewPage() {
         </div>
       )}
 
-      {/* Growth tools */}
-      <div className="space-y-2">
-        <p className="text-xs font-semibold text-slate-600 uppercase tracking-wide px-1">Growth tools</p>
-        {[
-          { href: '/habits',  icon: Repeat2,     label: 'Habits',       desc: 'Build streaks across all life areas',  color: 'text-amber-400',  bg: 'bg-amber-500/10'  },
-          { href: '/journal', icon: NotebookPen, label: 'Voice Journal', desc: 'Reflect with voice or text daily',     color: 'text-indigo-400', bg: 'bg-indigo-500/10' },
-          { href: '/checkin', icon: Smile,       label: 'Daily Check-in', desc: 'Mood, sleep, and life balance score', color: 'text-emerald-400', bg: 'bg-emerald-500/10' },
-        ].map(({ href, icon: Icon, label, desc, color, bg }) => (
-          <Link
-            key={href}
-            href={href}
-            className="flex items-center gap-3 rounded-xl border border-white/8 bg-white/3 px-4 py-3 hover:border-white/15 hover:bg-white/5 transition-all group"
-          >
-            <div className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${bg}`}>
-              <Icon className={`h-4 w-4 ${color}`} />
-            </div>
-            <div className="flex-1 min-w-0">
-              <p className="text-sm font-medium text-white">{label}</p>
-              <p className="text-xs text-slate-500">{desc}</p>
-            </div>
-            <span className="text-slate-600 group-hover:text-slate-400 text-xs transition-colors">→</span>
-          </Link>
-        ))}
+      {/* Quick stats */}
+      <div className="grid grid-cols-3 gap-3">
+        <div className="rounded-xl border border-white/10 bg-white/5 p-4 text-center">
+          <p className="text-2xl font-bold text-white">{habits?.length ?? 0}</p>
+          <p className="text-xs text-slate-500 mt-0.5">Total habits</p>
+        </div>
+        <div className="rounded-xl border border-white/10 bg-white/5 p-4 text-center">
+          <p className="text-2xl font-bold text-orange-400 flex items-center justify-center gap-1">
+            <Flame className="h-5 w-5" />{topStreak}
+          </p>
+          <p className="text-xs text-slate-500 mt-0.5">Top streak</p>
+        </div>
+        <div className="rounded-xl border border-white/10 bg-white/5 p-4 text-center">
+          <p className="text-2xl font-bold text-white">{todayJournal ? '✓' : '—'}</p>
+          <p className="text-xs text-slate-500 mt-0.5">Today's entry</p>
+        </div>
       </div>
     </div>
   )
