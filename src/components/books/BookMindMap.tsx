@@ -622,7 +622,7 @@ export default function BookMindMap({ bookId, bookTitle, initialJson, onClose }:
                 )}
 
                 {/* ── Insert-between button — inside node, only when has children ── */}
-                {!isRoot && hasChildren && !isEditing && (
+                {hasChildren && !isEditing && (
                   <button
                     type="button"
                     onMouseDown={e => e.stopPropagation()}
