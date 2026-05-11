@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Sparkles, Trophy, TrendingUp, TrendingDown, Lightbulb, CheckCircle2, ArrowRight, RefreshCw, Loader2, Star } from 'lucide-react'
 import { format, subMonths } from 'date-fns'
 
@@ -36,6 +36,8 @@ export default function MonthlyRetro() {
 
   const prevMonthLabel = format(subMonths(new Date(), 1), 'MMMM yyyy')
 
+  useEffect(() => { generate() }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
   async function generate(force = false) {
     setLoading(true)
     setError(null)
@@ -60,23 +62,29 @@ export default function MonthlyRetro() {
     return (
       <div className="rounded-2xl border border-white/8 bg-white/3 p-8 flex flex-col items-center gap-5 text-center">
         <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-rose-500/15 border border-rose-500/25">
-          <Sparkles className="h-7 w-7 text-rose-400" />
+          {loading ? <Loader2 className="h-7 w-7 text-rose-400 animate-spin" /> : <Sparkles className="h-7 w-7 text-rose-400" />}
         </div>
         <div>
-          <p className="text-base font-semibold text-white">Generate {prevMonthLabel} Retrospective</p>
-          <p className="text-sm text-slate-500 mt-1 max-w-xs">
-            Deep AI analysis of your full month — patterns, wins, growth areas, and commitments for next month
+          <p className="text-base font-semibold text-white">
+            {loading ? `Loading ${prevMonthLabel} Retrospective…` : `Generate ${prevMonthLabel} Retrospective`}
           </p>
+          {!loading && (
+            <p className="text-sm text-slate-500 mt-1 max-w-xs">
+              Deep AI analysis of your full month — patterns, wins, growth areas, and commitments for next month
+            </p>
+          )}
         </div>
         {error && <p className="text-xs text-red-400 bg-red-500/10 rounded-lg px-3 py-2 w-full">{error}</p>}
-        <button
-          onClick={() => generate()}
-          disabled={loading}
-          className="flex items-center gap-2 rounded-xl bg-rose-600 hover:bg-rose-500 disabled:opacity-50 px-6 py-2.5 text-sm font-medium text-white transition-colors"
-        >
-          {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
-          {loading ? 'Analyzing your month…' : 'Generate Retrospective'}
-        </button>
+        {!loading && (
+          <button
+            onClick={() => generate()}
+            disabled={loading}
+            className="flex items-center gap-2 rounded-xl bg-rose-600 hover:bg-rose-500 disabled:opacity-50 px-6 py-2.5 text-sm font-medium text-white transition-colors"
+          >
+            <Sparkles className="h-4 w-4" />
+            Generate Retrospective
+          </button>
+        )}
       </div>
     )
   }

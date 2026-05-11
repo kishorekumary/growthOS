@@ -76,7 +76,8 @@ async function showNotification(title: string, body: string) {
   if (!('Notification' in window)) return
   if (Notification.permission === 'default') await Notification.requestPermission()
   if (Notification.permission === 'granted') {
-    new Notification(title, { body, icon: '/icon-192.png', silent: false })
+    const n = new Notification(title, { body, icon: '/icon-192.png', silent: false })
+    setTimeout(() => n.close(), 3000)
   }
 }
 
@@ -229,12 +230,13 @@ export default function FocusTimer() {
   const [paused, setPaused]           = useState(false)
   const [done, setDone]               = useState(false)
 
-  // Refs — read inside setInterval to avoid stale closures
-  const runSeqRef  = useRef<Sequence | null>(null)
-  const stepIdxRef = useRef(0)
-  const endTimeRef = useRef(0)
-  const tickerRef  = useRef<ReturnType<typeof setInterval> | null>(null)
-  const pausedRef  = useRef(false)
+  // Refs — read inside worker callbacks to avoid stale closures
+  const runSeqRef   = useRef<Sequence | null>(null)
+  const stepIdxRef  = useRef(0)
+  const endTimeRef  = useRef(0)
+  const workerRef   = useRef<Worker | null>(null)
+  const advanceRef  = useRef<() => void>(() => {})
+  const pausedRef   = useRef(false)
 
   // ── Data ──────────────────────────────────────────────────
   const fetchSeqs = useCallback(async () => {
@@ -258,8 +260,19 @@ export default function FocusTimer() {
     }
   }, [])
 
-  useEffect(() => () => {
-    if (tickerRef.current) clearInterval(tickerRef.current)
+  // Spin up the Web Worker once — it runs off-thread so it's never throttled by tab visibility
+  useEffect(() => {
+    if (typeof Worker === 'undefined') return
+    const w = new Worker('/timer-worker.js')
+    w.onmessage = (e: MessageEvent) => {
+      if (e.data.type === 'tick') {
+        setSecondsLeft(Math.ceil(e.data.remaining / 1000))
+      } else if (e.data.type === 'done') {
+        advanceRef.current()
+      }
+    }
+    workerRef.current = w
+    return () => { w.terminate(); workerRef.current = null }
   }, [])
 
   // ── Timer engine ──────────────────────────────────────────
@@ -285,22 +298,11 @@ export default function FocusTimer() {
     setStepIdx(nextIdx)
     endTimeRef.current = Date.now() + seq.steps[nextIdx].duration * 1000
     setSecondsLeft(seq.steps[nextIdx].duration)
-    startTicker()
+    workerRef.current?.postMessage({ type: 'start', endTimeMs: endTimeRef.current })
   }
 
-  function startTicker() {
-    if (tickerRef.current) clearInterval(tickerRef.current)
-    tickerRef.current = setInterval(() => {
-      if (pausedRef.current) return
-      const remaining = Math.max(0, endTimeRef.current - Date.now())
-      setSecondsLeft(Math.ceil(remaining / 1000))
-      if (remaining === 0) {
-        clearInterval(tickerRef.current!)
-        tickerRef.current = null
-        advanceStep()
-      }
-    }, 200)
-  }
+  // Keep the ref current so the worker's onmessage always calls the latest version
+  advanceRef.current = advanceStep
 
   // ── Controls ──────────────────────────────────────────────
 
@@ -313,7 +315,7 @@ export default function FocusTimer() {
     setSecondsLeft(seq.steps[0].duration)
     setMode('run')
     endTimeRef.current = Date.now() + seq.steps[0].duration * 1000
-    startTicker()
+    workerRef.current?.postMessage({ type: 'start', endTimeMs: endTimeRef.current })
   }
 
   function togglePause() {
@@ -321,7 +323,9 @@ export default function FocusTimer() {
       endTimeRef.current = Date.now() + secondsLeft * 1000
       pausedRef.current  = false
       setPaused(false)
+      workerRef.current?.postMessage({ type: 'start', endTimeMs: endTimeRef.current })
     } else {
+      workerRef.current?.postMessage({ type: 'stop' })
       pausedRef.current = true
       setPaused(true)
     }
@@ -335,12 +339,11 @@ export default function FocusTimer() {
     const dur = seq.steps[stepIdxRef.current].duration
     endTimeRef.current = Date.now() + dur * 1000
     setSecondsLeft(dur)
-    startTicker()
+    workerRef.current?.postMessage({ type: 'start', endTimeMs: endTimeRef.current })
   }
 
   function stopTimer() {
-    if (tickerRef.current) clearInterval(tickerRef.current)
-    tickerRef.current = null
+    workerRef.current?.postMessage({ type: 'stop' })
     runSeqRef.current  = null
     pausedRef.current  = false
     setMode('list'); setRunSeq(null); setDone(false); setPaused(false)

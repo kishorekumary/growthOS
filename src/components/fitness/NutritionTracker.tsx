@@ -305,7 +305,7 @@ function AddMealModal({ onSave, onClose }: {
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/70 backdrop-blur-sm p-4">
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/70 backdrop-blur-sm px-4 pt-4 pb-[max(1rem,env(safe-area-inset-bottom))]">
       <div className="w-full max-w-md rounded-2xl border border-white/10 bg-slate-900 p-5 space-y-4 max-h-[92vh] overflow-y-auto">
         <div className="flex items-center justify-between">
           <h3 className="font-semibold text-white">Log a Meal</h3>

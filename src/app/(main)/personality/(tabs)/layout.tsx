@@ -6,6 +6,7 @@ import { cn } from '@/lib/utils'
 
 const TABS = [
   { label: 'Habits',  href: '/personality/habits' },
+  { label: 'Goals',   href: '/personality/goals' },
   { label: 'Journal', href: '/personality/journal' },
   { label: 'Coach',   href: '/personality/coach' },
 ]

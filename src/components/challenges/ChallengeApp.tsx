@@ -103,9 +103,12 @@ export default function ChallengeApp() {
   const [description, setDescription] = useState('')
 
   const load = useCallback(async () => {
+    const { data: { session } } = await supabase.auth.getSession()
+    if (!session?.user) return
     const { data } = await supabase
       .from('ninety_day_challenges')
       .select('*')
+      .eq('user_id', session.user.id)
       .order('created_at', { ascending: false })
     if (data) setChallenges(data)
   }, [supabase])
@@ -115,9 +118,12 @@ export default function ChallengeApp() {
   async function createChallenge() {
     if (!title.trim()) return
     setSaving(true)
+    const { data: { session } } = await supabase.auth.getSession()
+    if (!session?.user) { setSaving(false); return }
     const { data } = await supabase
       .from('ninety_day_challenges')
       .insert({
+        user_id: session.user.id,
         title: title.trim(),
         category,
         start_date: startDate,
