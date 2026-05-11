@@ -509,7 +509,7 @@ export default function HabitTracker() {
           <h2 className="font-semibold text-white">Habit Tracker</h2>
           {habits.length > 0 && (
             <p className="text-xs text-slate-500 mt-0.5">
-              {done.length}/{habits.length - skipped.length} done today
+              {done.length}/{habits.length} done today
               {topStreak > 0 && ` · 🔥 Best streak: ${topStreak}`}
             </p>
           )}
@@ -645,29 +645,41 @@ export default function HabitTracker() {
         })}
       </div>
 
-      {/* Skipped today — compact undo strip */}
+      {/* Not possible today — shown below main list, tap X to undo */}
       {skipped.length > 0 && (
-        <div className="space-y-1 pt-1">
+        <div className="space-y-1.5 pt-1">
           <p className="text-xs text-slate-600 px-1">
             {skipped.length} not possible today
           </p>
-          {skipped.map(habit => (
-            <div key={habit.id}
-              className="flex items-center gap-3 rounded-lg border border-white/5 bg-white/2 px-4 py-2">
-              <button
-                onClick={() => undoLog(habit)}
-                disabled={markingId === habit.id}
-                aria-label="Undo"
-                className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full border border-slate-700 hover:border-slate-500 hover:bg-white/10 transition-all"
-              >
-                {markingId === habit.id
-                  ? <Loader2 className="h-3 w-3 animate-spin text-slate-500" />
-                  : <RotateCcw className="h-3 w-3 text-slate-600" />}
-              </button>
-              <p className="flex-1 text-xs text-slate-600 line-through truncate">{habit.habit_name}</p>
-              <span className="text-[10px] text-slate-700">undo</span>
-            </div>
-          ))}
+          {skipped.map(habit => {
+            const cat = CATEGORY_STYLES[habit.category] ?? CATEGORY_STYLES.mindset
+            return (
+              <div key={habit.id}
+                className="group flex items-center gap-3 rounded-xl border border-red-500/15 bg-red-500/5 px-4 py-3 transition-all">
+                {/* Red X — tap to undo */}
+                <button
+                  onClick={() => undoLog(habit)}
+                  disabled={markingId === habit.id}
+                  aria-label="Undo — mark as pending"
+                  title="Tap to undo"
+                  className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full border-2 border-red-400 bg-red-400 hover:bg-slate-700 hover:border-slate-500 transition-all group/undo"
+                >
+                  {markingId === habit.id
+                    ? <Loader2 className="h-3 w-3 animate-spin text-white" />
+                    : <>
+                        <XCircle  className="h-3.5 w-3.5 text-white group-hover/undo:hidden" />
+                        <RotateCcw className="h-3 w-3 text-slate-300 hidden group-hover/undo:block" />
+                      </>}
+                </button>
+                <div className="flex-1 min-w-0 space-y-0.5">
+                  <p className="text-sm text-slate-500 line-through truncate">{habit.habit_name}</p>
+                  <span className={cn('text-xs px-1.5 py-0.5 rounded-full', cat.badge)}>
+                    {cat.label}
+                  </span>
+                </div>
+              </div>
+            )
+          })}
         </div>
       )}
     </div>
