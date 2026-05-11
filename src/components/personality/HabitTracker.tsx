@@ -482,11 +482,11 @@ export default function HabitTracker() {
     </div>
   )
 
-  // Pending first, then done, then missed
+  // Pending first, then done — skipped habits are hidden from the main list
   const pending = habits.filter(h => getStatus(h.id) === 'pending')
   const done    = habits.filter(h => getStatus(h.id) === 'done')
-  const missed  = habits.filter(h => getStatus(h.id) === 'missed')
-  const sortedHabits = [...pending, ...done, ...missed]
+  const skipped = habits.filter(h => getStatus(h.id) === 'missed')
+  const sortedHabits = [...pending, ...done]
 
   const weekDone   = weekLogs.filter(l => l.status === 'done').length
   const weekMissed = weekLogs.filter(l => l.status === 'missed').length
@@ -509,7 +509,7 @@ export default function HabitTracker() {
           <h2 className="font-semibold text-white">Habit Tracker</h2>
           {habits.length > 0 && (
             <p className="text-xs text-slate-500 mt-0.5">
-              {done.length}/{habits.length} done today
+              {done.length}/{habits.length - skipped.length} done today
               {topStreak > 0 && ` · 🔥 Best streak: ${topStreak}`}
             </p>
           )}
@@ -540,8 +540,7 @@ export default function HabitTracker() {
               key={habit.id}
               className={cn(
                 'group flex items-center gap-3 rounded-xl border px-4 py-3.5 transition-all',
-                status === 'done'   && 'border-emerald-500/20 bg-emerald-500/5',
-                status === 'missed' && 'border-red-500/20 bg-red-500/5',
+                status === 'done'    && 'border-emerald-500/20 bg-emerald-500/5',
                 status === 'pending' && 'border-white/10 bg-white/5 hover:border-white/20',
               )}
             >
@@ -562,7 +561,8 @@ export default function HabitTracker() {
                   <button
                     onClick={() => markMissed(habit)}
                     disabled={!!markingId}
-                    aria-label="Mark missed"
+                    aria-label="Not possible today"
+                    title="Not possible today"
                     className="flex h-6 w-6 items-center justify-center rounded-full border-2 border-slate-700 hover:border-red-400 hover:bg-red-500/20 transition-all"
                   >
                     <XCircle className="h-3.5 w-3.5 text-slate-700 hover:text-red-400" />
@@ -602,7 +602,6 @@ export default function HabitTracker() {
                 <p className={cn(
                   'text-sm font-medium truncate',
                   status === 'done'    && 'text-slate-500 line-through',
-                  status === 'missed'  && 'text-slate-500 line-through',
                   status === 'pending' && 'text-white',
                 )}>
                   {habit.habit_name}
@@ -612,9 +611,6 @@ export default function HabitTracker() {
                     {cat.label}
                   </span>
                   <span className="text-xs text-slate-600">{FREQUENCY_LABELS[habit.frequency]}</span>
-                  {status === 'missed' && (
-                    <span className="text-xs text-red-400/70">Missed today</span>
-                  )}
                 </div>
               </div>
 
@@ -648,6 +644,32 @@ export default function HabitTracker() {
           )
         })}
       </div>
+
+      {/* Skipped today — compact undo strip */}
+      {skipped.length > 0 && (
+        <div className="space-y-1 pt-1">
+          <p className="text-xs text-slate-600 px-1">
+            {skipped.length} not possible today
+          </p>
+          {skipped.map(habit => (
+            <div key={habit.id}
+              className="flex items-center gap-3 rounded-lg border border-white/5 bg-white/2 px-4 py-2">
+              <button
+                onClick={() => undoLog(habit)}
+                disabled={markingId === habit.id}
+                aria-label="Undo"
+                className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full border border-slate-700 hover:border-slate-500 hover:bg-white/10 transition-all"
+              >
+                {markingId === habit.id
+                  ? <Loader2 className="h-3 w-3 animate-spin text-slate-500" />
+                  : <RotateCcw className="h-3 w-3 text-slate-600" />}
+              </button>
+              <p className="flex-1 text-xs text-slate-600 line-through truncate">{habit.habit_name}</p>
+              <span className="text-[10px] text-slate-700">undo</span>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   )
 }
