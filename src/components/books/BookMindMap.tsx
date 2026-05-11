@@ -1,7 +1,7 @@
 'use client'
 
-import { useState, useRef } from 'react'
-import { X, Trash2, GitBranch, Loader2, Check, Pencil, Upload, Plus } from 'lucide-react'
+import { useState, useRef, useEffect, useCallback } from 'react'
+import { X, Trash2, GitBranch, Loader2, Check, Pencil, Upload, Plus, Undo2 } from 'lucide-react'
 import { createSupabaseBrowserClient } from '@/lib/supabase'
 import { cn } from '@/lib/utils'
 
@@ -62,7 +62,7 @@ function parseImportText(text: string): TreeNode | null {
   function stripMarkers(line: string) {
     return line.trim().replace(/^#{1,6}\s+/, '').replace(/^[-*•]\s+/, '')
   }
-  function getDepth(line: string) {
+  function getLevel(line: string) {
     if (isMarkdown) {
       const m = line.match(/^(#{1,6})\s/)
       return m ? m[1].length - 1 : 0
@@ -75,7 +75,7 @@ function parseImportText(text: string): TreeNode | null {
 
   for (const line of lines) {
     if (!line.trim()) continue
-    const depth = getDepth(line)
+    const depth = getLevel(line)
     const label = stripMarkers(line)
     if (!label) continue
     const node: TreeNode = { label, children: [] }
@@ -124,7 +124,7 @@ function appendBranches(text: string, existingNodes: MindNode[]): MindNode[] | n
   function stripMarkers(line: string) {
     return line.trim().replace(/^#{1,6}\s+/, '').replace(/^[-*•]\s+/, '')
   }
-  function getDepth(line: string) {
+  function getLevel(line: string) {
     if (isMarkdown) {
       const m = line.match(/^(#{1,6})\s/)
       return m ? m[1].length - 1 : 0
@@ -132,12 +132,11 @@ function appendBranches(text: string, existingNodes: MindNode[]): MindNode[] | n
     return Math.floor((line.match(/^(\s*)/)?.[1].length ?? 0) / 2)
   }
 
-  // Build tree collecting ALL top-level items as siblings
   const root: TreeNode = { label: '__root__', children: [] }
   const stack: { node: TreeNode; depth: number }[] = [{ node: root, depth: -1 }]
   for (const line of lines) {
     if (!line.trim()) continue
-    const depth = getDepth(line)
+    const depth = getLevel(line)
     const label = stripMarkers(line)
     if (!label) continue
     const node: TreeNode = { label, children: [] }
@@ -153,7 +152,6 @@ function appendBranches(text: string, existingNodes: MindNode[]): MindNode[] | n
   const H_GAP = 380
   const V_GAP = 56
 
-  // Start below the lowest existing node
   const maxY = existingNodes.reduce((m, n) => Math.max(m, n.y + NODE_H), 0)
   let leafCounter = Math.ceil((maxY + 80 - 40) / V_GAP)
 
@@ -197,19 +195,52 @@ export default function BookMindMap({ bookId, bookTitle, initialJson, onClose }:
     return [{ id: 'root', label: bookTitle, parentId: null, x: 60, y: 380 }]
   }
 
-  const [nodes, setNodes] = useState<MindNode[]>(initNodes)
-  const [editingId, setEditingId] = useState<string | null>(null)
-  const [editLabel, setEditLabel] = useState('')
-  const [saving, setSaving] = useState(false)
+  const [nodes, setNodes]           = useState<MindNode[]>(initNodes)
+  const [editingId, setEditingId]   = useState<string | null>(null)
+  const [editLabel, setEditLabel]   = useState('')
+  const [saving, setSaving]         = useState(false)
   const [savedFlash, setSavedFlash] = useState(false)
-  const [saveError, setSaveError] = useState<string | null>(null)
+  const [saveError, setSaveError]   = useState<string | null>(null)
   const [showImport, setShowImport] = useState(false)
   const [importText, setImportText] = useState('')
   const [importError, setImportError] = useState<string | null>(null)
+  const [canUndo, setCanUndo]       = useState(false)
+
+  // ── Undo history ──────────────────────────────────────────
+  const historyRef = useRef<MindNode[][]>([])
+  const nodesRef   = useRef(nodes)
+  nodesRef.current = nodes
+
+  function pushHistory() {
+    historyRef.current = [...historyRef.current.slice(-49), [...nodesRef.current]]
+    setCanUndo(true)
+  }
+
+  const undo = useCallback(() => {
+    if (!historyRef.current.length) return
+    const prev = historyRef.current[historyRef.current.length - 1]
+    historyRef.current = historyRef.current.slice(0, -1)
+    setNodes(prev)
+    setCanUndo(historyRef.current.length > 0)
+  }, [])
+
+  useEffect(() => {
+    function onKeyDown(e: KeyboardEvent) {
+      if ((e.metaKey || e.ctrlKey) && e.key === 'z' && !e.shiftKey) {
+        e.preventDefault()
+        undo()
+      }
+    }
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [undo])
+
+  // ── Import ────────────────────────────────────────────────
 
   function handleImportAdd() {
     const added = appendBranches(importText, nodesRef.current)
     if (!added) { setImportError('Could not parse. Paste an indented outline or Markdown headings (# ## ###).'); return }
+    pushHistory()
     setNodes(prev => [...prev, ...added])
     setImportText(''); setImportError(null); setShowImport(false)
   }
@@ -221,15 +252,20 @@ export default function BookMindMap({ bookId, bookTitle, initialJson, onClose }:
     const newNodes = treeToNodes(tree, 'root', root?.x ?? 60)
     const rootNode = newNodes.find(n => n.id === 'root')
     if (rootNode) rootNode.label = bookTitle
+    pushHistory()
     setNodes(newNodes)
     setImportText(''); setImportError(null); setShowImport(false)
   }
 
+  // ── Insert between node and all its children ──────────────
+  // Creates a new intermediate node: clicked node keeps its parent,
+  // new node becomes clicked node's child, all existing children reparent to new node.
   function insertBetweenChildren(node: MindNode) {
     const children = nodesRef.current.filter(n => n.parentId === node.id)
     if (!children.length) return
-    const newId = uid()
-    const avgY = children.reduce((s, c) => s + c.y + NODE_H / 2, 0) / children.length - NODE_H / 2
+    pushHistory()
+    const newId  = uid()
+    const avgY   = children.reduce((s, c) => s + c.y + NODE_H / 2, 0) / children.length - NODE_H / 2
     const newNode: MindNode = {
       id: newId, label: 'New level', parentId: node.id,
       x: node.x + 380, y: avgY,
@@ -241,15 +277,11 @@ export default function BookMindMap({ bookId, bookTitle, initialJson, onClose }:
     setTimeout(() => { setEditingId(newId); setEditLabel('New level') }, 20)
   }
 
-  // Using refs for drag state to avoid stale closures during fast mouse moves
-  const moveRef = useRef<{
-    id: string; ox: number; oy: number; mx: number; my: number
-  } | null>(null)
-  const connRef = useRef<{ fromId: string } | null>(null)
+  // ── Drag / connect refs ───────────────────────────────────
+  const moveRef  = useRef<{ id: string; ox: number; oy: number; mx: number; my: number } | null>(null)
+  const connRef  = useRef<{ fromId: string } | null>(null)
   const [connPos, setConnPos] = useState<{ x: number; y: number } | null>(null)
   const canvasRef = useRef<HTMLDivElement>(null)
-  const nodesRef = useRef(nodes)
-  nodesRef.current = nodes
 
   function canvasXY(e: React.MouseEvent): { x: number; y: number } {
     const rect = canvasRef.current!.getBoundingClientRect()
@@ -265,9 +297,7 @@ export default function BookMindMap({ bookId, bookTitle, initialJson, onClose }:
         prev.map(n => n.id === id ? { ...n, x: Math.max(4, ox + dx), y: Math.max(4, oy + dy) } : n)
       )
     }
-    if (connRef.current) {
-      setConnPos(canvasXY(e))
-    }
+    if (connRef.current) setConnPos(canvasXY(e))
   }
 
   function onMouseUp(e: React.MouseEvent) {
@@ -278,16 +308,13 @@ export default function BookMindMap({ bookId, bookTitle, initialJson, onClose }:
       if (from) {
         const dist = Math.hypot(x - (from.x + nodeWidth(from.label)), y - (from.y + NODE_H / 2))
         if (dist > 24) {
+          pushHistory()
           const newId = uid()
           const newNode: MindNode = {
-            id: newId,
-            label: 'New point',
-            parentId: fromId,
-            x: Math.max(8, x - MIN_W / 2),
-            y: Math.max(8, y - NODE_H / 2),
+            id: newId, label: 'New point', parentId: fromId,
+            x: Math.max(8, x - MIN_W / 2), y: Math.max(8, y - NODE_H / 2),
           }
           setNodes(prev => [...prev, newNode])
-          // slight delay so the node renders before we focus its input
           setTimeout(() => { setEditingId(newId); setEditLabel('New point') }, 20)
         }
       }
@@ -299,6 +326,7 @@ export default function BookMindMap({ bookId, bookTitle, initialJson, onClose }:
 
   function startMove(e: React.MouseEvent, node: MindNode) {
     if (node.id === 'root') return
+    pushHistory()
     moveRef.current = { id: node.id, ox: node.x, oy: node.y, mx: e.clientX, my: e.clientY }
     e.stopPropagation()
     e.preventDefault()
@@ -312,17 +340,19 @@ export default function BookMindMap({ bookId, bookTitle, initialJson, onClose }:
   }
 
   function commitEdit(id: string) {
+    pushHistory()
     const label = editLabel.trim()
     if (label) {
       setNodes(prev => prev.map(n => n.id === id ? { ...n, label } : n))
     } else {
-      deleteNode(id)
+      deleteNode(id, false)
     }
     setEditingId(null)
   }
 
-  function deleteNode(id: string) {
+  function deleteNode(id: string, withHistory = true) {
     if (id === 'root') return
+    if (withHistory) pushHistory()
     const toDelete = new Set<string>()
     const collect = (nid: string) => {
       toDelete.add(nid)
@@ -342,7 +372,6 @@ export default function BookMindMap({ bookId, bookTitle, initialJson, onClose }:
       .eq('id', bookId)
     setSaving(false)
     if (error) {
-      // key_lessons column missing — surface the required migration to the user
       setSaveError('Run in Supabase SQL editor: ALTER TABLE reading_log ADD COLUMN IF NOT EXISTS key_lessons TEXT;')
       return
     }
@@ -353,6 +382,9 @@ export default function BookMindMap({ bookId, bookTitle, initialJson, onClose }:
   const CANVAS_W = 2400
   const CANVAS_H = 1600
 
+  // Pre-compute which node IDs have at least one child
+  const nodesWithChildren = new Set(nodes.filter(n => n.parentId).map(n => n.parentId!))
+
   return (
     <div className="fixed inset-0 z-[60] flex flex-col" style={{ background: '#090912' }}>
 
@@ -361,6 +393,18 @@ export default function BookMindMap({ bookId, bookTitle, initialJson, onClose }:
         <GitBranch className="h-4 w-4 text-violet-400 shrink-0" />
         <p className="text-sm font-semibold text-white truncate flex-1">{bookTitle}</p>
         <span className="hidden sm:block text-xs text-slate-500 shrink-0">Mind Map</span>
+
+        {/* Undo button */}
+        <button
+          onClick={undo}
+          disabled={!canUndo}
+          title="Undo (⌘Z)"
+          className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium bg-white/5 hover:bg-white/10 text-slate-300 border border-white/10 transition-all shrink-0 disabled:opacity-30 disabled:cursor-not-allowed"
+        >
+          <Undo2 className="h-3 w-3" />
+          Undo
+        </button>
+
         <button
           onClick={() => { setShowImport(true); setImportError(null) }}
           className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium bg-white/5 hover:bg-white/10 text-slate-300 border border-white/10 transition-all shrink-0"
@@ -378,11 +422,8 @@ export default function BookMindMap({ bookId, bookTitle, initialJson, onClose }:
               : 'bg-violet-600 hover:bg-violet-700 text-white disabled:opacity-50'
           )}
         >
-          {saving ? (
-            <Loader2 className="h-3 w-3 animate-spin" />
-          ) : savedFlash ? (
-            <Check className="h-3 w-3" />
-          ) : null}
+          {saving ? <Loader2 className="h-3 w-3 animate-spin" />
+            : savedFlash ? <Check className="h-3 w-3" /> : null}
           {savedFlash ? 'Saved!' : 'Save'}
         </button>
         <button
@@ -404,10 +445,10 @@ export default function BookMindMap({ bookId, bookTitle, initialJson, onClose }:
       ) : (
         <div className="px-4 py-1.5 border-b border-white/5 bg-white/[0.015] shrink-0">
           <p className="text-[11px] text-slate-600">
-            Drag <span className="text-violet-500">●</span> to branch &nbsp;·&nbsp;
+            Drag <span className="text-violet-500">●</span> right edge to branch &nbsp;·&nbsp;
             <span className="text-violet-500">✎</span> edit &nbsp;·&nbsp;
-            <span className="text-amber-500">＋</span> below node = insert level between it and its children &nbsp;·&nbsp;
-            Import → <span className="text-violet-400">Add branches</span> appends without replacing
+            <span className="text-amber-500">＋</span> (inside node, on hover) = inject level between node and its children &nbsp;·&nbsp;
+            ⌘Z undo
           </p>
         </div>
       )}
@@ -429,9 +470,7 @@ export default function BookMindMap({ bookId, bookTitle, initialJson, onClose }:
             <div className="rounded-lg border border-white/5 bg-white/[0.03] p-3 space-y-2">
               <p className="text-[11px] font-medium text-slate-400">How to get the text from NotebookLM</p>
               <p className="text-[11px] text-slate-500">NotebookLM's mind map is visual-only. In the NotebookLM chat, type:</p>
-              <div
-                className="rounded bg-black/40 border border-white/10 px-2.5 py-1.5 text-[11px] text-violet-300 font-mono cursor-text select-all"
-              >
+              <div className="rounded bg-black/40 border border-white/10 px-2.5 py-1.5 text-[11px] text-violet-300 font-mono cursor-text select-all">
                 Give me the mind map as an indented text outline with all topics and subtopics
               </div>
               <p className="text-[11px] text-slate-500">Copy the response and paste it below. Also supports Markdown headings (# ## ###) and bullet lists (- *).</p>
@@ -445,9 +484,7 @@ export default function BookMindMap({ bookId, bookTitle, initialJson, onClose }:
               className="w-full h-48 rounded-lg border border-white/10 bg-white/5 px-3 py-2.5 text-xs text-slate-200 placeholder:text-slate-700 font-mono focus:outline-none focus:border-violet-500/50 resize-none"
             />
 
-            {importError && (
-              <p className="text-xs text-red-400">{importError}</p>
-            )}
+            {importError && <p className="text-xs text-red-400">{importError}</p>}
 
             <div className="flex gap-2">
               <button
@@ -484,8 +521,7 @@ export default function BookMindMap({ bookId, bookTitle, initialJson, onClose }:
           style={{
             width: CANVAS_W,
             height: CANVAS_H,
-            backgroundImage:
-              'radial-gradient(circle, rgba(255,255,255,0.035) 1px, transparent 1px)',
+            backgroundImage: 'radial-gradient(circle, rgba(255,255,255,0.035) 1px, transparent 1px)',
             backgroundSize: '28px 28px',
           }}
           onMouseMove={onMouseMove}
@@ -496,64 +532,43 @@ export default function BookMindMap({ bookId, bookTitle, initialJson, onClose }:
           {/* ── SVG edges ── */}
           <svg
             className="absolute inset-0 pointer-events-none"
-            width={CANVAS_W}
-            height={CANVAS_H}
+            width={CANVAS_W} height={CANVAS_H}
             style={{ overflow: 'visible' }}
           >
-            {nodes
-              .filter(n => n.parentId)
-              .map(child => {
-                const parent = nodesRef.current.find(p => p.id === child.parentId)
-                if (!parent) return null
-                const d = getDepth(child.id, nodesRef.current)
-                const color = DEPTH_COLORS[d % DEPTH_COLORS.length]
-                return (
-                  <path
-                    key={`edge-${child.id}`}
-                    d={bezier(parent, child)}
-                    fill="none"
-                    stroke={color}
-                    strokeWidth={1.5}
-                    strokeOpacity={0.4}
-                  />
-                )
-              })}
+            {nodes.filter(n => n.parentId).map(child => {
+              const parent = nodesRef.current.find(p => p.id === child.parentId)
+              if (!parent) return null
+              const d = getDepth(child.id, nodesRef.current)
+              const color = DEPTH_COLORS[d % DEPTH_COLORS.length]
+              return (
+                <path key={`edge-${child.id}`}
+                  d={bezier(parent, child)} fill="none"
+                  stroke={color} strokeWidth={1.5} strokeOpacity={0.4} />
+              )
+            })}
 
-            {/* Live drag line while connecting */}
             {connRef.current && connPos && (() => {
               const from = nodesRef.current.find(n => n.id === connRef.current!.fromId)
               if (!from) return null
               const fakeChild: MindNode = {
-                id: '__tmp__',
-                label: '',
-                parentId: null,
-                x: connPos.x - MIN_W / 2,
-                y: connPos.y - NODE_H / 2,
+                id: '__tmp__', label: '', parentId: null,
+                x: connPos.x - MIN_W / 2, y: connPos.y - NODE_H / 2,
               }
               return (
-                <path
-                  d={bezier(from, fakeChild)}
-                  fill="none"
-                  stroke="#7c3aed"
-                  strokeWidth={2}
-                  strokeDasharray="7 5"
-                  strokeOpacity={0.7}
-                />
+                <path d={bezier(from, fakeChild)} fill="none"
+                  stroke="#7c3aed" strokeWidth={2} strokeDasharray="7 5" strokeOpacity={0.7} />
               )
             })()}
           </svg>
 
           {/* ── Nodes ── */}
-          {(() => {
-            const nodesWithChildren = new Set(nodes.filter(n => n.parentId).map(n => n.parentId!))
-            return nodes.map(node => {
-            const isRoot = node.id === 'root'
-            const isEditing = editingId === node.id
-            const d = getDepth(node.id, nodes)
-            const color = DEPTH_COLORS[d % DEPTH_COLORS.length]
+          {nodes.map(node => {
+            const isRoot     = node.id === 'root'
+            const isEditing  = editingId === node.id
+            const d          = getDepth(node.id, nodes)
+            const color      = DEPTH_COLORS[d % DEPTH_COLORS.length]
             const hasChildren = nodesWithChildren.has(node.id)
-
-            const nw = nodeWidth(node.label)
+            const nw         = nodeWidth(node.label)
 
             return (
               <div
@@ -565,19 +580,14 @@ export default function BookMindMap({ bookId, bookTitle, initialJson, onClose }:
                   isRoot ? 'cursor-default' : 'cursor-move',
                 )}
                 style={{
-                  left: node.x,
-                  top: node.y,
-                  width: nw,
-                  height: NODE_H,
+                  left: node.x, top: node.y, width: nw, height: NODE_H,
                   borderColor: isRoot ? 'rgba(124,58,237,0.55)' : color + '44',
-                  background: isRoot
-                    ? 'rgba(109,40,217,0.25)'
-                    : 'rgba(12,12,26,0.88)',
+                  background: isRoot ? 'rgba(109,40,217,0.25)' : 'rgba(12,12,26,0.88)',
                   backdropFilter: 'blur(10px)',
                 }}
                 onMouseDown={isRoot ? undefined : e => startMove(e, node)}
               >
-                {/* Full-text tooltip — shown on hover when text is clipped */}
+                {/* Full-text tooltip when label is clipped */}
                 {!isEditing && nw === MAX_W && (
                   <div
                     className="pointer-events-none absolute left-0 bottom-[calc(100%+5px)] hidden group-hover:block z-20 max-w-[360px] rounded-lg border border-white/15 bg-slate-800/95 px-3 py-2 text-xs leading-relaxed shadow-xl backdrop-blur-sm whitespace-normal break-words"
@@ -609,6 +619,19 @@ export default function BookMindMap({ bookId, bookTitle, initialJson, onClose }:
                   >
                     {node.label}
                   </span>
+                )}
+
+                {/* ── Insert-between button — inside node, only when has children ── */}
+                {!isRoot && hasChildren && !isEditing && (
+                  <button
+                    type="button"
+                    onMouseDown={e => e.stopPropagation()}
+                    onClick={e => { e.stopPropagation(); insertBetweenChildren(node) }}
+                    title="Insert a new level between this node and its children (⌘Z to undo)"
+                    className="shrink-0 opacity-0 group-hover:opacity-100 flex items-center justify-center w-4 h-4 rounded-full border border-amber-500/60 bg-amber-500/15 text-amber-400 hover:bg-amber-500/40 transition-all"
+                  >
+                    <Plus className="h-2.5 w-2.5" />
+                  </button>
                 )}
 
                 {/* Edit icon */}
@@ -644,37 +667,17 @@ export default function BookMindMap({ bookId, bookTitle, initialJson, onClose }:
                   className="absolute -right-3 top-1/2 -translate-y-1/2 z-10 w-6 h-6 flex items-center justify-center cursor-crosshair opacity-0 group-hover:opacity-100 transition-opacity"
                   onMouseDown={e => startConn(e, node.id)}
                 >
-                  <div
-                    className={cn(
-                      'w-3.5 h-3.5 rounded-full border flex items-center justify-center',
-                      'border-violet-500/60 bg-violet-600/20',
-                      'hover:bg-violet-500 hover:border-violet-400 transition-colors'
-                    )}
-                  >
+                  <div className={cn(
+                    'w-3.5 h-3.5 rounded-full border flex items-center justify-center',
+                    'border-violet-500/60 bg-violet-600/20',
+                    'hover:bg-violet-500 hover:border-violet-400 transition-colors'
+                  )}>
                     <div className="w-1.5 h-1.5 rounded-full bg-violet-400" />
                   </div>
                 </div>
-
-                {/* ── Insert-between button (bottom centre, only when node has children) ── */}
-                {!isRoot && hasChildren && !isEditing && (
-                  <div
-                    className="absolute left-1/2 -translate-x-1/2 -bottom-4 z-10 opacity-0 group-hover:opacity-100 transition-opacity"
-                    onMouseDown={e => e.stopPropagation()}
-                  >
-                    <button
-                      type="button"
-                      onClick={e => { e.stopPropagation(); insertBetweenChildren(node) }}
-                      title="Insert a new level between this node and its children"
-                      className="flex h-5 w-5 items-center justify-center rounded-full border border-amber-500/60 bg-amber-500/20 text-amber-400 hover:bg-amber-500/50 transition-colors"
-                    >
-                      <Plus className="h-3 w-3" />
-                    </button>
-                  </div>
-                )}
               </div>
             )
-          })
-          })()}
+          })}
         </div>
       </div>
     </div>
