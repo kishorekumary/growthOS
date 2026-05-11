@@ -5,9 +5,8 @@ import dynamic from 'next/dynamic'
 import type { LifeScores } from '@/components/checkin/WheelOfLife'
 import { format, subDays, startOfWeek } from 'date-fns'
 
-const MoodCheckin  = dynamic(() => import('@/components/checkin/MoodCheckin'),  { ssr: false })
-const SleepTracker = dynamic(() => import('@/components/checkin/SleepTracker'), { ssr: false })
-const WheelOfLife  = dynamic(() => import('@/components/checkin/WheelOfLife'),  { ssr: false })
+const MoodCheckin = dynamic(() => import('@/components/checkin/MoodCheckin'), { ssr: false })
+const WheelOfLife = dynamic(() => import('@/components/checkin/WheelOfLife'), { ssr: false })
 
 function clamp(v: number, max: number): number {
   return Math.max(1, Math.min(10, Math.round(v)))
@@ -110,7 +109,7 @@ export default async function CheckinPage() {
           </div>
           <div>
             <h1 className="text-xl font-bold text-white">Daily Check-in</h1>
-            <p className="text-sm text-slate-500">Mood · Sleep · Life Balance</p>
+            <p className="text-sm text-slate-500">Mood · Life Balance</p>
           </div>
         </div>
 
@@ -119,9 +118,6 @@ export default async function CheckinPage() {
 
         {/* Mood & Energy */}
         <MoodCheckin />
-
-        {/* Sleep */}
-        <SleepTracker />
       </div>
     </div>
   )

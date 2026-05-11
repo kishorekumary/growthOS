@@ -2,22 +2,21 @@
 
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
-import { LayoutDashboard, Brain, Dumbbell, Wallet, BookOpen, Target, CheckSquare, Timer, Smile, ListChecks, Newspaper, NotebookPen, CalendarCheck, Flame, Settings, LogOut } from 'lucide-react'
+import { LayoutDashboard, Brain, Dumbbell, Wallet, BookOpen, Target, CheckSquare, Timer, Smile, Newspaper, NotebookPen, CalendarCheck, Flame, Settings, LogOut } from 'lucide-react'
 import { createSupabaseBrowserClient } from '@/lib/supabase'
 import { cn } from '@/lib/utils'
 
 const NAV_ITEMS = [
   { href: '/dashboard',    label: 'Dashboard',   icon: LayoutDashboard },
-  { href: '/personality',  label: 'Personality', icon: Brain },
-  { href: '/fitness',      label: 'Fitness',     icon: Dumbbell },
-  { href: '/finance',      label: 'Finance',     icon: Wallet },
-  { href: '/books',        label: 'Books',       icon: BookOpen },
-  { href: '/goals',        label: 'Goals',       icon: Target },
-  { href: '/todos',        label: 'Tasks',       icon: CheckSquare },
-  { href: '/focus',        label: 'Focus',       icon: Timer },
-  { href: '/checkin',     label: 'Check-in',    icon: Smile },
-  { href: '/routines',    label: 'Routines',    icon: ListChecks },
-  { href: '/digest',      label: 'Digest',      icon: Newspaper },
+  { href: '/personality/habits', label: 'Habits',    icon: Brain },
+  { href: '/fitness',            label: 'Fitness',   icon: Dumbbell },
+  { href: '/finance',            label: 'Finance',   icon: Wallet },
+  { href: '/books',              label: 'Books',     icon: BookOpen },
+  { href: '/goals',              label: 'Goals',     icon: Target },
+  { href: '/todos',              label: 'Tasks',     icon: CheckSquare },
+  { href: '/focus',              label: 'Focus',     icon: Timer },
+  { href: '/checkin',            label: 'Check-in',  icon: Smile },
+  { href: '/digest',             label: 'Digest',    icon: Newspaper },
   { href: '/journal',     label: 'Journal',     icon: NotebookPen },
   { href: '/retro',       label: 'Retro',       icon: CalendarCheck },
   { href: '/challenges',  label: 'Challenges',  icon: Flame },

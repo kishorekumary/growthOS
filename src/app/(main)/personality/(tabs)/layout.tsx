@@ -5,10 +5,9 @@ import { usePathname } from 'next/navigation'
 import { cn } from '@/lib/utils'
 
 const TABS = [
-  { label: 'Overview', href: '/personality' },
-  { label: 'Habits',   href: '/personality/habits' },
-  { label: 'Journal',  href: '/personality/journal' },
-  { label: 'Coach',    href: '/personality/coach' },
+  { label: 'Habits',  href: '/personality/habits' },
+  { label: 'Journal', href: '/personality/journal' },
+  { label: 'Coach',   href: '/personality/coach' },
 ]
 
 export default function PersonalityTabsLayout({ children }: { children: React.ReactNode }) {
