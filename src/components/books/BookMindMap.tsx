@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useRef } from 'react'
-import { X, Trash2, GitBranch, Loader2, Check, Pencil, Upload } from 'lucide-react'
+import { X, Trash2, GitBranch, Loader2, Check, Pencil, Upload, Plus } from 'lucide-react'
 import { createSupabaseBrowserClient } from '@/lib/supabase'
 import { cn } from '@/lib/utils'
 
@@ -115,6 +115,68 @@ function treeToNodes(tree: TreeNode, rootId: string, originX: number): MindNode[
   return result
 }
 
+// Append parsed branches to an existing node set, positioned below current content
+function appendBranches(text: string, existingNodes: MindNode[]): MindNode[] | null {
+  const lines = text.split('\n').filter(l => l.trim())
+  if (!lines.length) return null
+
+  const isMarkdown = lines.some(l => /^#{1,6}\s/.test(l))
+  function stripMarkers(line: string) {
+    return line.trim().replace(/^#{1,6}\s+/, '').replace(/^[-*•]\s+/, '')
+  }
+  function getDepth(line: string) {
+    if (isMarkdown) {
+      const m = line.match(/^(#{1,6})\s/)
+      return m ? m[1].length - 1 : 0
+    }
+    return Math.floor((line.match(/^(\s*)/)?.[1].length ?? 0) / 2)
+  }
+
+  // Build tree collecting ALL top-level items as siblings
+  const root: TreeNode = { label: '__root__', children: [] }
+  const stack: { node: TreeNode; depth: number }[] = [{ node: root, depth: -1 }]
+  for (const line of lines) {
+    if (!line.trim()) continue
+    const depth = getDepth(line)
+    const label = stripMarkers(line)
+    if (!label) continue
+    const node: TreeNode = { label, children: [] }
+    while (stack.length > 1 && stack[stack.length - 1].depth >= depth) stack.pop()
+    stack[stack.length - 1].node.children.push(node)
+    stack.push({ node, depth })
+  }
+
+  const branches = root.children
+  if (!branches.length) return null
+
+  const rootNode = existingNodes.find(n => n.id === 'root')!
+  const H_GAP = 380
+  const V_GAP = 56
+
+  // Start below the lowest existing node
+  const maxY = existingNodes.reduce((m, n) => Math.max(m, n.y + NODE_H), 0)
+  let leafCounter = Math.ceil((maxY + 80 - 40) / V_GAP)
+
+  const newNodes: MindNode[] = []
+
+  function place(node: TreeNode, parentId: string, depth: number): number {
+    const id = uid()
+    const xPos = rootNode.x + (depth + 1) * H_GAP
+    if (node.children.length === 0) {
+      newNodes.push({ id, label: node.label, parentId, x: xPos, y: leafCounter * V_GAP + 40 })
+      return leafCounter++
+    }
+    const avgs: number[] = []
+    for (const child of node.children) avgs.push(place(child, id, depth + 1))
+    const avg = (avgs[0] + avgs[avgs.length - 1]) / 2
+    newNodes.push({ id, label: node.label, parentId, x: xPos, y: avg * V_GAP + 40 })
+    return avg
+  }
+
+  for (const branch of branches) place(branch, 'root', 0)
+  return newNodes
+}
+
 // ─── Props ────────────────────────────────────────────────────
 
 interface Props {
@@ -145,18 +207,38 @@ export default function BookMindMap({ bookId, bookTitle, initialJson, onClose }:
   const [importText, setImportText] = useState('')
   const [importError, setImportError] = useState<string | null>(null)
 
-  function handleImport() {
+  function handleImportAdd() {
+    const added = appendBranches(importText, nodesRef.current)
+    if (!added) { setImportError('Could not parse. Paste an indented outline or Markdown headings (# ## ###).'); return }
+    setNodes(prev => [...prev, ...added])
+    setImportText(''); setImportError(null); setShowImport(false)
+  }
+
+  function handleImportReplace() {
     const tree = parseImportText(importText)
-    if (!tree) { setImportError('Could not parse the text. Paste an indented outline or Markdown headings.'); return }
+    if (!tree) { setImportError('Could not parse. Paste an indented outline or Markdown headings (# ## ###).'); return }
     const root = nodesRef.current.find(n => n.id === 'root')
     const newNodes = treeToNodes(tree, 'root', root?.x ?? 60)
-    // keep root label as book title
     const rootNode = newNodes.find(n => n.id === 'root')
     if (rootNode) rootNode.label = bookTitle
     setNodes(newNodes)
-    setImportText('')
-    setImportError(null)
-    setShowImport(false)
+    setImportText(''); setImportError(null); setShowImport(false)
+  }
+
+  function insertBetweenChildren(node: MindNode) {
+    const children = nodesRef.current.filter(n => n.parentId === node.id)
+    if (!children.length) return
+    const newId = uid()
+    const avgY = children.reduce((s, c) => s + c.y + NODE_H / 2, 0) / children.length - NODE_H / 2
+    const newNode: MindNode = {
+      id: newId, label: 'New level', parentId: node.id,
+      x: node.x + 380, y: avgY,
+    }
+    setNodes(prev => [
+      ...prev.map(n => n.parentId === node.id ? { ...n, parentId: newId } : n),
+      newNode,
+    ])
+    setTimeout(() => { setEditingId(newId); setEditLabel('New level') }, 20)
   }
 
   // Using refs for drag state to avoid stale closures during fast mouse moves
@@ -322,9 +404,10 @@ export default function BookMindMap({ bookId, bookTitle, initialJson, onClose }:
       ) : (
         <div className="px-4 py-1.5 border-b border-white/5 bg-white/[0.015] shrink-0">
           <p className="text-[11px] text-slate-600">
-            Drag the <span className="text-violet-500">●</span> handle on any node right to draw a branch &nbsp;·&nbsp;
-            Click <span className="text-violet-500">✎</span> to edit label &nbsp;·&nbsp;
-            Drag node body to reposition
+            Drag <span className="text-violet-500">●</span> to branch &nbsp;·&nbsp;
+            <span className="text-violet-500">✎</span> edit &nbsp;·&nbsp;
+            <span className="text-amber-500">＋</span> below node = insert level between it and its children &nbsp;·&nbsp;
+            Import → <span className="text-violet-400">Add branches</span> appends without replacing
           </p>
         </div>
       )}
@@ -335,8 +418,8 @@ export default function BookMindMap({ bookId, bookTitle, initialJson, onClose }:
           <div className="w-full max-w-lg mx-4 rounded-2xl border border-white/10 bg-slate-900 shadow-2xl p-5 space-y-4">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm font-semibold text-white">Import from NotebookLM</p>
-                <p className="text-xs text-slate-500 mt-0.5">Replaces the current mind map</p>
+                <p className="text-sm font-semibold text-white">Import outline</p>
+                <p className="text-xs text-slate-500 mt-0.5">Each <span className="text-violet-400 font-mono">#</span> heading becomes a new branch from root</p>
               </div>
               <button onClick={() => setShowImport(false)} className="text-slate-500 hover:text-white transition-colors">
                 <X className="h-4 w-4" />
@@ -369,16 +452,24 @@ export default function BookMindMap({ bookId, bookTitle, initialJson, onClose }:
             <div className="flex gap-2">
               <button
                 onClick={() => setShowImport(false)}
-                className="flex-1 rounded-lg border border-white/10 py-2 text-xs text-slate-400 hover:bg-white/5 transition-colors"
+                className="rounded-lg border border-white/10 px-3 py-2 text-xs text-slate-400 hover:bg-white/5 transition-colors"
               >
                 Cancel
               </button>
               <button
-                onClick={handleImport}
+                onClick={handleImportReplace}
+                disabled={!importText.trim()}
+                className="rounded-lg border border-white/10 px-3 py-2 text-xs text-slate-400 hover:bg-red-500/10 hover:border-red-500/30 hover:text-red-300 disabled:opacity-40 transition-colors"
+                title="Discard existing map and build from this text"
+              >
+                Replace map
+              </button>
+              <button
+                onClick={handleImportAdd}
                 disabled={!importText.trim()}
                 className="flex-1 rounded-lg bg-violet-600 hover:bg-violet-700 disabled:opacity-40 py-2 text-xs font-medium text-white transition-colors"
               >
-                Import & Replace
+                Add branches
               </button>
             </div>
           </div>
@@ -453,11 +544,14 @@ export default function BookMindMap({ bookId, bookTitle, initialJson, onClose }:
           </svg>
 
           {/* ── Nodes ── */}
-          {nodes.map(node => {
+          {(() => {
+            const nodesWithChildren = new Set(nodes.filter(n => n.parentId).map(n => n.parentId!))
+            return nodes.map(node => {
             const isRoot = node.id === 'root'
             const isEditing = editingId === node.id
             const d = getDepth(node.id, nodes)
             const color = DEPTH_COLORS[d % DEPTH_COLORS.length]
+            const hasChildren = nodesWithChildren.has(node.id)
 
             const nw = nodeWidth(node.label)
 
@@ -560,9 +654,27 @@ export default function BookMindMap({ bookId, bookTitle, initialJson, onClose }:
                     <div className="w-1.5 h-1.5 rounded-full bg-violet-400" />
                   </div>
                 </div>
+
+                {/* ── Insert-between button (bottom centre, only when node has children) ── */}
+                {!isRoot && hasChildren && !isEditing && (
+                  <div
+                    className="absolute left-1/2 -translate-x-1/2 -bottom-4 z-10 opacity-0 group-hover:opacity-100 transition-opacity"
+                    onMouseDown={e => e.stopPropagation()}
+                  >
+                    <button
+                      type="button"
+                      onClick={e => { e.stopPropagation(); insertBetweenChildren(node) }}
+                      title="Insert a new level between this node and its children"
+                      className="flex h-5 w-5 items-center justify-center rounded-full border border-amber-500/60 bg-amber-500/20 text-amber-400 hover:bg-amber-500/50 transition-colors"
+                    >
+                      <Plus className="h-3 w-3" />
+                    </button>
+                  </div>
+                )}
               </div>
             )
-          })}
+          })
+          })()}
         </div>
       </div>
     </div>
