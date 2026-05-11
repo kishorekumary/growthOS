@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
-import { LayoutDashboard, Brain, Dumbbell, Wallet, BookOpen, Target, CheckSquare, Timer, Smile, Newspaper, NotebookPen, CalendarCheck, Flame, Settings, LogOut } from 'lucide-react'
+import { LayoutDashboard, Brain, Dumbbell, Wallet, BookOpen, Target, CheckSquare, Timer, Newspaper, CalendarCheck, Flame, Settings, LogOut } from 'lucide-react'
 import { createSupabaseBrowserClient } from '@/lib/supabase'
 import { cn } from '@/lib/utils'
 
@@ -14,12 +14,10 @@ const NAV_ITEMS = [
   { href: '/books',              label: 'Books',     icon: BookOpen },
   { href: '/goals',              label: 'Goals',     icon: Target },
   { href: '/todos',              label: 'Tasks',     icon: CheckSquare },
-  { href: '/focus',              label: 'Focus',     icon: Timer },
-  { href: '/checkin',            label: 'Check-in',  icon: Smile },
-  { href: '/digest',             label: 'Digest',    icon: Newspaper },
-  { href: '/journal',     label: 'Journal',     icon: NotebookPen },
-  { href: '/retro',       label: 'Retro',       icon: CalendarCheck },
-  { href: '/challenges',  label: 'Challenges',  icon: Flame },
+  { href: '/focus',      label: 'Focus',      icon: Timer },
+  { href: '/digest',     label: 'Digest',     icon: Newspaper },
+  { href: '/retro',      label: 'Retro',      icon: CalendarCheck },
+  { href: '/challenges', label: 'Challenges', icon: Flame },
 ]
 
 interface SidebarProps {
