@@ -380,11 +380,10 @@ export default function HabitTracker() {
     const today = todayStr()
     const log = weekLogs.find(l => l.habit_id === habitId && l.log_date === today)
     if (log) return log.status
-    // Fallback when habit_logs table unavailable: derive from last_done_at
-    if (logsUnavailable) {
-      const habit = habits.find(h => h.id === habitId)
-      if (habit?.last_done_at && habit.last_done_at.startsWith(today)) return 'done'
-    }
+    // Always fall back to last_done_at — covers both when habit_logs is unavailable
+    // and when a done entry exists in personality_habits but is absent from habit_logs
+    const habit = habits.find(h => h.id === habitId)
+    if (habit?.last_done_at && habit.last_done_at.startsWith(today)) return 'done'
     return 'pending'
   }
 
