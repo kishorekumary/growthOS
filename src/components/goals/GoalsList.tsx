@@ -970,7 +970,7 @@ export default function GoalsList() {
             deletingId={deletingId}
           />
 
-          <CompletedList goals={completed} onDelete={deleteGoal} onUncomplete={markUncomplete} />
+          <CompletedList goals={completed.filter(g => g.category === activeCategory)} onDelete={deleteGoal} onUncomplete={markUncomplete} />
         </div>
       )}
     </div>

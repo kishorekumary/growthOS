@@ -52,6 +52,17 @@ function localDateStr(d = new Date()): string {
 
 function todayStr() { return localDateStr() }
 
+function readTodayMissed(): string[] {
+  try { return JSON.parse(localStorage.getItem(`habit_missed_${todayStr()}`) ?? '[]') } catch { return [] }
+}
+function writeTodayMissed(ids: string[]) {
+  try {
+    const key = `habit_missed_${todayStr()}`
+    if (ids.length) localStorage.setItem(key, JSON.stringify(ids))
+    else localStorage.removeItem(key)
+  } catch {}
+}
+
 function getWeekStart(): string {
   const d = new Date()
   const day = d.getDay() || 7    // Mon=1 … Sun=7
@@ -351,9 +362,11 @@ export default function HabitTracker() {
     setHabits((habitsRes.data as Habit[]) ?? [])
 
     if (logsRes.error) {
-      // habit_logs table not yet created (migration pending) — fall back to last_done_at
+      // habit_logs table not yet created (migration pending) — fall back to last_done_at + localStorage
       setLogsUnavail(true)
-      setWeekLogs([])
+      const today = todayStr()
+      const missedIds = readTodayMissed()
+      setWeekLogs(missedIds.map(id => ({ habit_id: id, log_date: today, status: 'missed' as const })))
     } else {
       setLogsUnavail(false)
       setWeekLogs((logsRes.data as HabitLog[]) ?? [])
@@ -420,6 +433,7 @@ export default function HabitTracker() {
       ...prev.filter(l => !(l.habit_id === habit.id && l.log_date === today)),
       { habit_id: habit.id, log_date: today, status: 'missed' },
     ])
+    writeTodayMissed([...readTodayMissed().filter(id => id !== habit.id), habit.id])
 
     const supabase = createSupabaseBrowserClient()
     const { error } = await supabase.from('habit_logs').upsert(
@@ -452,6 +466,7 @@ export default function HabitTracker() {
         }).eq('id', habit.id),
       ])
     } else {
+      writeTodayMissed(readTodayMissed().filter(id => id !== habit.id))
       await supabase.from('habit_logs').delete().eq('habit_id', habit.id).eq('log_date', today)
     }
 

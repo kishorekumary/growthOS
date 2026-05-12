@@ -51,8 +51,8 @@ export default function FinancePage() {
         <p className="text-slate-400 text-sm mt-1">Build wealth, reduce stress</p>
       </div>
 
-      {/* Goals widget */}
-      <GoalsWidget category="finance" />
+      {/* Goals widget — hidden on the Goals tab to avoid showing two goal lists */}
+      {tab !== 'Goals' && <GoalsWidget category="finance" />}
 
       {/* Tab bar */}
       <div className="flex gap-1 rounded-xl bg-white/5 p-1 mb-6 overflow-x-auto">
