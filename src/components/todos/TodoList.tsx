@@ -27,9 +27,9 @@ interface Todo {
 type Filter = 'today' | 'week' | 'all'
 
 const FILTERS: { key: Filter; label: string }[] = [
-  { key: 'today', label: 'Today' },
-  { key: 'week', label: 'This Week' },
-  { key: 'all', label: 'All' },
+  { key: 'today', label: "Today's Focus"  },
+  { key: 'week',  label: 'Week Ahead'     },
+  { key: 'all',   label: 'Full Board'     },
 ]
 
 function formatDueDate(dateStr: string) {
@@ -235,7 +235,7 @@ export default function TodoList({ initialTodos = [] }: { initialTodos?: Todo[] 
           onClick={() => setAdding(true)}
           className="w-full flex items-center gap-2 rounded-xl border border-dashed border-white/10 bg-white/3 px-4 py-3 text-sm text-slate-500 hover:text-white hover:border-violet-500/30 transition-all"
         >
-          <Plus className="h-4 w-4" /> Add task
+          <Plus className="h-4 w-4" /> Add a task
         </button>
       ) : (
         <div className="rounded-xl border border-violet-500/20 bg-slate-900/60 p-4 space-y-3">
@@ -245,7 +245,7 @@ export default function TodoList({ initialTodos = [] }: { initialTodos?: Todo[] 
               value={newTitle}
               onChange={e => setNewTitle(e.target.value)}
               onKeyDown={e => { if (e.key === 'Enter') handleAdd(); if (e.key === 'Escape') setAdding(false) }}
-              placeholder="Task title..."
+              placeholder="What do you want to achieve?"
               autoFocus
               className="flex-1 bg-transparent text-white placeholder:text-slate-600 text-sm focus:outline-none"
             />
@@ -300,7 +300,11 @@ export default function TodoList({ initialTodos = [] }: { initialTodos?: Todo[] 
       {filtered.length === 0 ? (
         <div className="rounded-xl border border-white/5 bg-white/2 py-12 text-center">
           <p className="text-slate-500 text-sm">
-            {filter === 'today' ? 'Nothing due today — add a task above' : 'No tasks here yet'}
+            {filter === 'today'
+              ? 'All clear — nothing to conquer today. Add a task to get moving.'
+              : filter === 'week'
+              ? 'Nothing on deck for the week. Add a task to plan ahead.'
+              : 'Your board is empty. Start building your mission list.'}
           </p>
         </div>
       ) : (
@@ -437,7 +441,7 @@ export default function TodoList({ initialTodos = [] }: { initialTodos?: Todo[] 
         </div>
       )}
 
-      {/* Completed section */}
+      {/* Achieved section */}
       {completed.length > 0 && (
         <div className="pt-2 border-t border-white/5">
           <button
@@ -446,7 +450,7 @@ export default function TodoList({ initialTodos = [] }: { initialTodos?: Todo[] 
             className="flex items-center gap-2 text-xs text-slate-600 hover:text-slate-400 transition-colors mb-2"
           >
             {showCompleted ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
-            {completed.length} completed
+            {completed.length} achieved {showCompleted ? '· hide' : '· show'}
           </button>
           {showCompleted && (
             <div className="space-y-1.5">

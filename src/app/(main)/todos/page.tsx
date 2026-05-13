@@ -13,7 +13,7 @@ export default async function TodosPage() {
     <div className="mx-auto max-w-2xl px-4 py-8 md:px-8">
       <div className="mb-6">
         <h1 className="text-2xl font-bold text-white">Tasks</h1>
-        <p className="text-slate-400 text-sm mt-1">Stay focused, get things done</p>
+        <p className="text-slate-400 text-sm mt-1">Own your day. One task at a time.</p>
       </div>
       <TodoList initialTodos={todos ?? []} />
     </div>
