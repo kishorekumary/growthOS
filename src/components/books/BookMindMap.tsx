@@ -283,46 +283,57 @@ export default function BookMindMap({ bookId, bookTitle, initialJson, onClose }:
   const [connPos, setConnPos] = useState<{ x: number; y: number } | null>(null)
   const canvasRef = useRef<HTMLDivElement>(null)
 
-  function canvasXY(e: React.MouseEvent): { x: number; y: number } {
-    const rect = canvasRef.current!.getBoundingClientRect()
-    return { x: e.clientX - rect.left, y: e.clientY - rect.top }
+  function canvasXY(clientX: number, clientY: number): { x: number; y: number } {
+    if (!canvasRef.current) return { x: 0, y: 0 }
+    const rect = canvasRef.current.getBoundingClientRect()
+    return { x: clientX - rect.left, y: clientY - rect.top }
   }
 
-  function onMouseMove(e: React.MouseEvent) {
-    if (moveRef.current) {
-      const { id, ox, oy, mx, my } = moveRef.current
-      const dx = e.clientX - mx
-      const dy = e.clientY - my
-      setNodes(prev =>
-        prev.map(n => n.id === id ? { ...n, x: Math.max(4, ox + dx), y: Math.max(4, oy + dy) } : n)
-      )
-    }
-    if (connRef.current) setConnPos(canvasXY(e))
-  }
-
-  function onMouseUp(e: React.MouseEvent) {
-    if (connRef.current) {
-      const { fromId } = connRef.current
-      const { x, y } = canvasXY(e)
-      const from = nodesRef.current.find(n => n.id === fromId)
-      if (from) {
-        const dist = Math.hypot(x - (from.x + nodeWidth(from.label)), y - (from.y + NODE_H / 2))
-        if (dist > 24) {
-          pushHistory()
-          const newId = uid()
-          const newNode: MindNode = {
-            id: newId, label: 'New point', parentId: fromId,
-            x: Math.max(8, x - MIN_W / 2), y: Math.max(8, y - NODE_H / 2),
-          }
-          setNodes(prev => [...prev, newNode])
-          setTimeout(() => { setEditingId(newId); setEditLabel('New point') }, 20)
-        }
+  // Attach mousemove/mouseup to window so drag is never cancelled by leaving the canvas div
+  useEffect(() => {
+    function handleMouseMove(e: MouseEvent) {
+      if (moveRef.current) {
+        const { id, ox, oy, mx, my } = moveRef.current
+        const dx = e.clientX - mx
+        const dy = e.clientY - my
+        setNodes(prev =>
+          prev.map(n => n.id === id ? { ...n, x: Math.max(4, ox + dx), y: Math.max(4, oy + dy) } : n)
+        )
       }
-      connRef.current = null
-      setConnPos(null)
+      if (connRef.current) setConnPos(canvasXY(e.clientX, e.clientY))
     }
-    moveRef.current = null
-  }
+
+    function handleMouseUp(e: MouseEvent) {
+      if (connRef.current) {
+        const { fromId } = connRef.current
+        const { x, y } = canvasXY(e.clientX, e.clientY)
+        const from = nodesRef.current.find(n => n.id === fromId)
+        if (from) {
+          const dist = Math.hypot(x - (from.x + nodeWidth(from.label)), y - (from.y + NODE_H / 2))
+          if (dist > 24) {
+            pushHistory()
+            const newId = uid()
+            const newNode: MindNode = {
+              id: newId, label: 'New point', parentId: fromId,
+              x: Math.max(8, x - MIN_W / 2), y: Math.max(8, y - NODE_H / 2),
+            }
+            setNodes(prev => [...prev, newNode])
+            setTimeout(() => { setEditingId(newId); setEditLabel('New point') }, 20)
+          }
+        }
+        connRef.current = null
+        setConnPos(null)
+      }
+      moveRef.current = null
+    }
+
+    window.addEventListener('mousemove', handleMouseMove)
+    window.addEventListener('mouseup', handleMouseUp)
+    return () => {
+      window.removeEventListener('mousemove', handleMouseMove)
+      window.removeEventListener('mouseup', handleMouseUp)
+    }
+  }, []) // stable: only refs + React state setters used inside
 
   function startMove(e: React.MouseEvent, node: MindNode) {
     if (node.id === 'root') return
@@ -334,7 +345,7 @@ export default function BookMindMap({ bookId, bookTitle, initialJson, onClose }:
 
   function startConn(e: React.MouseEvent, fromId: string) {
     connRef.current = { fromId }
-    setConnPos(canvasXY(e))
+    setConnPos(canvasXY(e.clientX, e.clientY))
     e.stopPropagation()
     e.preventDefault()
   }
@@ -379,8 +390,9 @@ export default function BookMindMap({ bookId, bookTitle, initialJson, onClose }:
     setTimeout(() => setSavedFlash(false), 2000)
   }
 
-  const CANVAS_W = 2400
-  const CANVAS_H = 1600
+  // Canvas grows with content — at least 2400×1600, plus 400px padding around nodes
+  const canvasW = Math.max(2400, Math.max(...nodes.map(n => n.x + nodeWidth(n.label))) + 400)
+  const canvasH = Math.max(1600, Math.max(...nodes.map(n => n.y + NODE_H)) + 400)
 
   // Pre-compute which node IDs have at least one child
   const nodesWithChildren = new Set(nodes.filter(n => n.parentId).map(n => n.parentId!))
@@ -519,20 +531,17 @@ export default function BookMindMap({ bookId, bookTitle, initialJson, onClose }:
           ref={canvasRef}
           className="relative select-none"
           style={{
-            width: CANVAS_W,
-            height: CANVAS_H,
+            width: canvasW,
+            height: canvasH,
             backgroundImage: 'radial-gradient(circle, rgba(255,255,255,0.035) 1px, transparent 1px)',
             backgroundSize: '28px 28px',
           }}
-          onMouseMove={onMouseMove}
-          onMouseUp={onMouseUp}
-          onMouseLeave={onMouseUp}
         >
 
           {/* ── SVG edges ── */}
           <svg
             className="absolute inset-0 pointer-events-none"
-            width={CANVAS_W} height={CANVAS_H}
+            width={canvasW} height={canvasH}
             style={{ overflow: 'visible' }}
           >
             {nodes.filter(n => n.parentId).map(child => {
