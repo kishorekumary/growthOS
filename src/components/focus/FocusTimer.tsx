@@ -49,25 +49,31 @@ function fmtCountdown(secs: number) {
   return `${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`
 }
 
-// Three-tone ascending chime via Web Audio API
+// Four-tone ascending chime + extra accent beep via Web Audio API
 function playAlarm() {
   try {
     const AudioCtx = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext
-    const ctx  = new AudioCtx()
-    const freqs = [523.25, 659.25, 783.99]  // C5 – E5 – G5
-    freqs.forEach((freq, i) => {
+    const ctx = new AudioCtx()
+    // C5 – E5 – G5 chime, then a separate C6 accent beep after a short pause
+    const tones: { freq: number; t: number; duration: number }[] = [
+      { freq: 523.25,  t: 0,    duration: 0.55 },  // C5
+      { freq: 659.25,  t: 0.22, duration: 0.55 },  // E5
+      { freq: 783.99,  t: 0.44, duration: 0.55 },  // G5
+      { freq: 1046.50, t: 1.05, duration: 0.65 },  // C6 — extra beep after pause
+    ]
+    tones.forEach(({ freq, t, duration }) => {
       const osc  = ctx.createOscillator()
       const gain = ctx.createGain()
       osc.connect(gain)
       gain.connect(ctx.destination)
       osc.type = 'sine'
       osc.frequency.value = freq
-      const t = ctx.currentTime + i * 0.22
-      gain.gain.setValueAtTime(0, t)
-      gain.gain.linearRampToValueAtTime(0.45, t + 0.04)
-      gain.gain.exponentialRampToValueAtTime(0.001, t + 0.55)
-      osc.start(t)
-      osc.stop(t + 0.6)
+      const at = ctx.currentTime + t
+      gain.gain.setValueAtTime(0, at)
+      gain.gain.linearRampToValueAtTime(0.85, at + 0.04)
+      gain.gain.exponentialRampToValueAtTime(0.001, at + duration)
+      osc.start(at)
+      osc.stop(at + duration + 0.05)
     })
   } catch { /* blocked by autoplay policy */ }
 }

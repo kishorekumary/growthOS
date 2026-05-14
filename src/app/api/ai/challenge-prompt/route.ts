@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createSupabaseServerClient } from '@/lib/supabase-server'
 import { createSupabaseAdminClient } from '@/lib/supabase-admin'
-import Anthropic from '@anthropic-ai/sdk'
+import { openai } from '@/lib/claude'
 import { format, parseISO, differenceInDays, addDays } from 'date-fns'
 
 const MILESTONES = [7, 21, 30, 45, 60, 75, 90]
@@ -66,8 +66,6 @@ export async function POST(req: NextRequest) {
 
   const phase = dayNumber <= 30 ? 'Foundation' : dayNumber <= 60 ? 'Momentum' : 'Mastery'
 
-  const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
-
   let prompt: string
 
   if (type === 'milestone' && isMilestone) {
@@ -106,13 +104,13 @@ ${recentReflections ? `Recent reflections: ${recentReflections}` : ''}
 Be direct, energizing, and specific to their challenge and current phase. No generic motivational fluff.`
   }
 
-  const message = await client.messages.create({
-    model: 'claude-haiku-4-5-20251001',
+  const response = await openai.chat.completions.create({
+    model: 'gpt-4o-mini',
     max_tokens: 512,
     messages: [{ role: 'user', content: prompt }],
   })
 
-  const text = (message.content[0] as { text: string }).text.trim()
+  const text = (response.choices[0]?.message?.content ?? '').trim()
 
   // Cache milestone messages
   if (type === 'milestone' && isMilestone) {

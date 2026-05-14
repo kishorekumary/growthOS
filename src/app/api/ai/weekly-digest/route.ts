@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createSupabaseServerClient } from '@/lib/supabase-server'
 import { createSupabaseAdminClient } from '@/lib/supabase-admin'
-import Anthropic from '@anthropic-ai/sdk'
+import { openai } from '@/lib/claude'
 import { format, startOfWeek, endOfWeek, subWeeks } from 'date-fns'
 
 export async function POST() {
@@ -119,10 +119,8 @@ GOALS: ${(goals ?? []).length} active goals: ${(goals ?? []).slice(0, 5).map(g =
 ROUTINES: ${(routineCompletions ?? []).length} routine completions this week.
   `.trim()
 
-  const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
-
-  const message = await client.messages.create({
-    model: 'claude-haiku-4-5-20251001',
+  const response = await openai.chat.completions.create({
+    model: 'gpt-4o-mini',
     max_tokens: 1024,
     messages: [{
       role: 'user',
@@ -145,7 +143,7 @@ Return only valid JSON, no markdown.`,
     }],
   })
 
-  const raw = (message.content[0] as { text: string }).text.trim()
+  const raw = (response.choices[0]?.message?.content ?? '').trim()
   let digest
   try {
     digest = JSON.parse(raw)
