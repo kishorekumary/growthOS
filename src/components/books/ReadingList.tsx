@@ -337,6 +337,7 @@ export default function ReadingList() {
   const [activeStatus, setActiveStatus] = useState<Status>('want_to_read')
   const [selected, setSelected]         = useState<Book | null>(null)
   const [mindMapBook, setMindMapBook]   = useState<Book | null>(null)
+  const [mindMapReadonly, setMindMapReadonly] = useState(false)
   const [deleteTarget, setDeleteTarget] = useState<Book | null>(null)
   const [deleting, setDeleting]         = useState(false)
 
@@ -488,9 +489,14 @@ export default function ReadingList() {
                       </span>
                     )}
                     {book.key_lessons && book.key_lessons.startsWith('[') && (
-                      <span title="Mind map available" className="text-cyan-500">
+                      <button
+                        type="button"
+                        title="Preview mind map (read-only)"
+                        onClick={e => { e.stopPropagation(); setMindMapReadonly(true); setMindMapBook(book) }}
+                        className="text-cyan-500 hover:text-cyan-300 transition-colors"
+                      >
                         <GitBranch className="h-3.5 w-3.5" />
-                      </span>
+                      </button>
                     )}
                     {book.status === 'completed' && book.rating && (
                       <div className="flex items-center gap-0.5">
@@ -506,7 +512,7 @@ export default function ReadingList() {
               {/* Mind Map button */}
               <button
                 type="button"
-                onClick={() => setMindMapBook(book)}
+                onClick={() => { setMindMapReadonly(false); setMindMapBook(book) }}
                 title="Open mind map"
                 className="shrink-0 flex items-center gap-1 rounded-lg border border-cyan-500/30 bg-cyan-500/10 px-2.5 py-1.5 text-[11px] font-medium text-cyan-400 opacity-0 group-hover:opacity-100 hover:bg-cyan-500/20 transition-all"
               >
@@ -575,6 +581,7 @@ export default function ReadingList() {
           bookId={mindMapBook.id}
           bookTitle={mindMapBook.book_title}
           initialJson={mindMapBook.key_lessons}
+          readonly={mindMapReadonly}
           onClose={() => {
             setMindMapBook(null)
             fetchBooks()

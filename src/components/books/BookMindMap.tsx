@@ -1,13 +1,15 @@
 'use client'
 
 import { useState, useRef, useEffect, useCallback } from 'react'
-import { X, Trash2, GitBranch, Loader2, Check, Pencil, Upload, Plus, Undo2 } from 'lucide-react'
+import { X, Trash2, GitBranch, Loader2, Check, Pencil, Upload, Plus, Undo2, Link2, Eye, EyeOff } from 'lucide-react'
 import { createSupabaseBrowserClient } from '@/lib/supabase'
 import { cn } from '@/lib/utils'
 
 const NODE_H = 40
 const MIN_W  = 160
 const MAX_W  = 320
+const H_GAP  = 380
+const V_GAP  = 56
 const DEPTH_COLORS = ['#7c3aed', '#06b6d4', '#10b981', '#f59e0b', '#ef4444', '#3b82f6']
 
 function nodeWidth(label: string): number {
@@ -44,6 +46,16 @@ function getDepth(id: string, nodes: MindNode[]): number {
     if (d > 20) break
   }
   return d
+}
+
+// Returns true if nodeId is a descendant of ancestorId (prevents cyclic reparenting)
+function isDescendant(nodeId: string, ancestorId: string, nodes: MindNode[]): boolean {
+  const children = nodes.filter(n => n.parentId === ancestorId)
+  for (const child of children) {
+    if (child.id === nodeId) return true
+    if (isDescendant(nodeId, child.id, nodes)) return true
+  }
+  return false
 }
 
 // ─── Import helpers ──────────────────────────────────────────
@@ -92,8 +104,6 @@ function parseImportText(text: string): TreeNode | null {
 }
 
 function treeToNodes(tree: TreeNode, rootId: string, originX: number): MindNode[] {
-  const H_GAP = 380
-  const V_GAP = 56
   const result: MindNode[] = []
   let leafCounter = 0
 
@@ -115,8 +125,8 @@ function treeToNodes(tree: TreeNode, rootId: string, originX: number): MindNode[
   return result
 }
 
-// Append parsed branches to an existing node set, positioned below current content
-function appendBranches(text: string, existingNodes: MindNode[]): MindNode[] | null {
+// Append parsed branches attached to a specific target node
+function appendBranches(text: string, existingNodes: MindNode[], targetNodeId: string): MindNode[] | null {
   const lines = text.split('\n').filter(l => l.trim())
   if (!lines.length) return null
 
@@ -148,9 +158,11 @@ function appendBranches(text: string, existingNodes: MindNode[]): MindNode[] | n
   const branches = root.children
   if (!branches.length) return null
 
-  const rootNode = existingNodes.find(n => n.id === 'root')!
-  const H_GAP = 380
-  const V_GAP = 56
+  const targetNode = existingNodes.find(n => n.id === targetNodeId)
+  if (!targetNode) return null
+
+  // Determine the depth of the target node so imported branches start one level deeper
+  const targetDepth = getDepth(targetNodeId, existingNodes)
 
   const maxY = existingNodes.reduce((m, n) => Math.max(m, n.y + NODE_H), 0)
   let leafCounter = Math.ceil((maxY + 80 - 40) / V_GAP)
@@ -159,7 +171,7 @@ function appendBranches(text: string, existingNodes: MindNode[]): MindNode[] | n
 
   function place(node: TreeNode, parentId: string, depth: number): number {
     const id = uid()
-    const xPos = rootNode.x + (depth + 1) * H_GAP
+    const xPos = targetNode!.x + (depth + 1) * H_GAP - targetDepth * H_GAP
     if (node.children.length === 0) {
       newNodes.push({ id, label: node.label, parentId, x: xPos, y: leafCounter * V_GAP + 40 })
       return leafCounter++
@@ -171,7 +183,7 @@ function appendBranches(text: string, existingNodes: MindNode[]): MindNode[] | n
     return avg
   }
 
-  for (const branch of branches) place(branch, 'root', 0)
+  for (const branch of branches) place(branch, targetNodeId, targetDepth)
   return newNodes
 }
 
@@ -182,9 +194,10 @@ interface Props {
   bookTitle: string
   initialJson: string | null
   onClose: () => void
+  readonly?: boolean
 }
 
-export default function BookMindMap({ bookId, bookTitle, initialJson, onClose }: Props) {
+export default function BookMindMap({ bookId, bookTitle, initialJson, onClose, readonly = false }: Props) {
   const initNodes = (): MindNode[] => {
     if (initialJson) {
       try {
@@ -204,7 +217,14 @@ export default function BookMindMap({ bookId, bookTitle, initialJson, onClose }:
   const [showImport, setShowImport] = useState(false)
   const [importText, setImportText] = useState('')
   const [importError, setImportError] = useState<string | null>(null)
+  const [importTargetId, setImportTargetId] = useState('root')
   const [canUndo, setCanUndo]       = useState(false)
+
+  // Read-only toggle — starts in the mode passed via prop
+  const [isReadOnly, setIsReadOnly] = useState(readonly)
+
+  // Reparent mode: ID of the node being moved to a new parent
+  const [reparentId, setReparentId] = useState<string | null>(null)
 
   // ── Undo history ──────────────────────────────────────────
   const historyRef = useRef<MindNode[][]>([])
@@ -226,6 +246,10 @@ export default function BookMindMap({ bookId, bookTitle, initialJson, onClose }:
 
   useEffect(() => {
     function onKeyDown(e: KeyboardEvent) {
+      if (e.key === 'Escape') {
+        setReparentId(null)
+        return
+      }
       if ((e.metaKey || e.ctrlKey) && e.key === 'z' && !e.shiftKey) {
         e.preventDefault()
         undo()
@@ -235,10 +259,15 @@ export default function BookMindMap({ bookId, bookTitle, initialJson, onClose }:
     return () => window.removeEventListener('keydown', onKeyDown)
   }, [undo])
 
+  // Reset import target when dialog opens
+  useEffect(() => {
+    if (showImport) setImportTargetId('root')
+  }, [showImport])
+
   // ── Import ────────────────────────────────────────────────
 
   function handleImportAdd() {
-    const added = appendBranches(importText, nodesRef.current)
+    const added = appendBranches(importText, nodesRef.current, importTargetId)
     if (!added) { setImportError('Could not parse. Paste an indented outline or Markdown headings (# ## ###).'); return }
     pushHistory()
     setNodes(prev => [...prev, ...added])
@@ -257,9 +286,26 @@ export default function BookMindMap({ bookId, bookTitle, initialJson, onClose }:
     setImportText(''); setImportError(null); setShowImport(false)
   }
 
+  // ── Reparent ──────────────────────────────────────────────
+
+  function startReparent(nodeId: string) {
+    setReparentId(nodeId)
+    // Clear any active edit
+    setEditingId(null)
+  }
+
+  function completeReparent(targetId: string) {
+    if (!reparentId) return
+    // Same node — cancel
+    if (targetId === reparentId) { setReparentId(null); return }
+    // Can't reparent to own descendant (would create a cycle)
+    if (isDescendant(targetId, reparentId, nodesRef.current)) { setReparentId(null); return }
+    pushHistory()
+    setNodes(prev => prev.map(n => n.id === reparentId ? { ...n, parentId: targetId } : n))
+    setReparentId(null)
+  }
+
   // ── Insert between node and all its children ──────────────
-  // Creates a new intermediate node: clicked node keeps its parent,
-  // new node becomes clicked node's child, all existing children reparent to new node.
   function insertBetweenChildren(node: MindNode) {
     const children = nodesRef.current.filter(n => n.parentId === node.id)
     if (!children.length) return
@@ -268,7 +314,7 @@ export default function BookMindMap({ bookId, bookTitle, initialJson, onClose }:
     const avgY   = children.reduce((s, c) => s + c.y + NODE_H / 2, 0) / children.length - NODE_H / 2
     const newNode: MindNode = {
       id: newId, label: 'New level', parentId: node.id,
-      x: node.x + 380, y: avgY,
+      x: node.x + H_GAP, y: avgY,
     }
     setNodes(prev => [
       ...prev.map(n => n.parentId === node.id ? { ...n, parentId: newId } : n),
@@ -289,7 +335,6 @@ export default function BookMindMap({ bookId, bookTitle, initialJson, onClose }:
     return { x: clientX - rect.left, y: clientY - rect.top }
   }
 
-  // Attach mousemove/mouseup to window so drag is never cancelled by leaving the canvas div
   useEffect(() => {
     function handleMouseMove(e: MouseEvent) {
       if (moveRef.current) {
@@ -333,10 +378,10 @@ export default function BookMindMap({ bookId, bookTitle, initialJson, onClose }:
       window.removeEventListener('mousemove', handleMouseMove)
       window.removeEventListener('mouseup', handleMouseUp)
     }
-  }, []) // stable: only refs + React state setters used inside
+  }, [])
 
   function startMove(e: React.MouseEvent, node: MindNode) {
-    if (node.id === 'root') return
+    if (node.id === 'root' || isReadOnly || reparentId) return
     pushHistory()
     moveRef.current = { id: node.id, ox: node.x, oy: node.y, mx: e.clientX, my: e.clientY }
     e.stopPropagation()
@@ -390,12 +435,16 @@ export default function BookMindMap({ bookId, bookTitle, initialJson, onClose }:
     setTimeout(() => setSavedFlash(false), 2000)
   }
 
-  // Canvas grows with content — at least 2400×1600, plus 400px padding around nodes
   const canvasW = Math.max(2400, Math.max(...nodes.map(n => n.x + nodeWidth(n.label))) + 400)
   const canvasH = Math.max(1600, Math.max(...nodes.map(n => n.y + NODE_H)) + 400)
 
-  // Pre-compute which node IDs have at least one child
   const nodesWithChildren = new Set(nodes.filter(n => n.parentId).map(n => n.parentId!))
+
+  // Sorted node list for the import target selector (root first, then alphabetical)
+  const sortedNodesForSelect = [
+    ...nodes.filter(n => n.id === 'root'),
+    ...nodes.filter(n => n.id !== 'root').sort((a, b) => a.label.localeCompare(b.label)),
+  ]
 
   return (
     <div className="fixed inset-0 z-[60] flex flex-col" style={{ background: '#090912' }}>
@@ -406,38 +455,58 @@ export default function BookMindMap({ bookId, bookTitle, initialJson, onClose }:
         <p className="text-sm font-semibold text-white truncate flex-1">{bookTitle}</p>
         <span className="hidden sm:block text-xs text-slate-500 shrink-0">Mind Map</span>
 
-        {/* Undo button */}
+        {/* Read-only toggle */}
         <button
-          onClick={undo}
-          disabled={!canUndo}
-          title="Undo (⌘Z)"
-          className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium bg-white/5 hover:bg-white/10 text-slate-300 border border-white/10 transition-all shrink-0 disabled:opacity-30 disabled:cursor-not-allowed"
-        >
-          <Undo2 className="h-3 w-3" />
-          Undo
-        </button>
-
-        <button
-          onClick={() => { setShowImport(true); setImportError(null) }}
-          className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium bg-white/5 hover:bg-white/10 text-slate-300 border border-white/10 transition-all shrink-0"
-        >
-          <Upload className="h-3 w-3" />
-          Import
-        </button>
-        <button
-          onClick={save}
-          disabled={saving}
+          onClick={() => { setIsReadOnly(r => !r); setReparentId(null) }}
+          title={isReadOnly ? 'Switch to edit mode' : 'Switch to read-only mode'}
           className={cn(
-            'flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium transition-all shrink-0',
-            savedFlash
-              ? 'bg-emerald-600 text-white'
-              : 'bg-violet-600 hover:bg-violet-700 text-white disabled:opacity-50'
+            'flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium border transition-all shrink-0',
+            isReadOnly
+              ? 'bg-amber-500/15 border-amber-500/40 text-amber-300 hover:bg-amber-500/25'
+              : 'bg-white/5 border-white/10 text-slate-300 hover:bg-white/10'
           )}
         >
-          {saving ? <Loader2 className="h-3 w-3 animate-spin" />
-            : savedFlash ? <Check className="h-3 w-3" /> : null}
-          {savedFlash ? 'Saved!' : 'Save'}
+          {isReadOnly ? <Eye className="h-3 w-3" /> : <EyeOff className="h-3 w-3" />}
+          {isReadOnly ? 'Read Only' : 'View'}
         </button>
+
+        {!isReadOnly && (
+          <>
+            <button
+              onClick={undo}
+              disabled={!canUndo}
+              title="Undo (⌘Z)"
+              className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium bg-white/5 hover:bg-white/10 text-slate-300 border border-white/10 transition-all shrink-0 disabled:opacity-30 disabled:cursor-not-allowed"
+            >
+              <Undo2 className="h-3 w-3" />
+              Undo
+            </button>
+
+            <button
+              onClick={() => { setShowImport(true); setImportError(null) }}
+              className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium bg-white/5 hover:bg-white/10 text-slate-300 border border-white/10 transition-all shrink-0"
+            >
+              <Upload className="h-3 w-3" />
+              Import
+            </button>
+
+            <button
+              onClick={save}
+              disabled={saving}
+              className={cn(
+                'flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium transition-all shrink-0',
+                savedFlash
+                  ? 'bg-emerald-600 text-white'
+                  : 'bg-violet-600 hover:bg-violet-700 text-white disabled:opacity-50'
+              )}
+            >
+              {saving ? <Loader2 className="h-3 w-3 animate-spin" />
+                : savedFlash ? <Check className="h-3 w-3" /> : null}
+              {savedFlash ? 'Saved!' : 'Save'}
+            </button>
+          </>
+        )}
+
         <button
           onClick={onClose}
           className="rounded-lg p-1.5 text-slate-500 hover:text-white hover:bg-white/10 transition-colors shrink-0"
@@ -445,6 +514,25 @@ export default function BookMindMap({ bookId, bookTitle, initialJson, onClose }:
           <X className="h-4 w-4" />
         </button>
       </div>
+
+      {/* ── Reparent mode banner ── */}
+      {reparentId && !isReadOnly && (
+        <div className="flex items-center justify-between px-4 py-2 border-b border-cyan-500/20 bg-cyan-500/10 shrink-0">
+          <div className="flex items-center gap-2">
+            <Link2 className="h-3.5 w-3.5 text-cyan-400 shrink-0" />
+            <p className="text-xs text-cyan-300">
+              <span className="font-semibold">Move branch: </span>
+              click any node to attach &ldquo;{nodesRef.current.find(n => n.id === reparentId)?.label ?? '…'}&rdquo; there
+            </p>
+          </div>
+          <button
+            onClick={() => setReparentId(null)}
+            className="text-xs text-cyan-500 hover:text-cyan-200 transition-colors shrink-0"
+          >
+            Cancel (Esc)
+          </button>
+        </div>
+      )}
 
       {/* ── Hint / error bar ── */}
       {saveError ? (
@@ -454,25 +542,32 @@ export default function BookMindMap({ bookId, bookTitle, initialJson, onClose }:
             <X className="h-3.5 w-3.5" />
           </button>
         </div>
-      ) : (
+      ) : !reparentId && (
         <div className="px-4 py-1.5 border-b border-white/5 bg-white/[0.015] shrink-0">
-          <p className="text-[11px] text-slate-600">
-            Drag <span className="text-violet-500">●</span> right edge to branch &nbsp;·&nbsp;
-            <span className="text-violet-500">✎</span> edit &nbsp;·&nbsp;
-            <span className="text-amber-500">＋</span> (inside node, on hover) = inject level between node and its children &nbsp;·&nbsp;
-            ⌘Z undo
-          </p>
+          {isReadOnly ? (
+            <p className="text-[11px] text-slate-600">
+              <span className="text-amber-500">Read-only</span> — click <span className="text-amber-400">View</span> in the header to switch to edit mode
+            </p>
+          ) : (
+            <p className="text-[11px] text-slate-600">
+              Drag <span className="text-violet-500">●</span> right edge to branch &nbsp;·&nbsp;
+              <span className="text-violet-500">✎</span> edit &nbsp;·&nbsp;
+              <span className="text-amber-500">＋</span> inject level &nbsp;·&nbsp;
+              <span className="text-cyan-500">⇌</span> move branch to another node &nbsp;·&nbsp;
+              ⌘Z undo
+            </p>
+          )}
         </div>
       )}
 
       {/* ── Import overlay ── */}
-      {showImport && (
+      {showImport && !isReadOnly && (
         <div className="absolute inset-0 z-20 flex items-center justify-center bg-black/70 backdrop-blur-sm">
           <div className="w-full max-w-lg mx-4 rounded-2xl border border-white/10 bg-slate-900 shadow-2xl p-5 space-y-4">
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm font-semibold text-white">Import outline</p>
-                <p className="text-xs text-slate-500 mt-0.5">Each <span className="text-violet-400 font-mono">#</span> heading becomes a new branch from root</p>
+                <p className="text-xs text-slate-500 mt-0.5">Paste an indented outline or Markdown headings</p>
               </div>
               <button onClick={() => setShowImport(false)} className="text-slate-500 hover:text-white transition-colors">
                 <X className="h-4 w-4" />
@@ -481,11 +576,30 @@ export default function BookMindMap({ bookId, bookTitle, initialJson, onClose }:
 
             <div className="rounded-lg border border-white/5 bg-white/[0.03] p-3 space-y-2">
               <p className="text-[11px] font-medium text-slate-400">How to get the text from NotebookLM</p>
-              <p className="text-[11px] text-slate-500">NotebookLM's mind map is visual-only. In the NotebookLM chat, type:</p>
+              <p className="text-[11px] text-slate-500">In the NotebookLM chat, type:</p>
               <div className="rounded bg-black/40 border border-white/10 px-2.5 py-1.5 text-[11px] text-violet-300 font-mono cursor-text select-all">
                 Give me the mind map as an indented text outline with all topics and subtopics
               </div>
               <p className="text-[11px] text-slate-500">Copy the response and paste it below. Also supports Markdown headings (# ## ###) and bullet lists (- *).</p>
+            </div>
+
+            {/* Target node selector */}
+            <div className="space-y-1.5">
+              <p className="text-xs font-medium text-slate-400">Attach imported branches to</p>
+              <select
+                value={importTargetId}
+                onChange={e => setImportTargetId(e.target.value)}
+                className="w-full rounded-lg border border-white/10 bg-slate-800 px-3 py-2 text-xs text-white focus:outline-none focus:border-violet-500/50 appearance-none"
+              >
+                {sortedNodesForSelect.map(n => (
+                  <option key={n.id} value={n.id}>
+                    {n.id === 'root' ? `⬤ ${n.label} (root)` : `  ${n.label}`}
+                  </option>
+                ))}
+              </select>
+              <p className="text-[10px] text-slate-600">
+                "Add branches" will attach the imported outline as children of the selected node
+              </p>
             </div>
 
             <textarea
@@ -493,7 +607,7 @@ export default function BookMindMap({ bookId, bookTitle, initialJson, onClose }:
               value={importText}
               onChange={e => { setImportText(e.target.value); setImportError(null) }}
               placeholder={`# Book Title\n## Chapter 1\n### Key idea\n### Another idea\n## Chapter 2`}
-              className="w-full h-48 rounded-lg border border-white/10 bg-white/5 px-3 py-2.5 text-xs text-slate-200 placeholder:text-slate-700 font-mono focus:outline-none focus:border-violet-500/50 resize-none"
+              className="w-full h-40 rounded-lg border border-white/10 bg-white/5 px-3 py-2.5 text-xs text-slate-200 placeholder:text-slate-700 font-mono focus:outline-none focus:border-violet-500/50 resize-none"
             />
 
             {importError && <p className="text-xs text-red-400">{importError}</p>}
@@ -549,10 +663,18 @@ export default function BookMindMap({ bookId, bookTitle, initialJson, onClose }:
               if (!parent) return null
               const d = getDepth(child.id, nodesRef.current)
               const color = DEPTH_COLORS[d % DEPTH_COLORS.length]
+              // Dim the edge of the branch being reparented
+              const isDimmed = reparentId
+                ? child.id === reparentId || isDescendant(child.id, reparentId, nodesRef.current)
+                : false
               return (
                 <path key={`edge-${child.id}`}
                   d={bezier(parent, child)} fill="none"
-                  stroke={color} strokeWidth={1.5} strokeOpacity={0.4} />
+                  stroke={isDimmed ? '#374151' : color}
+                  strokeWidth={1.5}
+                  strokeOpacity={isDimmed ? 0.3 : 0.4}
+                  strokeDasharray={isDimmed ? '5 4' : undefined}
+                />
               )
             })}
 
@@ -572,37 +694,66 @@ export default function BookMindMap({ bookId, bookTitle, initialJson, onClose }:
 
           {/* ── Nodes ── */}
           {nodes.map(node => {
-            const isRoot     = node.id === 'root'
-            const isEditing  = editingId === node.id
-            const d          = getDepth(node.id, nodes)
-            const color      = DEPTH_COLORS[d % DEPTH_COLORS.length]
-            const hasChildren = nodesWithChildren.has(node.id)
-            const nw         = nodeWidth(node.label)
+            const isRoot        = node.id === 'root'
+            const isEditing     = editingId === node.id
+            const d             = getDepth(node.id, nodes)
+            const color         = DEPTH_COLORS[d % DEPTH_COLORS.length]
+            const hasChildren   = nodesWithChildren.has(node.id)
+            const nw            = nodeWidth(node.label)
+
+            // Reparent mode states
+            const isBeingMoved  = reparentId === node.id
+            const isValidTarget = !!reparentId && node.id !== reparentId && !isDescendant(node.id, reparentId, nodesRef.current)
 
             return (
               <div
                 key={node.id}
                 className={cn(
                   'absolute group flex items-center gap-1 rounded-lg border px-2.5',
-                  'transition-shadow duration-150',
-                  'hover:shadow-[0_0_16px_rgba(124,58,237,0.35)] hover:z-10',
-                  isRoot ? 'cursor-default' : 'cursor-move',
+                  'transition-all duration-150',
+                  isBeingMoved
+                    ? 'shadow-[0_0_20px_rgba(6,182,212,0.5)] animate-pulse z-20'
+                    : isValidTarget
+                      ? 'cursor-pointer hover:shadow-[0_0_18px_rgba(6,182,212,0.45)] hover:z-10'
+                      : 'hover:shadow-[0_0_16px_rgba(124,58,237,0.35)] hover:z-10',
+                  !isReadOnly && !reparentId && !isRoot ? 'cursor-move' : '',
+                  isReadOnly ? 'cursor-default' : '',
                 )}
                 style={{
                   left: node.x, top: node.y, width: nw, height: NODE_H,
-                  borderColor: isRoot ? 'rgba(124,58,237,0.55)' : color + '44',
-                  background: isRoot ? 'rgba(109,40,217,0.25)' : 'rgba(12,12,26,0.88)',
+                  borderColor: isBeingMoved
+                    ? 'rgba(6,182,212,0.7)'
+                    : isValidTarget && reparentId
+                      ? 'rgba(6,182,212,0.35)'
+                      : isRoot
+                        ? 'rgba(124,58,237,0.55)'
+                        : color + '44',
+                  background: isBeingMoved
+                    ? 'rgba(6,182,212,0.15)'
+                    : isRoot
+                      ? 'rgba(109,40,217,0.25)'
+                      : 'rgba(12,12,26,0.88)',
                   backdropFilter: 'blur(10px)',
                 }}
-                onMouseDown={isRoot ? undefined : e => startMove(e, node)}
+                onMouseDown={isReadOnly || reparentId || isRoot ? undefined : e => startMove(e, node)}
+                onClick={reparentId && !isBeingMoved ? () => completeReparent(node.id) : undefined}
               >
-                {/* Full-text tooltip when label is clipped */}
+                {/* Tooltip for clipped labels */}
                 {!isEditing && nw === MAX_W && (
                   <div
                     className="pointer-events-none absolute left-0 bottom-[calc(100%+5px)] hidden group-hover:block z-20 max-w-[360px] rounded-lg border border-white/15 bg-slate-800/95 px-3 py-2 text-xs leading-relaxed shadow-xl backdrop-blur-sm whitespace-normal break-words"
                     style={{ color }}
                   >
                     {node.label}
+                  </div>
+                )}
+
+                {/* "Drop here" indicator in reparent mode */}
+                {isValidTarget && (
+                  <div className="pointer-events-none absolute inset-0 rounded-lg border-2 border-cyan-400/50 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                    <span className="text-[10px] text-cyan-400 font-semibold bg-slate-900/80 px-1.5 py-0.5 rounded">
+                      Attach here
+                    </span>
                   </div>
                 )}
 
@@ -624,66 +775,86 @@ export default function BookMindMap({ bookId, bookTitle, initialJson, onClose }:
                 ) : (
                   <span
                     className="flex-1 min-w-0 text-xs font-medium leading-snug truncate"
-                    style={{ color: isRoot ? '#c4b5fd' : color }}
+                    style={{ color: isBeingMoved ? '#67e8f9' : isRoot ? '#c4b5fd' : color }}
                   >
                     {node.label}
                   </span>
                 )}
 
-                {/* ── Insert-between button — inside node, only when has children ── */}
-                {hasChildren && !isEditing && (
-                  <button
-                    type="button"
-                    onMouseDown={e => e.stopPropagation()}
-                    onClick={e => { e.stopPropagation(); insertBetweenChildren(node) }}
-                    title="Insert a new level between this node and its children (⌘Z to undo)"
-                    className="shrink-0 opacity-0 group-hover:opacity-100 flex items-center justify-center w-4 h-4 rounded-full border border-amber-500/60 bg-amber-500/15 text-amber-400 hover:bg-amber-500/40 transition-all"
-                  >
-                    <Plus className="h-2.5 w-2.5" />
-                  </button>
+                {/* Edit controls — hidden in readonly or reparent mode */}
+                {!isReadOnly && !reparentId && !isEditing && (
+                  <>
+                    {/* Insert-between button — only for nodes that have children */}
+                    {hasChildren && (
+                      <button
+                        type="button"
+                        onMouseDown={e => e.stopPropagation()}
+                        onClick={e => { e.stopPropagation(); insertBetweenChildren(node) }}
+                        title="Insert a new level between this node and its children (⌘Z to undo)"
+                        className="shrink-0 opacity-0 group-hover:opacity-100 flex items-center justify-center w-4 h-4 rounded-full border border-amber-500/60 bg-amber-500/15 text-amber-400 hover:bg-amber-500/40 transition-all"
+                      >
+                        <Plus className="h-2.5 w-2.5" />
+                      </button>
+                    )}
+
+                    {/* Move-branch (reparent) button */}
+                    {!isRoot && (
+                      <button
+                        type="button"
+                        onMouseDown={e => e.stopPropagation()}
+                        onClick={e => { e.stopPropagation(); startReparent(node.id) }}
+                        title="Move this branch to another node"
+                        className="shrink-0 opacity-0 group-hover:opacity-100 text-slate-600 hover:text-cyan-400 transition-all"
+                      >
+                        <Link2 className="h-2.5 w-2.5" />
+                      </button>
+                    )}
+
+                    {/* Edit label button */}
+                    {!isRoot && (
+                      <button
+                        type="button"
+                        onMouseDown={e => e.stopPropagation()}
+                        onClick={e => {
+                          e.stopPropagation()
+                          setEditingId(node.id)
+                          setEditLabel(node.label)
+                        }}
+                        className="shrink-0 opacity-0 group-hover:opacity-100 text-slate-600 hover:text-slate-300 transition-all"
+                      >
+                        <Pencil className="h-2.5 w-2.5" />
+                      </button>
+                    )}
+
+                    {/* Delete button */}
+                    {!isRoot && (
+                      <button
+                        type="button"
+                        onMouseDown={e => e.stopPropagation()}
+                        onClick={e => { e.stopPropagation(); deleteNode(node.id) }}
+                        className="shrink-0 opacity-0 group-hover:opacity-100 text-slate-700 hover:text-red-400 transition-all"
+                      >
+                        <Trash2 className="h-2.5 w-2.5" />
+                      </button>
+                    )}
+                  </>
                 )}
 
-                {/* Edit icon */}
-                {!isRoot && !isEditing && (
-                  <button
-                    type="button"
-                    onMouseDown={e => e.stopPropagation()}
-                    onClick={e => {
-                      e.stopPropagation()
-                      setEditingId(node.id)
-                      setEditLabel(node.label)
-                    }}
-                    className="shrink-0 opacity-0 group-hover:opacity-100 text-slate-600 hover:text-slate-300 transition-all"
+                {/* Connect handle (right edge) — hidden in readonly or reparent mode */}
+                {!isReadOnly && !reparentId && (
+                  <div
+                    className="absolute -right-3 top-1/2 -translate-y-1/2 z-10 w-6 h-6 flex items-center justify-center cursor-crosshair opacity-0 group-hover:opacity-100 transition-opacity"
+                    onMouseDown={e => startConn(e, node.id)}
                   >
-                    <Pencil className="h-2.5 w-2.5" />
-                  </button>
-                )}
-
-                {/* Delete icon */}
-                {!isRoot && !isEditing && (
-                  <button
-                    type="button"
-                    onMouseDown={e => e.stopPropagation()}
-                    onClick={e => { e.stopPropagation(); deleteNode(node.id) }}
-                    className="shrink-0 opacity-0 group-hover:opacity-100 text-slate-700 hover:text-red-400 transition-all"
-                  >
-                    <Trash2 className="h-2.5 w-2.5" />
-                  </button>
-                )}
-
-                {/* ── Connect handle (right edge) ── */}
-                <div
-                  className="absolute -right-3 top-1/2 -translate-y-1/2 z-10 w-6 h-6 flex items-center justify-center cursor-crosshair opacity-0 group-hover:opacity-100 transition-opacity"
-                  onMouseDown={e => startConn(e, node.id)}
-                >
-                  <div className={cn(
-                    'w-3.5 h-3.5 rounded-full border flex items-center justify-center',
-                    'border-violet-500/60 bg-violet-600/20',
-                    'hover:bg-violet-500 hover:border-violet-400 transition-colors'
-                  )}>
-                    <div className="w-1.5 h-1.5 rounded-full bg-violet-400" />
+                    <div className={cn(
+                      'w-3.5 h-3.5 rounded-full border flex items-center justify-center',
+                      'border-violet-500/60 bg-violet-600/20',
+                      'hover:bg-violet-500 hover:border-violet-400 transition-colors'
+                    )}>
+                      <div className="w-1.5 h-1.5 rounded-full bg-violet-400" />
+                    </div>
                   </div>
-                </div>
+                )}
               </div>
             )
           })}
