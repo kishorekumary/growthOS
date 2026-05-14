@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback, useRef } from 'react'
 import {
   Camera, Loader2, Plus, Trash2, Flame, Trophy, Zap,
   CheckCircle2, AlertCircle, Save, RefreshCw, ChevronDown, ChevronUp, Sparkles,
+  Image as ImageIcon,
 } from 'lucide-react'
 import {
   LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, ReferenceLine,
@@ -212,7 +213,8 @@ function AddMealModal({ onSave, onClose }: {
   onSave: (log: Omit<NutritionLog, 'id' | 'log_date'>) => Promise<void>
   onClose: () => void
 }) {
-  const fileRef = useRef<HTMLInputElement>(null)
+  const fileRef   = useRef<HTMLInputElement>(null)
+  const cameraRef = useRef<HTMLInputElement>(null)
   const [preview, setPreview]         = useState<string | null>(null)
   const [analyzing, setAnalyzing]     = useState(false)
   const [analyzeErr, setAnalyzeErr]   = useState<string | null>(null)
@@ -315,19 +317,46 @@ function AddMealModal({ onSave, onClose }: {
             <button onClick={onClose} className="text-slate-500 hover:text-white text-xl leading-none">×</button>
           </div>
 
-          {/* Image drop zone */}
-          <div onClick={() => fileRef.current?.click()}
-            className={cn('relative flex flex-col items-center justify-center rounded-xl border-2 border-dashed cursor-pointer overflow-hidden transition-all',
-              preview ? 'border-white/20 h-44' : 'border-white/10 hover:border-violet-500/50 h-32')}>
-            {preview
-              ? <img src={preview} alt="food" className="h-full w-full object-cover" />
-              : <div className="flex flex-col items-center gap-2 text-slate-500">
-                  <Camera className="h-8 w-8" />
-                  <span className="text-xs">Tap to take / upload a photo</span>
-                </div>}
-            <input ref={fileRef} type="file" accept="image/*" className="hidden"
-              onChange={e => e.target.files?.[0] && handleFile(e.target.files[0])} />
-          </div>
+          {/* Image zone */}
+          {preview ? (
+            /* Preview — tap to replace */
+            <div
+              onClick={() => fileRef.current?.click()}
+              className="relative flex items-center justify-center rounded-xl border-2 border-white/20 h-44 cursor-pointer overflow-hidden"
+            >
+              <img src={preview} alt="food" className="h-full w-full object-cover" />
+              <div className="absolute inset-0 flex items-center justify-center bg-black/40 opacity-0 hover:opacity-100 transition-opacity">
+                <span className="text-xs text-white font-medium">Tap to replace</span>
+              </div>
+            </div>
+          ) : (
+            /* No photo yet — two explicit buttons */
+            <div className="grid grid-cols-2 gap-3">
+              <button
+                type="button"
+                onClick={() => cameraRef.current?.click()}
+                className="flex flex-col items-center gap-2.5 rounded-xl border-2 border-dashed border-white/10 hover:border-violet-500/50 py-5 text-slate-500 hover:text-slate-300 transition-all"
+              >
+                <Camera className="h-7 w-7" />
+                <span className="text-xs font-medium">Take Photo</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => fileRef.current?.click()}
+                className="flex flex-col items-center gap-2.5 rounded-xl border-2 border-dashed border-white/10 hover:border-violet-500/50 py-5 text-slate-500 hover:text-slate-300 transition-all"
+              >
+                <ImageIcon className="h-7 w-7" />
+                <span className="text-xs font-medium">Upload Photo</span>
+              </button>
+            </div>
+          )}
+
+          {/* Camera input — opens camera directly */}
+          <input ref={cameraRef} type="file" accept="image/*" capture="environment" className="hidden"
+            onChange={e => { if (e.target.files?.[0]) { handleFile(e.target.files[0]); e.target.value = '' } }} />
+          {/* Gallery input — opens photo library */}
+          <input ref={fileRef} type="file" accept="image/*" className="hidden"
+            onChange={e => { if (e.target.files?.[0]) { handleFile(e.target.files[0]); e.target.value = '' } }} />
 
           {preview && !result && (
             <Button onClick={analyze} disabled={analyzing} className="w-full bg-violet-600 hover:bg-violet-700 text-white">
