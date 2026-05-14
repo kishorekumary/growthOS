@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useRef, useEffect, useCallback, useMemo } from 'react'
-import { X, Trash2, GitBranch, Loader2, Check, Pencil, Upload, Plus, Undo2, Link2, Eye, EyeOff, Search, ChevronLeft, ChevronRight } from 'lucide-react'
+import { X, Trash2, GitBranch, Loader2, Check, Pencil, Upload, Plus, Undo2, Link2, Eye, EyeOff, Search, ChevronLeft, ChevronRight, Download } from 'lucide-react'
 import { createSupabaseBrowserClient } from '@/lib/supabase'
 import { cn } from '@/lib/utils'
 
@@ -56,6 +56,26 @@ function isDescendant(nodeId: string, ancestorId: string, nodes: MindNode[]): bo
     if (isDescendant(nodeId, child.id, nodes)) return true
   }
   return false
+}
+
+function nodesToMarkdown(nodes: MindNode[]): string {
+  const childrenOf: Record<string, MindNode[]> = {}
+  for (const n of nodes) {
+    if (n.parentId !== null) {
+      if (!childrenOf[n.parentId]) childrenOf[n.parentId] = []
+      childrenOf[n.parentId].push(n)
+    }
+  }
+  const lines: string[] = []
+  function dfs(id: string, depth: number) {
+    const node = nodes.find(n => n.id === id)
+    if (!node) return
+    lines.push(`${'#'.repeat(depth)} ${node.label}`)
+    const kids = (childrenOf[id] ?? []).slice().sort((a, b) => a.y - b.y)
+    for (const kid of kids) dfs(kid.id, depth + 1)
+  }
+  dfs('root', 1)
+  return lines.join('\n')
 }
 
 // ─── Import helpers ──────────────────────────────────────────
@@ -236,6 +256,25 @@ export default function BookMindMap({ bookId, bookTitle, initialJson, onClose, r
   const [importError, setImportError] = useState<string | null>(null)
   const [importTargetId, setImportTargetId] = useState('root')
   const [canUndo, setCanUndo]       = useState(false)
+
+  const [copySuccess, setCopySuccess] = useState(false)
+
+  function exportMarkdown() {
+    const md = nodesToMarkdown(nodes)
+    navigator.clipboard.writeText(md).then(() => {
+      setCopySuccess(true)
+      setTimeout(() => setCopySuccess(false), 2000)
+    }).catch(() => {
+      // Fallback: open in a new tab as a data URI so user can copy manually
+      const blob = new Blob([md], { type: 'text/plain' })
+      const url  = URL.createObjectURL(blob)
+      const a    = document.createElement('a')
+      a.href     = url
+      a.download = `${bookTitle.replace(/\s+/g, '_')}_mindmap.md`
+      a.click()
+      URL.revokeObjectURL(url)
+    })
+  }
 
   // Read-only toggle — starts in the mode passed via prop
   const [isReadOnly, setIsReadOnly] = useState(readonly)
@@ -594,6 +633,21 @@ export default function BookMindMap({ bookId, bookTitle, initialJson, onClose, r
         >
           <Search className="h-3 w-3" />
           <span className="hidden sm:inline">Search</span>
+        </button>
+
+        {/* Export to Markdown */}
+        <button
+          onClick={exportMarkdown}
+          title="Copy as Markdown (# ## ### headings)"
+          className={cn(
+            'flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium border transition-all shrink-0',
+            copySuccess
+              ? 'bg-emerald-500/20 border-emerald-500/40 text-emerald-300'
+              : 'bg-white/5 border-white/10 text-slate-300 hover:bg-white/10'
+          )}
+        >
+          {copySuccess ? <Check className="h-3 w-3" /> : <Download className="h-3 w-3" />}
+          <span className="hidden sm:inline">{copySuccess ? 'Copied!' : 'Export'}</span>
         </button>
 
         <button

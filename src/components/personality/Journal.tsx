@@ -1,8 +1,8 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { format } from 'date-fns'
-import { Sparkles, Loader2, Save, Pencil, ChevronDown, ChevronUp, AlertCircle, BookOpen } from 'lucide-react'
+import { Sparkles, Loader2, Save, Pencil, ChevronDown, ChevronUp, AlertCircle, BookOpen, Mic, Square } from 'lucide-react'
 import { createSupabaseBrowserClient } from '@/lib/supabase'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
@@ -108,6 +108,51 @@ function EntryEditor({
   const [mood, setMood]         = useState(initialMood)
   const [saving, setSaving]     = useState(false)
   const [error, setError]       = useState<string | null>(null)
+  const [recording, setRecording]       = useState(false)
+  const [interim, setInterim]           = useState('')
+  const [voiceSupported, setVoiceSupported] = useState(false)
+  const recognitionRef = useRef<any>(null)
+
+  useEffect(() => {
+    setVoiceSupported(!!(
+      (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition
+    ))
+    return () => { recognitionRef.current?.stop() }
+  }, [])
+
+  function startRecording() {
+    const SR = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition
+    if (!SR) return
+    const rec = new SR()
+    rec.continuous = false
+    rec.interimResults = true
+    rec.lang = 'en-US'
+    rec.onresult = (e: any) => {
+      let final = '', inter = ''
+      for (let i = e.resultIndex; i < e.results.length; i++) {
+        if (e.results[i].isFinal) final += e.results[i][0].transcript
+        else inter += e.results[i][0].transcript
+      }
+      if (final) {
+        setContent(prev => {
+          const sep = prev && !prev.endsWith(' ') && !prev.endsWith('\n') ? ' ' : ''
+          return prev + sep + final
+        })
+      }
+      setInterim(inter)
+    }
+    rec.onend = () => { setRecording(false); setInterim('') }
+    rec.onerror = () => { setRecording(false); setInterim('') }
+    recognitionRef.current = rec
+    rec.start()
+    setRecording(true)
+  }
+
+  function stopRecording() {
+    recognitionRef.current?.stop()
+    setRecording(false)
+    setInterim('')
+  }
 
   async function handleSave() {
     if (!content.trim()) return
@@ -153,14 +198,43 @@ function EntryEditor({
       </div>
 
       {/* Text */}
-      <textarea
-        value={content}
-        onChange={(e) => setContent(e.target.value)}
-        placeholder="How was your day? What are you grateful for?"
-        rows={6}
-        autoFocus
-        className="w-full rounded-lg border border-white/10 bg-white/5 px-4 py-3 text-sm text-white placeholder:text-slate-500 resize-none focus:outline-none focus:ring-2 focus:ring-violet-500 leading-relaxed"
-      />
+      <div className="relative">
+        <textarea
+          value={content}
+          onChange={(e) => setContent(e.target.value)}
+          placeholder="How was your day? What are you grateful for?"
+          rows={6}
+          autoFocus
+          className="w-full rounded-lg border border-white/10 bg-white/5 px-4 py-3 text-sm text-white placeholder:text-slate-500 resize-none focus:outline-none focus:ring-2 focus:ring-violet-500 leading-relaxed"
+        />
+        {interim && (
+          <p className="absolute bottom-3 left-4 right-4 text-sm text-purple-400/60 italic pointer-events-none line-clamp-2">
+            {interim}…
+          </p>
+        )}
+      </div>
+
+      {/* Voice button */}
+      {voiceSupported && (
+        <div className="flex items-center gap-3">
+          <button
+            type="button"
+            onClick={recording ? stopRecording : startRecording}
+            className={cn(
+              'flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-medium transition-all',
+              recording
+                ? 'bg-red-500/20 border border-red-500/40 text-red-400 animate-pulse'
+                : 'bg-white/5 border border-white/10 text-slate-400 hover:text-white hover:border-white/20'
+            )}
+          >
+            {recording ? <Square className="h-3.5 w-3.5" /> : <Mic className="h-3.5 w-3.5" />}
+            {recording ? 'Stop recording' : 'Speak to journal'}
+          </button>
+          {recording && (
+            <span className="text-xs text-slate-500">Listening… speak naturally</span>
+          )}
+        </div>
+      )}
 
       {error && (
         <div className="flex items-start gap-2 rounded-lg border border-red-500/20 bg-red-500/10 px-3 py-2">

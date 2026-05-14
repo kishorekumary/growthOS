@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from 'react'
 import {
   Bell, BellOff, Mail, MailCheck, Clock, Loader2,
   CheckCircle, AlertCircle, Send, Plus, X, Phone, PhoneOff, MessageCircle,
+  ChevronDown, ChevronUp, ShieldCheck, ShieldAlert,
 } from 'lucide-react'
 import { createSupabaseBrowserClient } from '@/lib/supabase'
 import { Button } from '@/components/ui/button'
@@ -54,6 +55,19 @@ export default function NotificationSettings() {
   const [testing, setTesting]           = useState(false)
   const [saved, setSaved]               = useState(false)
   const [error, setError]               = useState<string | null>(null)
+
+  const [diagOpen, setDiagOpen]   = useState(false)
+  const [diagLoading, setDiagLoading] = useState(false)
+  const [diag, setDiag]           = useState<Record<string, { ok: boolean; detail: string }> | null>(null)
+
+  async function runDiagnose() {
+    setDiagLoading(true)
+    setDiagOpen(true)
+    const res  = await fetch('/api/notifications/diagnose')
+    const data = await res.json().catch(() => ({}))
+    setDiag(data)
+    setDiagLoading(false)
+  }
 
   const [pushSupported, setPushSupported]   = useState(false)
   const [pushPermission, setPushPermission] = useState<NotificationPermission>('default')
@@ -492,6 +506,42 @@ export default function NotificationSettings() {
           <p className="text-[11px] text-slate-600">Auto-detected. Use IANA format (e.g. Asia/Kolkata, America/New_York).</p>
         </div>
 
+      </div>
+
+      {/* Server-side config diagnostics */}
+      <div className="rounded-xl border border-white/8 bg-white/3 p-5 space-y-3">
+        <button
+          type="button"
+          onClick={diagOpen ? () => setDiagOpen(false) : runDiagnose}
+          className="flex w-full items-center justify-between text-sm font-semibold text-white"
+        >
+          <span className="flex items-center gap-2">
+            {diagLoading ? <Loader2 className="h-4 w-4 animate-spin text-violet-400" /> : <ShieldCheck className="h-4 w-4 text-violet-400" />}
+            Diagnose Configuration
+          </span>
+          {diagOpen ? <ChevronUp className="h-4 w-4 text-slate-500" /> : <ChevronDown className="h-4 w-4 text-slate-500" />}
+        </button>
+
+        {diagOpen && !diagLoading && diag && (
+          <div className="space-y-2 pt-1">
+            {Object.entries(diag).map(([channel, { ok, detail }]) => (
+              <div key={channel} className="flex items-start gap-2.5">
+                {ok
+                  ? <CheckCircle className="h-3.5 w-3.5 text-emerald-400 shrink-0 mt-0.5" />
+                  : <ShieldAlert className="h-3.5 w-3.5 text-amber-400 shrink-0 mt-0.5" />}
+                <div>
+                  <p className={cn('text-xs font-medium capitalize', ok ? 'text-emerald-300' : 'text-amber-300')}>
+                    {channel === 'push' ? 'Push Notifications' : channel === 'email' ? 'Email' : channel === 'telegram' ? 'Telegram' : channel === 'cron' ? 'Scheduled Reminders' : 'Phone Calls'}
+                  </p>
+                  <p className="text-[11px] text-slate-500 mt-0.5 leading-snug">{detail}</p>
+                </div>
+              </div>
+            ))}
+            <p className="text-[11px] text-slate-600 pt-1 border-t border-white/5">
+              To fix missing env vars, add them to your Vercel project settings under Settings → Environment Variables, then redeploy.
+            </p>
+          </div>
+        )}
       </div>
 
       <Button
