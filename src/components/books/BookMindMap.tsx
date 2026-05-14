@@ -738,10 +738,12 @@ export default function BookMindMap({ bookId, bookTitle, initialJson, onClose, r
                 onMouseDown={isReadOnly || reparentId || isRoot ? undefined : e => startMove(e, node)}
                 onClick={reparentId && !isBeingMoved ? () => completeReparent(node.id) : undefined}
               >
-                {/* Tooltip for clipped labels */}
-                {!isEditing && nw === MAX_W && (
+                {/* Tooltip — always show full label on hover.
+                    Even nodes below MAX_W truncate because edit/reparent/delete
+                    buttons always occupy flex space regardless of opacity. */}
+                {!isEditing && (
                   <div
-                    className="pointer-events-none absolute left-0 bottom-[calc(100%+5px)] hidden group-hover:block z-20 max-w-[360px] rounded-lg border border-white/15 bg-slate-800/95 px-3 py-2 text-xs leading-relaxed shadow-xl backdrop-blur-sm whitespace-normal break-words"
+                    className="pointer-events-none absolute left-0 bottom-[calc(100%+5px)] hidden group-hover:block z-20 max-w-[400px] rounded-lg border border-white/15 bg-slate-800/95 px-3 py-2 text-xs leading-relaxed shadow-xl backdrop-blur-sm whitespace-normal break-words"
                     style={{ color }}
                   >
                     {node.label}
