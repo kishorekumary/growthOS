@@ -305,115 +305,123 @@ function AddMealModal({ onSave, onClose }: {
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/70 backdrop-blur-sm px-4 pt-4 pb-[max(1rem,env(safe-area-inset-bottom))]">
-      <div className="w-full max-w-md rounded-2xl border border-white/10 bg-slate-900 p-5 space-y-4 max-h-[92vh] overflow-y-auto">
-        <div className="flex items-center justify-between">
-          <h3 className="font-semibold text-white">Log a Meal</h3>
-          <button onClick={onClose} className="text-slate-500 hover:text-white text-xl leading-none">×</button>
-        </div>
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/70 backdrop-blur-sm px-4 pt-4">
+      <div className="w-full max-w-md rounded-2xl border border-white/10 bg-slate-900 flex flex-col max-h-[92vh]">
 
-        {/* Image drop zone */}
-        <div onClick={() => fileRef.current?.click()}
-          className={cn('relative flex flex-col items-center justify-center rounded-xl border-2 border-dashed cursor-pointer overflow-hidden transition-all',
-            preview ? 'border-white/20 h-44' : 'border-white/10 hover:border-violet-500/50 h-32')}>
-          {preview
-            ? <img src={preview} alt="food" className="h-full w-full object-cover" />
-            : <div className="flex flex-col items-center gap-2 text-slate-500">
-                <Camera className="h-8 w-8" />
-                <span className="text-xs">Tap to take / upload a photo</span>
-              </div>}
-          <input ref={fileRef} type="file" accept="image/*" className="hidden"
-            onChange={e => e.target.files?.[0] && handleFile(e.target.files[0])} />
-        </div>
-
-        {preview && !result && (
-          <Button onClick={analyze} disabled={analyzing} className="w-full bg-violet-600 hover:bg-violet-700 text-white">
-            {analyzing ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Analysing…</>
-                       : <><Zap className="mr-2 h-4 w-4" /> Analyse with AI</>}
-          </Button>
-        )}
-
-        {analyzeErr && (
-          <div className="flex items-start gap-2 rounded-lg border border-red-500/20 bg-red-500/10 px-3 py-2 text-xs text-red-400">
-            <AlertCircle className="h-3.5 w-3.5 shrink-0 mt-0.5" />{analyzeErr}
+        {/* ── Scrollable form content ── */}
+        <div className="p-5 space-y-4 overflow-y-auto flex-1 min-h-0">
+          <div className="flex items-center justify-between">
+            <h3 className="font-semibold text-white">Log a Meal</h3>
+            <button onClick={onClose} className="text-slate-500 hover:text-white text-xl leading-none">×</button>
           </div>
-        )}
 
-        {(result || !preview) && (
-          <div className="space-y-3">
-            {result && (
-              <div className="flex items-center gap-2 rounded-lg border border-emerald-500/20 bg-emerald-500/10 px-3 py-2 text-xs text-emerald-400">
-                <CheckCircle2 className="h-3.5 w-3.5 shrink-0" /> AI estimate ready — adjust if needed
-              </div>
-            )}
-            <div className="grid grid-cols-4 gap-1.5">
-              {MEAL_TYPES.map(t => (
-                <button key={t} type="button" onClick={() => setMealType(t)}
-                  className={cn('rounded-lg border py-1.5 text-xs font-medium capitalize transition-all',
-                    mealType === t ? 'border-violet-500 bg-violet-500/20 text-white'
-                                  : 'border-white/10 bg-white/5 text-slate-400 hover:border-white/20')}>
-                  {MEAL_ICONS[t]} {t}
-                </button>
-              ))}
+          {/* Image drop zone */}
+          <div onClick={() => fileRef.current?.click()}
+            className={cn('relative flex flex-col items-center justify-center rounded-xl border-2 border-dashed cursor-pointer overflow-hidden transition-all',
+              preview ? 'border-white/20 h-44' : 'border-white/10 hover:border-violet-500/50 h-32')}>
+            {preview
+              ? <img src={preview} alt="food" className="h-full w-full object-cover" />
+              : <div className="flex flex-col items-center gap-2 text-slate-500">
+                  <Camera className="h-8 w-8" />
+                  <span className="text-xs">Tap to take / upload a photo</span>
+                </div>}
+            <input ref={fileRef} type="file" accept="image/*" className="hidden"
+              onChange={e => e.target.files?.[0] && handleFile(e.target.files[0])} />
+          </div>
+
+          {preview && !result && (
+            <Button onClick={analyze} disabled={analyzing} className="w-full bg-violet-600 hover:bg-violet-700 text-white">
+              {analyzing ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Analysing…</>
+                         : <><Zap className="mr-2 h-4 w-4" /> Analyse with AI</>}
+            </Button>
+          )}
+
+          {analyzeErr && (
+            <div className="flex items-start gap-2 rounded-lg border border-red-500/20 bg-red-500/10 px-3 py-2 text-xs text-red-400">
+              <AlertCircle className="h-3.5 w-3.5 shrink-0 mt-0.5" />{analyzeErr}
             </div>
-            <div className="space-y-1">
-              <div className="flex items-center justify-between">
-                <Label className="text-slate-400 text-xs">Food / Dish</Label>
-                <span className="text-[10px] text-slate-600">Type a meal name → hit ✨ to auto-fill macros</span>
-              </div>
-              <div className="flex gap-2">
-                <input
-                  value={foodName}
-                  onChange={e => { setFoodName(e.target.value); setAutofillErr(null) }}
-                  onKeyDown={e => { if (e.key === 'Enter' && foodName.trim().length >= 3) autofill() }}
-                  placeholder="e.g. bowl of rice with chicken"
-                  className="flex-1 rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-white placeholder:text-slate-600 focus:outline-none focus:border-violet-500"
-                />
-                <button
-                  type="button"
-                  onClick={autofill}
-                  disabled={autofilling || !foodName.trim()}
-                  title="Auto-fill macros with AI"
-                  className={cn(
-                    'shrink-0 flex items-center gap-1 rounded-lg border px-3 py-2 text-xs font-medium transition-all',
-                    autofilling
-                      ? 'border-violet-500/30 bg-violet-500/10 text-violet-400'
-                      : foodName.trim()
-                        ? 'border-violet-500/50 bg-violet-500/15 text-violet-300 hover:bg-violet-500/25'
-                        : 'border-white/10 bg-white/5 text-slate-600 cursor-not-allowed'
-                  )}
-                >
-                  {autofilling
-                    ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                    : <Sparkles className="h-3.5 w-3.5" />}
-                </button>
-              </div>
-              {autofillErr && (
-                <p className="text-[11px] text-red-400 flex items-center gap-1">
-                  <AlertCircle className="h-3 w-3 shrink-0" />{autofillErr}
-                </p>
-              )}
-            </div>
-            <div className="grid grid-cols-2 gap-2">
-              {[['Calories (kcal)', calories, setCalories], ['Protein (g)', protein, setProtein],
-                ['Carbs (g)',   carbs,   setCarbs  ], ['Fiber (g)',  fiber,  setFiber  ],
-                ['Fat (g)',     fat,     setFat    ]].map(([label, val, set]) => (
-                <div key={label as string} className="space-y-1">
-                  <Label className="text-slate-500 text-[10px]">{label as string}</Label>
-                  <input type="number" min={0} value={val as string}
-                    onChange={e => (set as (v: string) => void)(e.target.value)}
-                    className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-1.5 text-sm text-white focus:outline-none focus:border-violet-500" />
+          )}
+
+          {(result || !preview) && (
+            <div className="space-y-3">
+              {result && (
+                <div className="flex items-center gap-2 rounded-lg border border-emerald-500/20 bg-emerald-500/10 px-3 py-2 text-xs text-emerald-400">
+                  <CheckCircle2 className="h-3.5 w-3.5 shrink-0" /> AI estimate ready — adjust if needed
                 </div>
-              ))}
+              )}
+              <div className="grid grid-cols-4 gap-1.5">
+                {MEAL_TYPES.map(t => (
+                  <button key={t} type="button" onClick={() => setMealType(t)}
+                    className={cn('rounded-lg border py-1.5 text-xs font-medium capitalize transition-all',
+                      mealType === t ? 'border-violet-500 bg-violet-500/20 text-white'
+                                    : 'border-white/10 bg-white/5 text-slate-400 hover:border-white/20')}>
+                    {MEAL_ICONS[t]} {t}
+                  </button>
+                ))}
+              </div>
+              <div className="space-y-1">
+                <div className="flex items-center justify-between">
+                  <Label className="text-slate-400 text-xs">Food / Dish</Label>
+                  <span className="text-[10px] text-slate-600">Type a meal name → hit ✨ to auto-fill macros</span>
+                </div>
+                <div className="flex gap-2">
+                  <input
+                    value={foodName}
+                    onChange={e => { setFoodName(e.target.value); setAutofillErr(null) }}
+                    onKeyDown={e => { if (e.key === 'Enter' && foodName.trim().length >= 3) autofill() }}
+                    placeholder="e.g. bowl of rice with chicken"
+                    className="flex-1 rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-white placeholder:text-slate-600 focus:outline-none focus:border-violet-500"
+                  />
+                  <button
+                    type="button"
+                    onClick={autofill}
+                    disabled={autofilling || !foodName.trim()}
+                    title="Auto-fill macros with AI"
+                    className={cn(
+                      'shrink-0 flex items-center gap-1 rounded-lg border px-3 py-2 text-xs font-medium transition-all',
+                      autofilling
+                        ? 'border-violet-500/30 bg-violet-500/10 text-violet-400'
+                        : foodName.trim()
+                          ? 'border-violet-500/50 bg-violet-500/15 text-violet-300 hover:bg-violet-500/25'
+                          : 'border-white/10 bg-white/5 text-slate-600 cursor-not-allowed'
+                    )}
+                  >
+                    {autofilling
+                      ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                      : <Sparkles className="h-3.5 w-3.5" />}
+                  </button>
+                </div>
+                {autofillErr && (
+                  <p className="text-[11px] text-red-400 flex items-center gap-1">
+                    <AlertCircle className="h-3 w-3 shrink-0" />{autofillErr}
+                  </p>
+                )}
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                {[['Calories (kcal)', calories, setCalories], ['Protein (g)', protein, setProtein],
+                  ['Carbs (g)',   carbs,   setCarbs  ], ['Fiber (g)',  fiber,  setFiber  ],
+                  ['Fat (g)',     fat,     setFat    ]].map(([label, val, set]) => (
+                  <div key={label as string} className="space-y-1">
+                    <Label className="text-slate-500 text-[10px]">{label as string}</Label>
+                    <input type="number" min={0} value={val as string}
+                      onChange={e => (set as (v: string) => void)(e.target.value)}
+                      className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-1.5 text-sm text-white focus:outline-none focus:border-violet-500" />
+                  </div>
+                ))}
+              </div>
+              {result?.notes && <p className="text-[10px] text-slate-600 italic">{result.notes}</p>}
             </div>
-            {result?.notes && <p className="text-[10px] text-slate-600 italic">{result.notes}</p>}
-          </div>
-        )}
+          )}
+        </div>
 
-        <Button onClick={handleSave} disabled={saving || !foodName.trim() || !calories}
-          className="w-full bg-violet-600 hover:bg-violet-700 text-white">
-          {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null} Save Meal
-        </Button>
+        {/* ── Sticky Save button — always visible above safe area ── */}
+        <div className="px-5 pt-3 pb-[max(1.25rem,env(safe-area-inset-bottom))] border-t border-white/8 bg-slate-900 rounded-b-2xl shrink-0">
+          <Button onClick={handleSave} disabled={saving || !foodName.trim() || !calories}
+            className="w-full bg-violet-600 hover:bg-violet-700 text-white h-12 text-sm font-semibold">
+            {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null} Save Meal
+          </Button>
+        </div>
+
       </div>
     </div>
   )
