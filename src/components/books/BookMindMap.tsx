@@ -1,7 +1,7 @@
 'use client'
 
-import { useState, useRef, useEffect, useCallback } from 'react'
-import { X, Trash2, GitBranch, Loader2, Check, Pencil, Upload, Plus, Undo2, Link2, Eye, EyeOff } from 'lucide-react'
+import { useState, useRef, useEffect, useCallback, useMemo } from 'react'
+import { X, Trash2, GitBranch, Loader2, Check, Pencil, Upload, Plus, Undo2, Link2, Eye, EyeOff, Search, ChevronLeft, ChevronRight } from 'lucide-react'
 import { createSupabaseBrowserClient } from '@/lib/supabase'
 import { cn } from '@/lib/utils'
 
@@ -187,6 +187,23 @@ function appendBranches(text: string, existingNodes: MindNode[], targetNodeId: s
   return newNodes
 }
 
+// ─── Inline search highlight ─────────────────────────────────
+
+function HighlightedLabel({ text, query }: { text: string; query: string }) {
+  if (!query) return <>{text}</>
+  const idx = text.toLowerCase().indexOf(query.toLowerCase())
+  if (idx === -1) return <>{text}</>
+  return (
+    <>
+      {text.slice(0, idx)}
+      <span className="rounded-sm px-0.5" style={{ background: 'rgba(251,191,36,0.45)', color: '#fef3c7' }}>
+        {text.slice(idx, idx + query.length)}
+      </span>
+      {text.slice(idx + query.length)}
+    </>
+  )
+}
+
 // ─── Props ────────────────────────────────────────────────────
 
 interface Props {
@@ -226,6 +243,50 @@ export default function BookMindMap({ bookId, bookTitle, initialJson, onClose, r
   // Reparent mode: ID of the node being moved to a new parent
   const [reparentId, setReparentId] = useState<string | null>(null)
 
+  // ── Search ────────────────────────────────────────────────
+  const [showSearch, setShowSearch]       = useState(false)
+  const [searchQuery, setSearchQuery]     = useState('')
+  const [searchMatchIdx, setSearchMatchIdx] = useState(0)
+  const searchInputRef   = useRef<HTMLInputElement>(null)
+  const scrollContainerRef = useRef<HTMLDivElement>(null)
+
+  const searchMatches = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase()
+    if (!q) return []
+    return nodes.filter(n => n.label.toLowerCase().includes(q))
+  }, [nodes, searchQuery])
+
+  const matchIds = useMemo(() => new Set(searchMatches.map(n => n.id)), [searchMatches])
+
+  // Keep focused match index in bounds when matches change
+  useEffect(() => {
+    setSearchMatchIdx(prev => (searchMatches.length ? Math.min(prev, searchMatches.length - 1) : 0))
+  }, [searchMatches])
+
+  // Scroll canvas to keep the focused match visible
+  useEffect(() => {
+    const node = searchMatches[searchMatchIdx]
+    if (!node || !scrollContainerRef.current) return
+    const c  = scrollContainerRef.current
+    const nw = nodeWidth(node.label)
+    c.scrollTo({
+      left: Math.max(0, node.x + nw / 2 - c.clientWidth / 2),
+      top:  Math.max(0, node.y + NODE_H / 2 - c.clientHeight / 2),
+      behavior: 'smooth',
+    })
+  }, [searchMatchIdx, searchMatches])
+
+  // Focus input when search bar opens
+  useEffect(() => {
+    if (showSearch) setTimeout(() => searchInputRef.current?.focus(), 50)
+    else setSearchQuery('')
+  }, [showSearch])
+
+  function openSearch() { setShowSearch(true) }
+  function closeSearch() { setShowSearch(false) }
+  function nextMatch()   { setSearchMatchIdx(i => (i + 1) % searchMatches.length) }
+  function prevMatch()   { setSearchMatchIdx(i => (i - 1 + searchMatches.length) % searchMatches.length) }
+
   // ── Undo history ──────────────────────────────────────────
   const historyRef = useRef<MindNode[][]>([])
   const nodesRef   = useRef(nodes)
@@ -246,9 +307,21 @@ export default function BookMindMap({ bookId, bookTitle, initialJson, onClose, r
 
   useEffect(() => {
     function onKeyDown(e: KeyboardEvent) {
+      // ⌘F / Ctrl+F — open search
+      if ((e.metaKey || e.ctrlKey) && e.key === 'f') {
+        e.preventDefault()
+        setShowSearch(true)
+        return
+      }
       if (e.key === 'Escape') {
+        if (showSearch) { closeSearch(); return }
         setReparentId(null)
         return
+      }
+      // Navigate matches while search input is focused
+      if (showSearch && searchMatches.length > 0) {
+        if (e.key === 'Enter' || e.key === 'ArrowDown') { e.preventDefault(); nextMatch(); return }
+        if ((e.shiftKey && e.key === 'Enter') || e.key === 'ArrowUp') { e.preventDefault(); prevMatch(); return }
       }
       if ((e.metaKey || e.ctrlKey) && e.key === 'z' && !e.shiftKey) {
         e.preventDefault()
@@ -257,7 +330,8 @@ export default function BookMindMap({ bookId, bookTitle, initialJson, onClose, r
     }
     window.addEventListener('keydown', onKeyDown)
     return () => window.removeEventListener('keydown', onKeyDown)
-  }, [undo])
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [undo, showSearch, searchMatches])
 
   // Reset import target when dialog opens
   useEffect(() => {
@@ -507,6 +581,21 @@ export default function BookMindMap({ bookId, bookTitle, initialJson, onClose, r
           </>
         )}
 
+        {/* Search toggle */}
+        <button
+          onClick={() => setShowSearch(s => !s)}
+          title="Search nodes (⌘F)"
+          className={cn(
+            'flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium border transition-all shrink-0',
+            showSearch
+              ? 'bg-amber-500/15 border-amber-500/40 text-amber-300'
+              : 'bg-white/5 border-white/10 text-slate-300 hover:bg-white/10'
+          )}
+        >
+          <Search className="h-3 w-3" />
+          <span className="hidden sm:inline">Search</span>
+        </button>
+
         <button
           onClick={onClose}
           className="rounded-lg p-1.5 text-slate-500 hover:text-white hover:bg-white/10 transition-colors shrink-0"
@@ -514,6 +603,52 @@ export default function BookMindMap({ bookId, bookTitle, initialJson, onClose, r
           <X className="h-4 w-4" />
         </button>
       </div>
+
+      {/* ── Search bar ── */}
+      {showSearch && (
+        <div className="flex items-center gap-2 px-4 py-2 border-b border-amber-500/20 bg-amber-500/5 shrink-0">
+          <Search className="h-3.5 w-3.5 text-amber-400 shrink-0" />
+          <input
+            ref={searchInputRef}
+            value={searchQuery}
+            onChange={e => { setSearchQuery(e.target.value); setSearchMatchIdx(0) }}
+            onKeyDown={e => {
+              if (e.key === 'Enter')  { e.preventDefault(); e.shiftKey ? prevMatch() : nextMatch() }
+              if (e.key === 'Escape') { e.preventDefault(); closeSearch() }
+            }}
+            placeholder="Search nodes…"
+            className="flex-1 bg-transparent text-xs text-white placeholder:text-slate-600 focus:outline-none"
+          />
+          {/* Match counter */}
+          {searchQuery.trim() && (
+            <span className="text-[11px] text-slate-500 shrink-0 tabular-nums">
+              {searchMatches.length === 0
+                ? 'No matches'
+                : `${searchMatchIdx + 1} / ${searchMatches.length}`}
+            </span>
+          )}
+          {/* Prev / Next */}
+          <button
+            onClick={prevMatch}
+            disabled={searchMatches.length < 2}
+            title="Previous match (Shift+Enter)"
+            className="p-1 rounded text-slate-400 hover:text-white disabled:opacity-25 transition-colors"
+          >
+            <ChevronLeft className="h-3.5 w-3.5" />
+          </button>
+          <button
+            onClick={nextMatch}
+            disabled={searchMatches.length < 2}
+            title="Next match (Enter)"
+            className="p-1 rounded text-slate-400 hover:text-white disabled:opacity-25 transition-colors"
+          >
+            <ChevronRight className="h-3.5 w-3.5" />
+          </button>
+          <button onClick={closeSearch} className="p-1 rounded text-slate-500 hover:text-white transition-colors">
+            <X className="h-3.5 w-3.5" />
+          </button>
+        </div>
+      )}
 
       {/* ── Reparent mode banner ── */}
       {reparentId && !isReadOnly && (
@@ -640,7 +775,7 @@ export default function BookMindMap({ bookId, bookTitle, initialJson, onClose, r
       )}
 
       {/* ── Scrollable canvas ── */}
-      <div className="flex-1 overflow-auto">
+      <div ref={scrollContainerRef} className="flex-1 overflow-auto">
         <div
           ref={canvasRef}
           className="relative select-none"
@@ -705,6 +840,10 @@ export default function BookMindMap({ bookId, bookTitle, initialJson, onClose, r
             const isBeingMoved  = reparentId === node.id
             const isValidTarget = !!reparentId && node.id !== reparentId && !isDescendant(node.id, reparentId, nodesRef.current)
 
+            // Search highlight states
+            const isSearchMatch = matchIds.has(node.id)
+            const isSearchFocus = isSearchMatch && searchMatches[searchMatchIdx]?.id === node.id
+
             return (
               <div
                 key={node.id}
@@ -713,9 +852,13 @@ export default function BookMindMap({ bookId, bookTitle, initialJson, onClose, r
                   'transition-all duration-150',
                   isBeingMoved
                     ? 'shadow-[0_0_20px_rgba(6,182,212,0.5)] animate-pulse z-20'
-                    : isValidTarget
-                      ? 'cursor-pointer hover:shadow-[0_0_18px_rgba(6,182,212,0.45)] hover:z-10'
-                      : 'hover:shadow-[0_0_16px_rgba(124,58,237,0.35)] hover:z-10',
+                    : isSearchFocus
+                      ? 'shadow-[0_0_22px_rgba(251,191,36,0.6)] z-20'
+                      : isSearchMatch
+                        ? 'shadow-[0_0_12px_rgba(251,191,36,0.3)] z-10'
+                        : isValidTarget
+                          ? 'cursor-pointer hover:shadow-[0_0_18px_rgba(6,182,212,0.45)] hover:z-10'
+                          : 'hover:shadow-[0_0_16px_rgba(124,58,237,0.35)] hover:z-10',
                   !isReadOnly && !reparentId && !isRoot ? 'cursor-move' : '',
                   isReadOnly ? 'cursor-default' : '',
                 )}
@@ -723,30 +866,34 @@ export default function BookMindMap({ bookId, bookTitle, initialJson, onClose, r
                   left: node.x, top: node.y, width: nw, height: NODE_H,
                   borderColor: isBeingMoved
                     ? 'rgba(6,182,212,0.7)'
-                    : isValidTarget && reparentId
-                      ? 'rgba(6,182,212,0.35)'
-                      : isRoot
-                        ? 'rgba(124,58,237,0.55)'
-                        : color + '44',
+                    : isSearchFocus
+                      ? 'rgba(251,191,36,0.8)'
+                      : isSearchMatch
+                        ? 'rgba(251,191,36,0.4)'
+                        : isValidTarget && reparentId
+                          ? 'rgba(6,182,212,0.35)'
+                          : isRoot
+                            ? 'rgba(124,58,237,0.55)'
+                            : color + '44',
                   background: isBeingMoved
                     ? 'rgba(6,182,212,0.15)'
-                    : isRoot
-                      ? 'rgba(109,40,217,0.25)'
-                      : 'rgba(12,12,26,0.88)',
+                    : isSearchFocus
+                      ? 'rgba(251,191,36,0.12)'
+                      : isRoot
+                        ? 'rgba(109,40,217,0.25)'
+                        : 'rgba(12,12,26,0.88)',
                   backdropFilter: 'blur(10px)',
                 }}
                 onMouseDown={isReadOnly || reparentId || isRoot ? undefined : e => startMove(e, node)}
                 onClick={reparentId && !isBeingMoved ? () => completeReparent(node.id) : undefined}
               >
-                {/* Tooltip — always show full label on hover.
-                    Even nodes below MAX_W truncate because edit/reparent/delete
-                    buttons always occupy flex space regardless of opacity. */}
+                {/* Tooltip — always show full label on hover */}
                 {!isEditing && (
                   <div
                     className="pointer-events-none absolute left-0 bottom-[calc(100%+5px)] hidden group-hover:block z-20 max-w-[400px] rounded-lg border border-white/15 bg-slate-800/95 px-3 py-2 text-xs leading-relaxed shadow-xl backdrop-blur-sm whitespace-normal break-words"
                     style={{ color }}
                   >
-                    {node.label}
+                    <HighlightedLabel text={node.label} query={searchQuery} />
                   </div>
                 )}
 
@@ -777,9 +924,9 @@ export default function BookMindMap({ bookId, bookTitle, initialJson, onClose, r
                 ) : (
                   <span
                     className="flex-1 min-w-0 text-xs font-medium leading-snug truncate"
-                    style={{ color: isBeingMoved ? '#67e8f9' : isRoot ? '#c4b5fd' : color }}
+                    style={{ color: isBeingMoved ? '#67e8f9' : isSearchFocus ? '#fef3c7' : isRoot ? '#c4b5fd' : color }}
                   >
-                    {node.label}
+                    <HighlightedLabel text={node.label} query={searchQuery} />
                   </span>
                 )}
 
