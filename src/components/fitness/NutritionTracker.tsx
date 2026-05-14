@@ -322,7 +322,7 @@ function AddMealModal({ onSave, onClose }: {
                 <Camera className="h-8 w-8" />
                 <span className="text-xs">Tap to take / upload a photo</span>
               </div>}
-          <input ref={fileRef} type="file" accept="image/*" capture="environment" className="hidden"
+          <input ref={fileRef} type="file" accept="image/*" className="hidden"
             onChange={e => e.target.files?.[0] && handleFile(e.target.files[0])} />
         </div>
 
