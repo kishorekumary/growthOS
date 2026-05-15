@@ -18,7 +18,7 @@ const NAV_ITEMS = [
   { href: '/digest',     label: 'Digest',     icon: Newspaper },
   { href: '/retro',      label: 'Retro',      icon: CalendarCheck },
   { href: '/challenges', label: 'Challenges', icon: Flame },
-  { href: '/journal',    label: 'Journal',    icon: NotebookPen },
+  { href: '/personality/journal', label: 'Journal', icon: NotebookPen },
 ]
 
 interface SidebarProps {
