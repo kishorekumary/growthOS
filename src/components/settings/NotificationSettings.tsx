@@ -389,31 +389,33 @@ export default function NotificationSettings() {
         </div>
 
         {callEnabled && (
-          <div className="space-y-1.5">
-            <label className="text-xs font-medium text-slate-400">Phone number</label>
-            <input
-              type="tel"
-              value={phoneNumber}
-              onChange={e => setPhoneNumber(e.target.value)}
-              placeholder="+91 98765 43210"
-              className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-white placeholder:text-slate-600 focus:outline-none focus:ring-1 focus:ring-emerald-500"
-            />
-            <p className="text-[11px] text-slate-600">Include country code — e.g. +91 for India, +1 for US.</p>
-          </div>
+          <div className="space-y-4">
+            <div className="space-y-1.5">
+              <label className="text-xs font-medium text-slate-400">Phone number</label>
+              <input
+                type="tel"
+                value={phoneNumber}
+                onChange={e => setPhoneNumber(e.target.value)}
+                placeholder="+91 98765 43210"
+                className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-white placeholder:text-slate-600 focus:outline-none focus:ring-1 focus:ring-emerald-500"
+              />
+              <p className="text-[11px] text-slate-600">Include country code — e.g. +91 for India, +1 for US.</p>
+            </div>
 
-          {phoneNumber.trim() && (
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={sendTestCall}
-              disabled={callTesting}
-              className="border-white/10 bg-white/5 text-slate-300 hover:text-white text-xs h-8"
-            >
-              {callTesting
-                ? <><Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> Calling...</>
-                : <><Phone className="mr-1.5 h-3.5 w-3.5" /> Test call now</>}
-            </Button>
-          )}
+            {phoneNumber.trim() && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={sendTestCall}
+                disabled={callTesting}
+                className="border-white/10 bg-white/5 text-slate-300 hover:text-white text-xs h-8"
+              >
+                {callTesting
+                  ? <><Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> Calling...</>
+                  : <><Phone className="mr-1.5 h-3.5 w-3.5" /> Test call now</>}
+              </Button>
+            )}
+          </div>
         )}
       </div>
 
