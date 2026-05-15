@@ -338,17 +338,43 @@ export default function BookMindMap({ bookId, bookTitle, initialJson, onClose, r
   const nodesRef   = useRef(nodes)
   nodesRef.current = nodes
 
-  // Warn on browser refresh / tab close / back navigation when unsaved
+  // Keep a ref so the popstate handler always sees the latest isDirty value
+  // without needing to be recreated every time it changes
+  const isDirtyRef = useRef(false)
+  isDirtyRef.current = isDirty
+
+  // Warn on browser refresh / tab close when unsaved
   useEffect(() => {
     function onBeforeUnload(e: BeforeUnloadEvent) {
-      if (isDirty && !isReadOnly) {
+      if (isDirtyRef.current && !isReadOnly) {
         e.preventDefault()
         e.returnValue = ''
       }
     }
     window.addEventListener('beforeunload', onBeforeUnload)
     return () => window.removeEventListener('beforeunload', onBeforeUnload)
-  }, [isDirty, isReadOnly])
+  // isReadOnly won't change after mount in practice; isDirtyRef handles the rest
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  // Intercept the browser back button when unsaved.
+  // Push a dummy history entry on mount so pressing Back triggers popstate
+  // instead of immediately leaving. If dirty, push it back again and show
+  // our own confirm dialog instead of navigating away.
+  useEffect(() => {
+    history.pushState({ mindmap: true }, '')
+
+    function onPopState() {
+      if (isDirtyRef.current) {
+        history.pushState({ mindmap: true }, '')
+        setShowCloseConfirm(true)
+      }
+    }
+
+    window.addEventListener('popstate', onPopState)
+    return () => window.removeEventListener('popstate', onPopState)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   function pushHistory() {
     historyRef.current = [...historyRef.current.slice(-49), [...nodesRef.current]]
