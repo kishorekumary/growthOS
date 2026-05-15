@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import {
   Timer, Play, Pause, Square, Plus, Trash2, ChevronLeft,
-  Loader2, Check, GripVertical, RotateCcw, Bell, Pencil, Copy,
+  Loader2, Check, GripVertical, RotateCcw, Bell, Pencil, Copy, SkipForward,
 } from 'lucide-react'
 import { createSupabaseBrowserClient } from '@/lib/supabase'
 import { Button } from '@/components/ui/button'
@@ -349,6 +349,13 @@ export default function FocusTimer() {
     workerRef.current?.postMessage({ type: 'start', endTimeMs: endTimeRef.current })
   }
 
+  function skipStep() {
+    workerRef.current?.postMessage({ type: 'stop' })
+    pausedRef.current = false
+    setPaused(false)
+    advanceStep()
+  }
+
   function stopTimer() {
     workerRef.current?.postMessage({ type: 'stop' })
     runSeqRef.current  = null
@@ -475,6 +482,12 @@ export default function FocusTimer() {
                 )}>
                 {paused ? <Play className="h-6 w-6" /> : <Pause className="h-6 w-6" />}
               </button>
+              {stepIdx < runSeq.steps.length - 1 && (
+                <button onClick={skipStep} title="Skip to next step"
+                  className="flex h-11 w-11 items-center justify-center rounded-full border-2 border-white/10 bg-white/5 text-slate-400 hover:border-amber-400/40 hover:text-amber-300 transition-all">
+                  <SkipForward className="h-4 w-4" />
+                </button>
+              )}
               <button onClick={stopTimer} title="End session"
                 className="flex h-11 w-11 items-center justify-center rounded-full border-2 border-red-500/30 bg-red-500/10 text-red-400 hover:bg-red-500/20 transition-all">
                 <Square className="h-4 w-4" />
@@ -501,6 +514,12 @@ export default function FocusTimer() {
                   :                 <div className="h-2 w-2 rounded-full bg-slate-700 shrink-0" />}
                   <span className={cn('flex-1 truncate', i < stepIdx && 'line-through')}>{s.label}</span>
                   <span className="text-xs text-slate-600 shrink-0">{fmtDuration(s.duration)}</span>
+                  {i === stepIdx && i < runSeq.steps.length - 1 && (
+                    <button onClick={skipStep} title="Skip this step"
+                      className="ml-1 text-slate-600 hover:text-amber-300 transition-colors">
+                      <SkipForward className="h-3.5 w-3.5" />
+                    </button>
+                  )}
                 </div>
               ))}
             </div>
