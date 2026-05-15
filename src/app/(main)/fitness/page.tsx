@@ -20,11 +20,11 @@ function Spinner() {
   )
 }
 
-const TABS = ['Plan', 'Log Workout', 'Nutrition', 'Progress', 'Coach'] as const
+const TABS = ['Log Workout', 'Plan', 'Nutrition', 'Progress', 'Coach'] as const
 type Tab = typeof TABS[number]
 
 export default function FitnessPage() {
-  const [tab, setTab] = useState<Tab>('Plan')
+  const [tab, setTab] = useState<Tab>('Log Workout')
 
   return (
     <div className="mx-auto max-w-2xl px-4 py-8 md:px-8">
