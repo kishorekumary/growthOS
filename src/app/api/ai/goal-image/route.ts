@@ -24,7 +24,7 @@ export async function POST(req: Request) {
       response_format: 'b64_json',
     })
 
-    const b64 = imageResponse.data[0]?.b64_json
+    const b64 = (imageResponse.data ?? [])[0]?.b64_json
     if (!b64) {
       return Response.json({ error: 'No image data returned from DALL-E' }, { status: 500 })
     }
