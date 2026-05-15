@@ -36,7 +36,7 @@ function buildMonths() {
 
 const MONTHS = buildMonths()
 
-const TABS = ['Overview', 'Budget', 'Goals', 'Tracker', 'Coach'] as const
+const TABS = ['Overview', 'Tracker', 'Goals', 'Budget', 'Coach'] as const
 type Tab = typeof TABS[number]
 
 export default function FinancePage() {
