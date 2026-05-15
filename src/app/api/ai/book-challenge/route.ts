@@ -61,7 +61,7 @@ Pick a real, well-known book that is widely available.`,
     const raw = completion.choices[0]?.message?.content ?? '{}'
     const picked = JSON.parse(raw)
 
-    const { data: challenge } = await supabase
+    const { data: challenge, error: insertError } = await supabase
       .from('book_challenges')
       .insert({
         user_id: user.id,
@@ -75,9 +75,14 @@ Pick a real, well-known book that is widely available.`,
       .select()
       .single()
 
+    if (insertError) {
+      console.error('book-challenge insert error', insertError)
+      return NextResponse.json({ error: 'Failed to save challenge. Please try again.' }, { status: 500 })
+    }
+
     return NextResponse.json({ challenge })
   } catch (err) {
     console.error('book-challenge error', err)
-    return NextResponse.json({ challenge: null })
+    return NextResponse.json({ error: 'Failed to pick a book. Please try again in a moment.' }, { status: 500 })
   }
 }

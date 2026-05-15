@@ -30,6 +30,7 @@ export default function BookChallenge() {
   const [loading, setLoading]     = useState(true)
   const [starting, setStarting]   = useState(false)
   const [updating, setUpdating]   = useState(false)
+  const [error, setError]         = useState<string | null>(null)
   const supabase = createSupabaseBrowserClient()
 
   useEffect(() => {
@@ -48,9 +49,18 @@ export default function BookChallenge() {
 
   async function startChallenge() {
     setStarting(true)
-    const res = await fetch('/api/ai/book-challenge', { method: 'POST' })
-    const data = await res.json()
-    if (data.challenge) setChallenge(data.challenge)
+    setError(null)
+    try {
+      const res  = await fetch('/api/ai/book-challenge', { method: 'POST' })
+      const data = await res.json().catch(() => ({}))
+      if (data.challenge) {
+        setChallenge(data.challenge)
+      } else {
+        setError(data.error ?? 'Could not pick a book right now. Please try again.')
+      }
+    } catch {
+      setError('Network error. Please check your connection and try again.')
+    }
     setStarting(false)
   }
 
@@ -61,7 +71,7 @@ export default function BookChallenge() {
     setUpdating(true)
     await supabase
       .from('book_challenges')
-      .update({ chapters_read: next, updated_at: new Date().toISOString() })
+      .update({ chapters_read: next })
       .eq('id', challenge.id)
     setChallenge(prev => prev ? { ...prev, chapters_read: next } : prev)
     setUpdating(false)
@@ -97,6 +107,11 @@ export default function BookChallenge() {
               Let AI pick the perfect book for {monthLabel}.
             </p>
           </div>
+          {error && (
+            <div className="rounded-lg border border-red-500/20 bg-red-500/10 px-4 py-3 text-sm text-red-300">
+              {error}
+            </div>
+          )}
           <Button
             onClick={startChallenge}
             disabled={starting}
