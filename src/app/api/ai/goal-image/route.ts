@@ -16,33 +16,36 @@ export async function POST(req: Request) {
 
   const admin = createSupabaseAdminClient()
 
-  // ── Generate image ────────────────────────────────────────────
-  let b64: string
+  // ── Generate image (returns a temporary URL) ─────────────────
+  let tempUrl: string
   try {
     const imageResponse = await openai.images.generate({
       model: 'dall-e-3',
       prompt: `${prompt}. Make it inspiring, aspirational and high quality.`,
       n: 1,
       size: '1024x1024',
-      response_format: 'b64_json',
     })
-    const raw = (imageResponse.data ?? [])[0]?.b64_json
-    if (!raw) return Response.json({ error: 'DALL-E returned no image data' }, { status: 500 })
-    b64 = raw
+    const url = (imageResponse.data ?? [])[0]?.url
+    if (!url) return Response.json({ error: 'DALL-E returned no image URL' }, { status: 500 })
+    tempUrl = url
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : String(err)
     console.error('[goal-image] DALL-E error:', msg)
     return Response.json({ error: `Image generation failed: ${msg}` }, { status: 500 })
   }
 
-  // ── Upload to Supabase Storage ────────────────────────────────
+  // ── Fetch image bytes and upload to Supabase Storage ─────────
   const path = `${user.id}/${goalId}.png`
   try {
+    const imageRes = await fetch(tempUrl)
+    if (!imageRes.ok) throw new Error(`Failed to fetch generated image: ${imageRes.status}`)
+    const imageBuffer = Buffer.from(await imageRes.arrayBuffer())
+
     await admin.storage.createBucket('goal-visions', { public: true }).catch(() => {})
 
     const { error: uploadError } = await admin.storage
       .from('goal-visions')
-      .upload(path, Buffer.from(b64, 'base64'), { upsert: true, contentType: 'image/png' })
+      .upload(path, imageBuffer, { upsert: true, contentType: 'image/png' })
 
     if (uploadError) {
       console.error('[goal-image] upload error:', uploadError)
