@@ -77,6 +77,7 @@ export default function NotificationSettings() {
   const [phoneNumber, setPhoneNumber]         = useState('')
   const [telegramEnabled, setTelegramEnabled] = useState(false)
   const [telegramChatId, setTelegramChatId]   = useState('')
+  const [callTesting, setCallTesting]         = useState(false)
   const [telegramTesting, setTelegramTesting] = useState(false)
   const [times, setTimes]     = useState<string[]>(['08:00', '18:00'])
   const [timezone, setTimezone] = useState('UTC')
@@ -242,6 +243,17 @@ export default function NotificationSettings() {
     setSaving(false)
   }
 
+  async function sendTestCall() {
+    setCallTesting(true)
+    setError(null)
+    const res = await fetch('/api/voice/test', { method: 'POST' })
+    if (!res.ok) {
+      const d = await res.json().catch(() => ({}))
+      setError(d.error ?? 'Failed to place test call')
+    }
+    setCallTesting(false)
+  }
+
   async function sendTestTelegram() {
     setTelegramTesting(true)
     setError(null)
@@ -388,6 +400,20 @@ export default function NotificationSettings() {
             />
             <p className="text-[11px] text-slate-600">Include country code — e.g. +91 for India, +1 for US.</p>
           </div>
+
+          {phoneNumber.trim() && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={sendTestCall}
+              disabled={callTesting}
+              className="border-white/10 bg-white/5 text-slate-300 hover:text-white text-xs h-8"
+            >
+              {callTesting
+                ? <><Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> Calling...</>
+                : <><Phone className="mr-1.5 h-3.5 w-3.5" /> Test call now</>}
+            </Button>
+          )}
         )}
       </div>
 
