@@ -3,68 +3,71 @@ import { createSupabaseAdminClient } from '@/lib/supabase-admin'
 import { openai } from '@/lib/openai'
 
 export async function POST(req: Request) {
+  // ── Auth ──────────────────────────────────────────────────────
+  const supabase = createSupabaseServerClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return Response.json({ error: 'Unauthorized' }, { status: 401 })
+
+  const body = await req.json().catch(() => null)
+  const { goalId, prompt } = (body ?? {}) as { goalId?: string; prompt?: string }
+  if (!goalId || !prompt) {
+    return Response.json({ error: 'goalId and prompt are required' }, { status: 400 })
+  }
+
+  const admin = createSupabaseAdminClient()
+
+  // ── Generate image ────────────────────────────────────────────
+  let b64: string
   try {
-    const supabase = createSupabaseServerClient()
-    const { data: { user } } = await supabase.auth.getUser()
-    if (!user) return new Response('Unauthorized', { status: 401 })
-
-    const { goalId, prompt } = (await req.json()) as { goalId: string; prompt: string }
-
-    if (!goalId || !prompt) {
-      return Response.json({ error: 'goalId and prompt are required' }, { status: 400 })
-    }
-
-    const fullPrompt = `Inspiring visualization for personal goal: ${prompt}. Make it photorealistic, high quality, aspirational and motivational.`
-
     const imageResponse = await openai.images.generate({
       model: 'dall-e-3',
-      prompt: fullPrompt,
+      prompt: `${prompt}. Make it inspiring, aspirational and high quality.`,
       n: 1,
       size: '1024x1024',
       response_format: 'b64_json',
     })
+    const raw = (imageResponse.data ?? [])[0]?.b64_json
+    if (!raw) return Response.json({ error: 'DALL-E returned no image data' }, { status: 500 })
+    b64 = raw
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err)
+    console.error('[goal-image] DALL-E error:', msg)
+    return Response.json({ error: `Image generation failed: ${msg}` }, { status: 500 })
+  }
 
-    const b64 = (imageResponse.data ?? [])[0]?.b64_json
-    if (!b64) {
-      return Response.json({ error: 'No image data returned from DALL-E' }, { status: 500 })
-    }
-
-    const imageBuffer = Buffer.from(b64, 'base64')
-    const path = `${user.id}/${goalId}.png`
-
-    const admin = createSupabaseAdminClient()
-
-    // Create bucket if it doesn't already exist — swallow error if it does
+  // ── Upload to Supabase Storage ────────────────────────────────
+  const path = `${user.id}/${goalId}.png`
+  try {
     await admin.storage.createBucket('goal-visions', { public: true }).catch(() => {})
 
     const { error: uploadError } = await admin.storage
       .from('goal-visions')
-      .upload(path, imageBuffer, {
-        upsert: true,
-        contentType: 'image/png',
-      })
+      .upload(path, Buffer.from(b64, 'base64'), { upsert: true, contentType: 'image/png' })
 
     if (uploadError) {
       console.error('[goal-image] upload error:', uploadError)
-      return Response.json({ error: uploadError.message }, { status: 500 })
+      return Response.json({ error: `Storage upload failed: ${uploadError.message}` }, { status: 500 })
     }
-
-    const { data: { publicUrl } } = admin.storage.from('goal-visions').getPublicUrl(path)
-
-    const { error: updateError } = await supabase
-      .from('user_goals')
-      .update({ vision_image_url: publicUrl })
-      .eq('id', goalId)
-      .eq('user_id', user.id)
-
-    if (updateError) {
-      console.error('[goal-image] update error:', updateError)
-      return Response.json({ error: updateError.message }, { status: 500 })
-    }
-
-    return Response.json({ imageUrl: publicUrl })
-  } catch (err) {
-    console.error('[goal-image] unexpected error:', err)
-    return Response.json({ error: 'Failed to generate goal image. Please try again.' }, { status: 500 })
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err)
+    console.error('[goal-image] storage error:', msg)
+    return Response.json({ error: `Storage error: ${msg}` }, { status: 500 })
   }
+
+  // ── Persist URL on the goal ───────────────────────────────────
+  const { data: { publicUrl } } = admin.storage.from('goal-visions').getPublicUrl(path)
+
+  // Use admin client — server client session cookie may not resolve in API routes
+  const { error: updateError } = await admin
+    .from('user_goals')
+    .update({ vision_image_url: publicUrl })
+    .eq('id', goalId)
+    .eq('user_id', user.id)
+
+  if (updateError) {
+    console.error('[goal-image] update error:', updateError)
+    return Response.json({ error: `Failed to save image URL: ${updateError.message}` }, { status: 500 })
+  }
+
+  return Response.json({ imageUrl: publicUrl })
 }
