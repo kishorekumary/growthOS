@@ -19,11 +19,11 @@ function Spinner() {
   )
 }
 
-const TABS = ['Discover', 'My List', 'Challenge', 'Coach'] as const
+const TABS = ['My List', 'Challenge', 'Coach', 'Discover'] as const
 type Tab = typeof TABS[number]
 
 export default function BooksPage() {
-  const [tab, setTab] = useState<Tab>('Discover')
+  const [tab, setTab] = useState<Tab>('My List')
 
   return (
     <div className="mx-auto max-w-2xl px-4 py-8 md:px-8">

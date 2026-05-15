@@ -338,6 +338,18 @@ export default function BookMindMap({ bookId, bookTitle, initialJson, onClose, r
   const nodesRef   = useRef(nodes)
   nodesRef.current = nodes
 
+  // Warn on browser refresh / tab close / back navigation when unsaved
+  useEffect(() => {
+    function onBeforeUnload(e: BeforeUnloadEvent) {
+      if (isDirty && !isReadOnly) {
+        e.preventDefault()
+        e.returnValue = ''
+      }
+    }
+    window.addEventListener('beforeunload', onBeforeUnload)
+    return () => window.removeEventListener('beforeunload', onBeforeUnload)
+  }, [isDirty, isReadOnly])
+
   function pushHistory() {
     historyRef.current = [...historyRef.current.slice(-49), [...nodesRef.current]]
     setCanUndo(true)

@@ -30,8 +30,8 @@ interface Book {
 interface AiData { summary: string; lessons: string[] }
 
 const STATUS_TABS: { value: Status; label: string; icon: string }[] = [
-  { value: 'want_to_read', label: 'Want to Read', icon: '📚' },
   { value: 'reading',      label: 'Reading',      icon: '📖' },
+  { value: 'want_to_read', label: 'Want to Read', icon: '📚' },
   { value: 'completed',    label: 'Completed',    icon: '✅' },
 ]
 
@@ -334,7 +334,7 @@ export default function ReadingList() {
   const [books, setBooks]               = useState<Book[]>([])
   const [loading, setLoading]           = useState(true)
   const [fetchError, setFetchError]     = useState<string | null>(null)
-  const [activeStatus, setActiveStatus] = useState<Status>('want_to_read')
+  const [activeStatus, setActiveStatus] = useState<Status>('reading')
   const [selected, setSelected]         = useState<Book | null>(null)
   const [mindMapBook, setMindMapBook]   = useState<Book | null>(null)
   const [mindMapReadonly, setMindMapReadonly] = useState(false)
