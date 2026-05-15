@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { createSupabaseServerClient } from '@/lib/supabase-server'
+import { createSupabaseAdminClient } from '@/lib/supabase-admin'
 import { openai } from '@/lib/claude'
 import { format } from 'date-fns'
 
@@ -61,23 +62,25 @@ Pick a real, well-known book that is widely available.`,
     const raw = completion.choices[0]?.message?.content ?? '{}'
     const picked = JSON.parse(raw)
 
-    const { data: challenge, error: insertError } = await supabase
+    // Admin client bypasses RLS — user is already verified above
+    const admin = createSupabaseAdminClient()
+    const { data: challenge, error: insertError } = await admin
       .from('book_challenges')
       .insert({
-        user_id: user.id,
+        user_id:         user.id,
         challenge_month: challengeMonth,
-        book_title: picked.title,
-        author: picked.author,
-        genre: picked.genre,
-        total_chapters: picked.total_chapters ?? 10,
-        ai_note: picked.ai_note,
+        book_title:      picked.title ?? picked.book_title ?? 'Monthly Reading Pick',
+        author:          picked.author   ?? null,
+        genre:           picked.genre    ?? null,
+        total_chapters:  Number(picked.total_chapters) || 10,
+        ai_note:         picked.ai_note  ?? null,
       })
       .select()
       .single()
 
     if (insertError) {
       console.error('book-challenge insert error', insertError)
-      return NextResponse.json({ error: 'Failed to save challenge. Please try again.' }, { status: 500 })
+      return NextResponse.json({ error: insertError.message }, { status: 500 })
     }
 
     return NextResponse.json({ challenge })
