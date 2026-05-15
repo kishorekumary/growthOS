@@ -20,10 +20,10 @@ export async function POST(req: Request) {
   let tempUrl: string
   try {
     const imageResponse = await openai.images.generate({
-      model: 'dall-e-3',
+      model: 'dall-e-2',
       prompt: `${prompt}. Make it inspiring, aspirational and high quality.`,
       n: 1,
-      size: '1024x1024',
+      size: '512x512',
     })
     const url = (imageResponse.data ?? [])[0]?.url
     if (!url) return Response.json({ error: 'DALL-E returned no image URL' }, { status: 500 })
