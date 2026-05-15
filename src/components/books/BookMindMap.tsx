@@ -256,8 +256,15 @@ export default function BookMindMap({ bookId, bookTitle, initialJson, onClose, r
   const [importError, setImportError] = useState<string | null>(null)
   const [importTargetId, setImportTargetId] = useState('root')
   const [canUndo, setCanUndo]       = useState(false)
+  const [isDirty, setIsDirty]       = useState(false)
+  const [showCloseConfirm, setShowCloseConfirm] = useState(false)
 
   const [copySuccess, setCopySuccess] = useState(false)
+
+  function handleClose() {
+    if (isDirty && !isReadOnly) { setShowCloseConfirm(true); return }
+    onClose()
+  }
 
   function exportMarkdown() {
     const md = nodesToMarkdown(nodes)
@@ -334,6 +341,7 @@ export default function BookMindMap({ bookId, bookTitle, initialJson, onClose, r
   function pushHistory() {
     historyRef.current = [...historyRef.current.slice(-49), [...nodesRef.current]]
     setCanUndo(true)
+    setIsDirty(true)
   }
 
   const undo = useCallback(() => {
@@ -544,6 +552,7 @@ export default function BookMindMap({ bookId, bookTitle, initialJson, onClose, r
       setSaveError('Run in Supabase SQL editor: ALTER TABLE reading_log ADD COLUMN IF NOT EXISTS key_lessons TEXT;')
       return
     }
+    setIsDirty(false)
     setSavedFlash(true)
     setTimeout(() => setSavedFlash(false), 2000)
   }
@@ -651,7 +660,7 @@ export default function BookMindMap({ bookId, bookTitle, initialJson, onClose, r
         </button>
 
         <button
-          onClick={onClose}
+          onClick={handleClose}
           className="rounded-lg p-1.5 text-slate-500 hover:text-white hover:bg-white/10 transition-colors shrink-0"
         >
           <X className="h-4 w-4" />
@@ -1063,6 +1072,30 @@ export default function BookMindMap({ bookId, bookTitle, initialJson, onClose, r
           })}
         </div>
       </div>
+
+      {/* Unsaved changes confirm dialog */}
+      {showCloseConfirm && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+          <div className="w-full max-w-sm rounded-2xl border border-white/10 bg-slate-900 p-6 space-y-4">
+            <p className="text-base font-semibold text-white">Unsaved changes</p>
+            <p className="text-sm text-slate-400">You have unsaved changes to this mind map. Save before closing?</p>
+            <div className="flex gap-3">
+              <button
+                onClick={() => { setShowCloseConfirm(false); onClose() }}
+                className="flex-1 rounded-xl border border-white/10 py-2 text-sm text-slate-300 hover:bg-white/5 transition-colors"
+              >
+                Discard
+              </button>
+              <button
+                onClick={async () => { setShowCloseConfirm(false); await save(); onClose() }}
+                className="flex-1 rounded-xl bg-violet-600 hover:bg-violet-500 py-2 text-sm font-medium text-white transition-colors"
+              >
+                Save & Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
