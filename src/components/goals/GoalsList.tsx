@@ -5,6 +5,7 @@ import {
   Target, Plus, Check, Trash2, Loader2, AlertCircle,
   Dumbbell, Wallet, BookOpen, Sparkles, Briefcase,
   ChevronDown, ChevronUp, CalendarDays, CalendarRange, TrendingUp, Pencil, RotateCcw,
+  Image as ImageIcon,
 } from 'lucide-react'
 import { createSupabaseBrowserClient } from '@/lib/supabase'
 import { Button } from '@/components/ui/button'
@@ -29,6 +30,7 @@ interface Goal {
   is_completed: boolean
   completed_at: string | null
   created_at: string
+  vision_image_url: string | null
 }
 
 const CATEGORY_CONFIG: Record<Category, { label: string; icon: typeof Target; color: string; bg: string; border: string }> = {
@@ -478,6 +480,149 @@ function EditGoalModal({
   )
 }
 
+// ─── Goal Vision Modal ────────────────────────────────────────
+
+function GoalVisionModal({ goal, onImageSaved }: { goal: Goal; onImageSaved: (url: string) => void }) {
+  const [open, setOpen] = useState(false)
+  const [prompt, setPrompt] = useState('')
+  const [activeStyle, setActiveStyle] = useState(0)
+  const [generating, setGenerating] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [previewUrl, setPreviewUrl] = useState<string | null>(goal.vision_image_url)
+
+  function handleOpenChange(v: boolean) {
+    setOpen(v)
+    if (v) {
+      setPrompt(goal.title)
+      setPreviewUrl(goal.vision_image_url)
+      setError(null)
+    }
+  }
+
+  const STYLES = [
+    { label: 'Photorealistic', suffix: 'photorealistic, ultra-detailed, 4K photography' },
+    { label: 'Artistic',       suffix: 'vibrant digital art, illustration style' },
+    { label: 'Cinematic',      suffix: 'cinematic lighting, dramatic atmosphere, movie still' },
+    { label: 'Motivational',   suffix: 'motivational poster, bold composition, inspiring' },
+  ]
+
+  async function generate() {
+    if (!prompt.trim()) return
+    setGenerating(true)
+    setError(null)
+    const fullPrompt = `${prompt.trim()}, ${STYLES[activeStyle].suffix}`
+    try {
+      const res = await fetch('/api/ai/goal-image', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ goalId: goal.id, prompt: fullPrompt }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (data.imageUrl) {
+        setPreviewUrl(data.imageUrl)
+        onImageSaved(data.imageUrl)
+      } else {
+        setError(data.error ?? 'Failed to generate image. Please try again.')
+      }
+    } catch {
+      setError('Network error. Please try again.')
+    }
+    setGenerating(false)
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={handleOpenChange}>
+      <DialogTrigger asChild>
+        <button
+          type="button"
+          title="Visualize goal"
+          className="opacity-0 group-hover:opacity-100 text-slate-600 hover:text-violet-400 transition-all shrink-0"
+        >
+          <ImageIcon className="h-3 w-3" />
+        </button>
+      </DialogTrigger>
+      <DialogContent className="max-w-md">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <Sparkles className="h-4 w-4 text-violet-400" />
+            Visualize Goal
+          </DialogTitle>
+        </DialogHeader>
+        <div className="space-y-4">
+          {/* Preview */}
+          <div className="relative w-full aspect-square rounded-xl overflow-hidden bg-white/5 border border-white/10 flex items-center justify-center">
+            {previewUrl ? (
+              <img src={previewUrl} alt="Goal vision" className="w-full h-full object-cover" />
+            ) : (
+              <div className="flex flex-col items-center gap-2 text-slate-600">
+                <ImageIcon className="h-10 w-10" />
+                <p className="text-xs">Your vision will appear here</p>
+              </div>
+            )}
+            {generating && (
+              <div className="absolute inset-0 flex items-center justify-center bg-slate-950/70 backdrop-blur-sm">
+                <div className="flex flex-col items-center gap-2">
+                  <Loader2 className="h-8 w-8 animate-spin text-violet-400" />
+                  <p className="text-xs text-slate-300">Creating your vision...</p>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Prompt */}
+          <div className="space-y-1.5">
+            <Label className="text-slate-300 text-xs">Describe your vision</Label>
+            <textarea
+              value={prompt}
+              onChange={e => setPrompt(e.target.value)}
+              rows={2}
+              placeholder="e.g. Beautiful modern house with a lush garden at sunset..."
+              className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-white placeholder:text-slate-500 resize-none focus:outline-none focus:ring-2 focus:ring-violet-500"
+            />
+          </div>
+
+          {/* Style chips */}
+          <div className="space-y-1.5">
+            <Label className="text-slate-300 text-xs">Style</Label>
+            <div className="flex gap-2 flex-wrap">
+              {STYLES.map((s, i) => (
+                <button
+                  key={s.label}
+                  type="button"
+                  onClick={() => setActiveStyle(i)}
+                  className={cn(
+                    'rounded-full border px-3 py-1 text-xs font-medium transition-all',
+                    activeStyle === i
+                      ? 'border-violet-500 bg-violet-500/20 text-white'
+                      : 'border-white/10 bg-white/5 text-slate-400 hover:border-white/20'
+                  )}
+                >
+                  {s.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {error && (
+            <p className="text-xs text-red-400 rounded-lg border border-red-500/20 bg-red-500/10 px-3 py-2">{error}</p>
+          )}
+
+          <Button
+            onClick={generate}
+            disabled={generating || !prompt.trim()}
+            className="w-full bg-violet-600 hover:bg-violet-700 text-white gap-2"
+          >
+            {generating
+              ? <><Loader2 className="h-4 w-4 animate-spin" /> Generating...</>
+              : <><Sparkles className="h-4 w-4" /> {previewUrl ? 'Regenerate Vision' : 'Generate Vision'}</>
+            }
+          </Button>
+        </div>
+      </DialogContent>
+    </Dialog>
+  )
+}
+
 // ─── Goal card ────────────────────────────────────────────────
 
 function GoalCard({
@@ -485,6 +630,7 @@ function GoalCard({
   onComplete,
   onDelete,
   onEdit,
+  onImageSaved,
   markingId,
   deletingId,
 }: {
@@ -492,6 +638,7 @@ function GoalCard({
   onComplete: (id: string) => void
   onDelete: (id: string) => void
   onEdit: () => void
+  onImageSaved: (id: string, url: string) => void
   markingId: string | null
   deletingId: string | null
 }) {
@@ -500,62 +647,75 @@ function GoalCard({
 
   return (
     <div className={cn(
-      'group flex items-start gap-3 rounded-xl border p-4 transition-all',
+      'group flex flex-col rounded-xl border transition-all overflow-hidden',
       'border-white/10 bg-white/3 hover:border-white/20',
     )}>
-      <button
-        type="button"
-        onClick={() => onComplete(goal.id)}
-        disabled={!!markingId}
-        aria-label="Mark complete"
-        className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full border-2 border-white/30 hover:border-emerald-400 hover:bg-emerald-500/20 transition-all cursor-pointer"
-      >
-        {markingId === goal.id
-          ? <Loader2 className="h-3 w-3 animate-spin text-slate-400" />
-          : <Check className="h-3 w-3 text-white opacity-0 group-hover:opacity-60" />
-        }
-      </button>
-
-      <div className="flex-1 min-w-0 space-y-1">
-        <div className="flex items-start gap-2 justify-between">
-          <div className="flex items-center gap-1.5 min-w-0">
-            <p className="text-sm font-medium text-white leading-snug">{goal.title}</p>
-            <EditGoalModal
-              goal={goal}
-              onSave={onEdit}
-              trigger={
-                <button
-                  type="button"
-                  className="opacity-0 group-hover:opacity-100 text-slate-600 hover:text-slate-400 transition-all shrink-0"
-                  aria-label="Edit goal"
-                >
-                  <Pencil className="h-3 w-3" />
-                </button>
-              }
-            />
-          </div>
-          <span className={cn('flex items-center gap-1 text-xs px-1.5 py-0.5 rounded-full shrink-0 border', cat.bg, cat.color, cat.border)}>
-            <CatIcon className="h-3 w-3" />
-            {cat.label}
-          </span>
+      {goal.vision_image_url && (
+        <div className="relative w-full h-32 overflow-hidden">
+          <img src={goal.vision_image_url} alt="Goal vision" className="w-full h-full object-cover" />
+          <div className="absolute inset-0 bg-gradient-to-b from-transparent to-slate-950/60" />
         </div>
-        {goal.description && (
-          <p className="text-xs text-slate-400 leading-relaxed">{goal.description}</p>
-        )}
-        {goal.target_date && <DateStatus targetDate={goal.target_date} />}
-      </div>
+      )}
 
-      <button
-        type="button"
-        onClick={() => onDelete(goal.id)}
-        disabled={deletingId === goal.id}
-        aria-label="Delete goal"
-        className="shrink-0 mt-0.5 text-slate-700 opacity-0 group-hover:opacity-100 hover:text-red-400 transition-all"
-      >
-        {deletingId === goal.id
-          ? <Loader2 className="h-4 w-4 animate-spin" />
-          : <Trash2 className="h-4 w-4" />}
-      </button>
+      <div className="flex items-start gap-3 p-4">
+        <button
+          type="button"
+          onClick={() => onComplete(goal.id)}
+          disabled={!!markingId}
+          aria-label="Mark complete"
+          className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full border-2 border-white/30 hover:border-emerald-400 hover:bg-emerald-500/20 transition-all cursor-pointer"
+        >
+          {markingId === goal.id
+            ? <Loader2 className="h-3 w-3 animate-spin text-slate-400" />
+            : <Check className="h-3 w-3 text-white opacity-0 group-hover:opacity-60" />
+          }
+        </button>
+
+        <div className="flex-1 min-w-0 space-y-1">
+          <div className="flex items-start gap-2 justify-between">
+            <div className="flex items-center gap-1.5 min-w-0">
+              <p className="text-sm font-medium text-white leading-snug">{goal.title}</p>
+              <EditGoalModal
+                goal={goal}
+                onSave={onEdit}
+                trigger={
+                  <button
+                    type="button"
+                    className="opacity-0 group-hover:opacity-100 text-slate-600 hover:text-slate-400 transition-all shrink-0"
+                    aria-label="Edit goal"
+                  >
+                    <Pencil className="h-3 w-3" />
+                  </button>
+                }
+              />
+              <GoalVisionModal
+                goal={goal}
+                onImageSaved={url => onImageSaved(goal.id, url)}
+              />
+            </div>
+            <span className={cn('flex items-center gap-1 text-xs px-1.5 py-0.5 rounded-full shrink-0 border', cat.bg, cat.color, cat.border)}>
+              <CatIcon className="h-3 w-3" />
+              {cat.label}
+            </span>
+          </div>
+          {goal.description && (
+            <p className="text-xs text-slate-400 leading-relaxed">{goal.description}</p>
+          )}
+          {goal.target_date && <DateStatus targetDate={goal.target_date} />}
+        </div>
+
+        <button
+          type="button"
+          onClick={() => onDelete(goal.id)}
+          disabled={deletingId === goal.id}
+          aria-label="Delete goal"
+          className="shrink-0 mt-0.5 text-slate-700 opacity-0 group-hover:opacity-100 hover:text-red-400 transition-all"
+        >
+          {deletingId === goal.id
+            ? <Loader2 className="h-4 w-4 animate-spin" />
+            : <Trash2 className="h-4 w-4" />}
+        </button>
+      </div>
     </div>
   )
 }
@@ -569,6 +729,7 @@ function GoalSection({
   onComplete,
   onDelete,
   onEdit,
+  onImageSaved,
   markingId,
   deletingId,
 }: {
@@ -578,6 +739,7 @@ function GoalSection({
   onComplete: (id: string) => void
   onDelete: (id: string) => void
   onEdit: () => void
+  onImageSaved: (id: string, url: string) => void
   markingId: string | null
   deletingId: string | null
 }) {
@@ -638,6 +800,7 @@ function GoalSection({
                 onComplete={onComplete}
                 onDelete={onDelete}
                 onEdit={onEdit}
+                onImageSaved={onImageSaved}
                 markingId={markingId}
                 deletingId={deletingId}
               />
@@ -662,6 +825,7 @@ function CategorySection({
   onComplete,
   onDelete,
   onEdit,
+  onImageSaved,
   markingId,
   deletingId,
 }: {
@@ -671,6 +835,7 @@ function CategorySection({
   onComplete: (id: string) => void
   onDelete: (id: string) => void
   onEdit: () => void
+  onImageSaved: (id: string, url: string) => void
   markingId: string | null
   deletingId: string | null
 }) {
@@ -712,6 +877,7 @@ function CategorySection({
               onComplete={onComplete}
               onDelete={onDelete}
               onEdit={onEdit}
+              onImageSaved={onImageSaved}
               markingId={markingId}
               deletingId={deletingId}
             />
@@ -850,6 +1016,10 @@ export default function GoalsList() {
     setDeletingId(null)
   }
 
+  function handleImageSaved(id: string, url: string) {
+    setGoals(prev => prev.map(g => g.id === id ? { ...g, vision_image_url: url } : g))
+  }
+
   if (loading) return (
     <div className="flex items-center justify-center py-16">
       <Loader2 className="h-5 w-5 animate-spin text-slate-500" />
@@ -905,11 +1075,11 @@ export default function GoalsList() {
       {/* ── By Timeframe tab ── */}
       {tab === 'timeframe' && (
         <div className="space-y-4">
-          <GoalSection timeframe="week"   goals={weekGoals}   onAdd={fetchGoals} onComplete={markComplete} onDelete={deleteGoal} onEdit={fetchGoals} markingId={markingId} deletingId={deletingId} />
-          <GoalSection timeframe="month"  goals={monthGoals}  onAdd={fetchGoals} onComplete={markComplete} onDelete={deleteGoal} onEdit={fetchGoals} markingId={markingId} deletingId={deletingId} />
-          <GoalSection timeframe="year"   goals={yearGoals}   onAdd={fetchGoals} onComplete={markComplete} onDelete={deleteGoal} onEdit={fetchGoals} markingId={markingId} deletingId={deletingId} />
+          <GoalSection timeframe="week"   goals={weekGoals}   onAdd={fetchGoals} onComplete={markComplete} onDelete={deleteGoal} onEdit={fetchGoals} onImageSaved={handleImageSaved} markingId={markingId} deletingId={deletingId} />
+          <GoalSection timeframe="month"  goals={monthGoals}  onAdd={fetchGoals} onComplete={markComplete} onDelete={deleteGoal} onEdit={fetchGoals} onImageSaved={handleImageSaved} markingId={markingId} deletingId={deletingId} />
+          <GoalSection timeframe="year"   goals={yearGoals}   onAdd={fetchGoals} onComplete={markComplete} onDelete={deleteGoal} onEdit={fetchGoals} onImageSaved={handleImageSaved} markingId={markingId} deletingId={deletingId} />
           {customGoals.length > 0 && (
-            <GoalSection timeframe="custom" goals={customGoals} onAdd={fetchGoals} onComplete={markComplete} onDelete={deleteGoal} onEdit={fetchGoals} markingId={markingId} deletingId={deletingId} />
+            <GoalSection timeframe="custom" goals={customGoals} onAdd={fetchGoals} onComplete={markComplete} onDelete={deleteGoal} onEdit={fetchGoals} onImageSaved={handleImageSaved} markingId={markingId} deletingId={deletingId} />
           )}
           {active.length === 0 && (
             <div className="rounded-xl border border-dashed border-white/10 p-12 text-center">
@@ -966,6 +1136,7 @@ export default function GoalsList() {
             onComplete={markComplete}
             onDelete={deleteGoal}
             onEdit={fetchGoals}
+            onImageSaved={handleImageSaved}
             markingId={markingId}
             deletingId={deletingId}
           />
