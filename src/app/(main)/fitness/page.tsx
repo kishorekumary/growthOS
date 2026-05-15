@@ -20,7 +20,7 @@ function Spinner() {
   )
 }
 
-const TABS = ['Log Workout', 'Plan', 'Nutrition', 'Progress', 'Coach'] as const
+const TABS = ['Log Workout', 'Nutrition', 'Plan', 'Progress', 'Coach'] as const
 type Tab = typeof TABS[number]
 
 export default function FitnessPage() {
