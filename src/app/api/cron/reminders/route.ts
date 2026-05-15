@@ -164,16 +164,29 @@ export async function GET(req: NextRequest) {
     const isEvening = h >= 12
     const greeting  = isEvening ? 'Good evening! 🌙' : 'Good morning! 🌅'
 
-    const { count: todoCount } = await admin
+    const { data: todos } = await admin
       .from('user_todos')
-      .select('id', { count: 'exact', head: true })
+      .select('title')
       .eq('user_id', s.user_id)
       .eq('is_completed', false)
       .lte('due_date', dateStr)
+      .order('due_date', { ascending: true })
+      .limit(10)
 
-    const taskMsg = (todoCount ?? 0) > 0
-      ? `You have ${todoCount} task${todoCount !== 1 ? 's' : ''} pending today. Stay on track!`
-      : 'Your tasks are clear today. Keep the momentum going!'
+    const todoCount = todos?.length ?? 0
+    let taskMsg: string
+    if (todoCount === 0) {
+      taskMsg = 'Your tasks are clear today. Keep the momentum going!'
+    } else if (todoCount === 1) {
+      taskMsg = `You have 1 task pending today: ${todos![0].title}. Stay on track!`
+    } else {
+      // Limit to first 5 tasks in the spoken message to keep the call short
+      const spoken = (todos!.slice(0, 5) as { title: string }[])
+        .map((t, i) => `${i + 1}. ${t.title}`)
+        .join('. ')
+      const remaining = todoCount > 5 ? ` And ${todoCount - 5} more.` : ''
+      taskMsg = `You have ${todoCount} tasks pending today. Here they are: ${spoken}.${remaining} Stay on track!`
+    }
 
     const pushPayload = JSON.stringify({
       title: 'GrowthOS Reminder 🌱',
