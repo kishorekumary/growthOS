@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useRef, useEffect, useCallback, useMemo } from 'react'
-import { X, Trash2, GitBranch, Loader2, Check, Pencil, Upload, Plus, Undo2, Link2, Eye, EyeOff, Search, ChevronLeft, ChevronRight, Download, MoreHorizontal, Save } from 'lucide-react'
+import { X, Trash2, GitBranch, Loader2, Check, Pencil, Upload, Plus, Undo2, Link2, Eye, EyeOff, Search, ChevronLeft, ChevronRight, Download, MoreHorizontal, Save, Navigation } from 'lucide-react'
 import { createSupabaseBrowserClient } from '@/lib/supabase'
 import { cn } from '@/lib/utils'
 
@@ -318,6 +318,11 @@ export default function BookMindMap({ bookId, bookTitle, initialJson, onClose, r
 
   const matchIds = useMemo(() => new Set(searchMatches.map(n => n.id)), [searchMatches])
 
+  // Refs for traversal — read inside the keydown handler without stale closures
+  const traversalIdxRef = useRef(traversalIdx)
+  traversalIdxRef.current = traversalIdx
+  const dfsLengthRef = useRef(0) // kept in sync after dfsOrder is computed below
+
   // Pre-order DFS traversal: root → first child → deepest → next sibling (top-to-bottom)
   const dfsOrder = useMemo(() => {
     const result: MindNode[] = []
@@ -330,6 +335,7 @@ export default function BookMindMap({ bookId, bookTitle, initialJson, onClose, r
     dfs('root')
     return result
   }, [nodes])
+  dfsLengthRef.current = dfsOrder.length
 
   // Keep focused match index in bounds when matches change
   useEffect(() => {
@@ -419,6 +425,8 @@ export default function BookMindMap({ bookId, bookTitle, initialJson, onClose, r
 
   useEffect(() => {
     function onKeyDown(e: KeyboardEvent) {
+      const inInput = document.activeElement?.tagName === 'INPUT' || document.activeElement?.tagName === 'TEXTAREA'
+
       // ⌘F / Ctrl+F — open search
       if ((e.metaKey || e.ctrlKey) && e.key === 'f') {
         e.preventDefault()
@@ -427,13 +435,27 @@ export default function BookMindMap({ bookId, bookTitle, initialJson, onClose, r
       }
       if (e.key === 'Escape') {
         if (showSearch) { closeSearch(); return }
+        if (traversalIdxRef.current !== null) { setTraversalIdx(null); return }
         setReparentId(null)
         return
       }
-      // Navigate matches while search input is focused
+      // Navigate search matches while search is open
       if (showSearch && searchMatches.length > 0) {
         if (e.key === 'Enter' || e.key === 'ArrowDown') { e.preventDefault(); nextMatch(); return }
         if ((e.shiftKey && e.key === 'Enter') || e.key === 'ArrowUp') { e.preventDefault(); prevMatch(); return }
+      }
+      // ← / → arrow-key tree traversal (when traversal is active and no input is focused)
+      if (traversalIdxRef.current !== null && !showSearch && !inInput) {
+        if (e.key === 'ArrowRight' || e.key === 'ArrowDown') {
+          e.preventDefault()
+          setTraversalIdx(i => Math.min(dfsLengthRef.current - 1, (i ?? 0) + 1))
+          return
+        }
+        if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') {
+          e.preventDefault()
+          setTraversalIdx(i => Math.max(0, (i ?? 0) - 1))
+          return
+        }
       }
       if ((e.metaKey || e.ctrlKey) && e.key === 'z' && !e.shiftKey) {
         e.preventDefault()
@@ -1202,9 +1224,11 @@ export default function BookMindMap({ bookId, bookTitle, initialJson, onClose, r
                 onClick={
                   reparentId && !isBeingMoved
                     ? () => completeReparent(node.id)
-                    : (isMobile && !isReadOnly && !isRoot && !isEditing)
-                      ? () => { setEditingId(node.id); setEditLabel(node.label) }
-                      : undefined
+                    : (isMobile && traversalIdx !== null && !isEditing)
+                      ? () => { const idx = dfsOrder.findIndex(n => n.id === node.id); if (idx !== -1) setTraversalIdx(idx) }
+                      : (isMobile && !isReadOnly && !isRoot && !isEditing)
+                        ? () => { setEditingId(node.id); setEditLabel(node.label) }
+                        : undefined
                 }
               >
                 {/* Tooltip — always show full label on hover */}
@@ -1309,6 +1333,28 @@ export default function BookMindMap({ bookId, bookTitle, initialJson, onClose, r
                   </>
                 )}
 
+                {/* Navigate-from-here handle (left edge) — always available, any mode */}
+                {!reparentId && !isEditing && (
+                  <div
+                    className="absolute -left-3 top-1/2 -translate-y-1/2 z-10 w-6 h-6 flex items-center justify-center cursor-pointer"
+                    onMouseDown={e => e.stopPropagation()}
+                    onClick={e => {
+                      e.stopPropagation()
+                      const idx = dfsOrder.findIndex(n => n.id === node.id)
+                      if (idx !== -1) setTraversalIdx(idx)
+                    }}
+                  >
+                    <div className={cn(
+                      'w-3.5 h-3.5 rounded-full border flex items-center justify-center transition-all',
+                      isTraversalFocus
+                        ? 'opacity-100 border-emerald-500/70 bg-emerald-500/25 text-emerald-400'
+                        : 'opacity-0 group-hover:opacity-100 border-slate-600/50 bg-slate-800/70 text-slate-500 hover:border-emerald-500/60 hover:bg-emerald-500/15 hover:text-emerald-400'
+                    )}>
+                      <Navigation className="h-2 w-2" />
+                    </div>
+                  </div>
+                )}
+
                 {/* Connect handle (right edge) — hidden in readonly or reparent mode */}
                 {!isReadOnly && !reparentId && (
                   <div
@@ -1330,16 +1376,17 @@ export default function BookMindMap({ bookId, bookTitle, initialJson, onClose, r
         </div>
       </div>
 
-      {/* ── Mobile tree navigation bar ── */}
-      <div className="flex sm:hidden flex-col border-t border-white/8 bg-[#06060f]/95 backdrop-blur shrink-0">
+      {/* ── Tree navigation bar (all screen sizes) ── */}
+      <div className="flex flex-col border-t border-white/8 bg-[#06060f]/95 backdrop-blur shrink-0">
         {traversalIdx === null ? (
-          /* Dormant state — slim "Navigate" trigger */
+          /* Dormant state — slim trigger */
           <button
             onClick={() => setTraversalIdx(0)}
-            className="flex items-center justify-center gap-2 py-2.5 text-xs text-slate-500 hover:text-slate-300 active:text-white transition-colors"
+            className="flex items-center justify-center gap-2 py-2 text-xs text-slate-600 hover:text-slate-300 active:text-white transition-colors"
           >
-            <GitBranch className="h-3.5 w-3.5" />
-            Navigate tree
+            <Navigation className="h-3 w-3" />
+            <span>Navigate tree</span>
+            <span className="hidden sm:inline text-slate-700">· hover node and click <Navigation className="inline h-2.5 w-2.5 mb-0.5" /> to start from any node</span>
           </button>
         ) : (
           /* Active traversal */
@@ -1371,35 +1418,41 @@ export default function BookMindMap({ bookId, bookTitle, initialJson, onClose, r
               <button
                 onClick={() => setTraversalIdx(i => Math.max(0, (i ?? 0) - 1))}
                 disabled={traversalIdx === 0}
-                className="flex items-center justify-center w-10 h-10 rounded-xl bg-white/5 border border-white/8 text-slate-300 hover:bg-white/10 active:bg-white/15 disabled:opacity-25 transition-all shrink-0"
+                className="flex items-center justify-center w-9 h-9 rounded-xl bg-white/5 border border-white/8 text-slate-300 hover:bg-white/10 active:bg-white/15 disabled:opacity-25 transition-all shrink-0"
+                title="Previous node (← ArrowLeft)"
               >
-                <ChevronLeft className="h-5 w-5" />
+                <ChevronLeft className="h-4 w-4" />
               </button>
 
-              <div className="flex-1 min-w-0 text-center px-1">
+              <div className="flex-1 min-w-0 text-center px-2">
                 <p className="text-sm font-semibold text-white truncate leading-tight">
                   {dfsOrder[traversalIdx]?.label}
                 </p>
-                <p className="text-[10px] text-slate-600 mt-0.5">
-                  {getDepth(dfsOrder[traversalIdx]?.id ?? 'root', nodes) === 0
-                    ? 'Root'
-                    : `Depth ${getDepth(dfsOrder[traversalIdx]?.id ?? 'root', nodes)}`}
-                </p>
+                <div className="flex items-center justify-center gap-2 mt-0.5">
+                  <p className="text-[10px] text-slate-600">
+                    {getDepth(dfsOrder[traversalIdx]?.id ?? 'root', nodes) === 0
+                      ? 'Root'
+                      : `Depth ${getDepth(dfsOrder[traversalIdx]?.id ?? 'root', nodes)}`}
+                  </p>
+                  <span className="hidden sm:inline text-[10px] text-slate-700">← → arrow keys to navigate · Esc to exit</span>
+                </div>
               </div>
 
               <button
                 onClick={() => setTraversalIdx(i => Math.min(dfsOrder.length - 1, (i ?? 0) + 1))}
                 disabled={traversalIdx === dfsOrder.length - 1}
-                className="flex items-center justify-center w-10 h-10 rounded-xl bg-white/5 border border-white/8 text-slate-300 hover:bg-white/10 active:bg-white/15 disabled:opacity-25 transition-all shrink-0"
+                className="flex items-center justify-center w-9 h-9 rounded-xl bg-white/5 border border-white/8 text-slate-300 hover:bg-white/10 active:bg-white/15 disabled:opacity-25 transition-all shrink-0"
+                title="Next node (→ ArrowRight)"
               >
-                <ChevronRight className="h-5 w-5" />
+                <ChevronRight className="h-4 w-4" />
               </button>
 
               <button
                 onClick={() => setTraversalIdx(null)}
-                className="flex items-center justify-center w-8 h-8 ml-1 rounded-lg text-slate-600 hover:text-slate-300 hover:bg-white/5 transition-all shrink-0"
+                className="flex items-center justify-center w-7 h-7 ml-1 rounded-lg text-slate-600 hover:text-slate-300 hover:bg-white/5 transition-all shrink-0"
+                title="Exit navigation (Esc)"
               >
-                <X className="h-4 w-4" />
+                <X className="h-3.5 w-3.5" />
               </button>
             </div>
           </>
