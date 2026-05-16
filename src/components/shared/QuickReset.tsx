@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useRef, useCallback } from 'react'
-import { Wind, Sparkles, Brain, X, ChevronLeft, ChevronRight, Loader2, RefreshCw } from 'lucide-react'
+import { Wind, Sparkles, Brain, X, ChevronLeft, ChevronRight, Loader2, RefreshCw, Zap } from 'lucide-react'
 import { createSupabaseBrowserClient } from '@/lib/supabase'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
@@ -327,8 +327,14 @@ const MODES = [
 
 // ─── Main export ──────────────────────────────────────────────────
 export default function QuickReset() {
-  const [open, setOpen] = useState(false)
-  const [mode, setMode] = useState<Mode>('menu')
+  const [open, setOpen]   = useState(false)
+  const [mode, setMode]   = useState<Mode>('menu')
+  const [pinging, setPinging] = useState(true)
+
+  useEffect(() => {
+    const t = setTimeout(() => setPinging(false), 3000)
+    return () => clearTimeout(t)
+  }, [])
 
   function close() { setOpen(false); setMode('menu') }
 
@@ -336,19 +342,55 @@ export default function QuickReset() {
 
   if (!open) {
     return (
-      <button
-        onClick={() => setOpen(true)}
-        className="w-full flex items-center gap-3 rounded-2xl border border-dashed border-blue-500/30 bg-blue-500/5 px-5 py-4 text-left hover:bg-blue-500/10 transition-colors group"
-      >
-        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-blue-500/20">
-          <Wind className="h-4 w-4 text-blue-400" />
+      <>
+        {/* ── Featured card with 3 direct-access mode buttons ── */}
+        <div className="rounded-2xl border border-white/10 bg-gradient-to-br from-slate-800/70 to-slate-900/90 p-4 shadow-lg">
+          <div className="flex items-center gap-3 mb-3.5">
+            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-blue-500/30 via-violet-500/20 to-emerald-500/20 border border-white/10">
+              <Zap className="h-4 w-4 text-white" />
+            </div>
+            <div>
+              <p className="text-sm font-bold text-white tracking-tight">Quick Reset</p>
+              <p className="text-[11px] text-slate-400 mt-0.5">Take a moment to reset right now</p>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-3 gap-2">
+            {MODES.map(m => {
+              const Icon = m.icon
+              return (
+                <button
+                  key={m.id}
+                  onClick={() => { setMode(m.id); setOpen(true) }}
+                  className={cn(
+                    'flex flex-col items-center gap-2 rounded-xl border py-3.5 px-2 transition-all active:scale-95',
+                    m.border, m.bg, m.hover,
+                  )}
+                >
+                  <div className={cn('flex h-8 w-8 items-center justify-center rounded-lg bg-white/5')}>
+                    <Icon className={cn('h-4 w-4', m.accent)} />
+                  </div>
+                  <span className={cn('text-[11px] font-semibold', m.accent)}>{m.label}</span>
+                  <span className="text-[10px] text-slate-600 text-center leading-tight hidden sm:block">{m.desc}</span>
+                </button>
+              )
+            })}
+          </div>
         </div>
-        <div className="flex-1 min-w-0">
-          <p className="text-sm font-semibold text-white">Quick Reset</p>
-          <p className="text-xs text-slate-500 mt-0.5">Breathe · Affirm · AI Support</p>
+
+        {/* ── Floating action button — stays visible while scrolling ── */}
+        <div className="fixed bottom-[4.75rem] right-4 z-40 sm:bottom-6 sm:right-6">
+          {/* Pulse ring — fades after 3 s */}
+          {pinging && <span className="absolute inset-0 rounded-full animate-ping bg-violet-500/30 pointer-events-none" />}
+          <button
+            onClick={() => setOpen(true)}
+            title="Quick Reset"
+            className="relative flex h-12 w-12 items-center justify-center rounded-full bg-gradient-to-br from-blue-600 to-violet-600 shadow-lg shadow-violet-500/40 hover:shadow-violet-500/60 hover:scale-105 active:scale-95 transition-all"
+          >
+            <Zap className="h-5 w-5 text-white" />
+          </button>
         </div>
-        <span className="text-xs text-blue-400 opacity-0 group-hover:opacity-70 transition-opacity">Open →</span>
-      </button>
+      </>
     )
   }
 
