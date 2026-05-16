@@ -1,12 +1,13 @@
 'use client'
 
 import { useState, useEffect, useRef, useCallback } from 'react'
-import { Wind, Sparkles, Brain, X, ChevronLeft, ChevronRight, Loader2, RefreshCw, Zap } from 'lucide-react'
+import { Wind, Sparkles, Brain, X, ChevronLeft, ChevronRight, Loader2, RefreshCw, Zap, Target } from 'lucide-react'
+import { differenceInDays, parseISO } from 'date-fns'
 import { createSupabaseBrowserClient } from '@/lib/supabase'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 
-type Mode = 'menu' | 'breathing' | 'affirmations' | 'ai'
+type Mode = 'menu' | 'breathing' | 'affirmations' | 'ai' | 'goals'
 
 // ─── Box breathing phases ─────────────────────────────────────────
 const PHASES = [
@@ -291,6 +292,90 @@ function AIResetMessage() {
 
 const fallback = "Take a breath. You're doing better than you think. Hard moments pass — this one will too."
 
+// ─── Goals view ───────────────────────────────────────────────────
+type GoalCategory = 'fitness' | 'finance' | 'books' | 'general' | 'career'
+
+interface Goal {
+  id: string
+  title: string
+  category: GoalCategory
+  target_date: string | null
+}
+
+const CATEGORY_DOT: Record<GoalCategory, string> = {
+  fitness: 'bg-emerald-400',
+  finance: 'bg-sky-400',
+  books:   'bg-amber-400',
+  general: 'bg-violet-400',
+  career:  'bg-rose-400',
+}
+
+function GoalsView() {
+  const [goals, setGoals]     = useState<Goal[]>([])
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    async function load() {
+      const supabase = createSupabaseBrowserClient()
+      const { data: { session } } = await supabase.auth.getSession()
+      if (!session?.user) { setLoading(false); return }
+      const { data } = await supabase
+        .from('user_goals')
+        .select('id, title, category, target_date')
+        .eq('user_id', session.user.id)
+        .eq('is_completed', false)
+        .order('target_date', { ascending: true, nullsFirst: false })
+      setGoals((data as Goal[] | null) ?? [])
+      setLoading(false)
+    }
+    load()
+  }, [])
+
+  if (loading) {
+    return <div className="flex justify-center py-14"><Loader2 className="h-5 w-5 animate-spin text-slate-500" /></div>
+  }
+
+  if (goals.length === 0) {
+    return (
+      <div className="text-center py-10 space-y-3">
+        <Target className="h-8 w-8 text-amber-400/40 mx-auto" />
+        <p className="text-slate-400 text-sm">No active goals yet.</p>
+        <p className="text-slate-500 text-xs">Add goals from the Goals page.</p>
+      </div>
+    )
+  }
+
+  return (
+    <div className="flex flex-col gap-3">
+      <p className="text-[11px] text-amber-400/60 uppercase tracking-widest text-center">
+        {goals.length} active goal{goals.length !== 1 ? 's' : ''}
+      </p>
+      <div className="space-y-1.5 max-h-[55vh] overflow-y-auto pr-1">
+        {goals.map(goal => {
+          const days = goal.target_date ? differenceInDays(parseISO(goal.target_date), new Date()) : null
+          return (
+            <div key={goal.id} className="flex items-center gap-3 rounded-xl bg-white/5 px-3 py-3">
+              <span className={cn('h-2.5 w-2.5 shrink-0 rounded-full', CATEGORY_DOT[goal.category])} />
+              <span className="flex-1 min-w-0 text-sm text-slate-200">{goal.title}</span>
+              {days !== null && (
+                <span className={cn(
+                  'text-xs shrink-0 font-medium',
+                  days < 0  ? 'text-red-400'   :
+                  days === 0 ? 'text-amber-300' :
+                  days <= 7  ? 'text-amber-400' :
+                  days <= 30 ? 'text-slate-400' : 'text-slate-500',
+                )}>
+                  {days < 0 ? 'Overdue' : days === 0 ? 'Today' : `${days}d`}
+                </span>
+              )}
+            </div>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
 // ─── Mode config ──────────────────────────────────────────────────
 const MODES = [
   {
@@ -322,6 +407,16 @@ const MODES = [
     bg:     'bg-emerald-500/8',
     hover:  'hover:bg-emerald-500/15',
     desc:   'Personalized reset message',
+  },
+  {
+    id:     'goals'        as Mode,
+    label:  'Goals',
+    icon:   Target,
+    accent: 'text-amber-400',
+    border: 'border-amber-500/20',
+    bg:     'bg-amber-500/8',
+    hover:  'hover:bg-amber-500/15',
+    desc:   'All your active goals',
   },
 ]
 
@@ -355,7 +450,7 @@ export default function QuickReset() {
             </div>
           </div>
 
-          <div className="grid grid-cols-3 gap-2">
+          <div className="grid grid-cols-2 gap-2">
             {MODES.map(m => {
               const Icon = m.icon
               return (
@@ -452,6 +547,7 @@ export default function QuickReset() {
         {mode === 'breathing'    && <BreathingExercise />}
         {mode === 'affirmations' && <AffirmationsFlash />}
         {mode === 'ai'           && <AIResetMessage />}
+        {mode === 'goals'        && <GoalsView />}
       </div>
     </div>
   )
