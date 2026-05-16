@@ -2,10 +2,11 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import Link from 'next/link'
-import { Target, Plus, Check, Loader2, ChevronDown, ChevronUp } from 'lucide-react'
+import { Target, Plus, Check, Loader2, ChevronDown, ChevronUp, Maximize2 } from 'lucide-react'
 import { createSupabaseBrowserClient } from '@/lib/supabase'
 import { cn } from '@/lib/utils'
 import { differenceInDays, isPast, parseISO } from 'date-fns'
+import GoalsFocusModal from './GoalsFocusModal'
 
 type Category = 'fitness' | 'finance' | 'books' | 'general'
 
@@ -46,6 +47,7 @@ export default function GoalsWidget({ category }: { category: Category }) {
   const [goals, setGoals]     = useState<Goal[]>([])
   const [loading, setLoading] = useState(true)
   const [open, setOpen]       = useState(true)
+  const [focusOpen, setFocusOpen] = useState(false)
   const [markingId, setMarkingId] = useState<string | null>(null)
 
   const fetchGoals = useCallback(async () => {
@@ -59,7 +61,6 @@ export default function GoalsWidget({ category }: { category: Category }) {
       .eq('category', category)
       .eq('is_completed', false)
       .order('target_date', { ascending: true, nullsFirst: false })
-      .limit(5)
     setGoals((data as Goal[]) ?? [])
     setLoading(false)
   }, [category])
@@ -97,6 +98,16 @@ export default function GoalsWidget({ category }: { category: Category }) {
           )}
         </div>
         <div className="flex items-center gap-2">
+          {!loading && goals.length > 0 && (
+            <button
+              type="button"
+              onClick={e => { e.stopPropagation(); setFocusOpen(true) }}
+              className="text-slate-500 hover:text-violet-400 transition-colors"
+              aria-label="View full screen"
+            >
+              <Maximize2 className="h-3.5 w-3.5" />
+            </button>
+          )}
           <Link
             href="/goals"
             onClick={e => e.stopPropagation()}
@@ -110,6 +121,13 @@ export default function GoalsWidget({ category }: { category: Category }) {
           }
         </div>
       </button>
+
+      <GoalsFocusModal
+        goals={goals}
+        title={`${label} Goals`}
+        open={focusOpen}
+        onClose={() => setFocusOpen(false)}
+      />
 
       {/* Body */}
       {open && (
@@ -130,7 +148,7 @@ export default function GoalsWidget({ category }: { category: Category }) {
             </div>
           ) : (
             <>
-              {goals.map(goal => (
+              {goals.slice(0, 5).map(goal => (
                 <div
                   key={goal.id}
                   className="flex items-center gap-3 rounded-lg bg-white/5 px-3 py-2.5"
@@ -159,12 +177,22 @@ export default function GoalsWidget({ category }: { category: Category }) {
                 </div>
               ))}
 
-              <Link
-                href="/goals"
-                className="block text-center text-xs text-slate-500 hover:text-violet-400 transition-colors pt-1"
-              >
-                View all goals →
-              </Link>
+              {goals.length > 5 ? (
+                <button
+                  type="button"
+                  onClick={() => setFocusOpen(true)}
+                  className="block w-full text-center text-xs text-slate-500 hover:text-violet-400 transition-colors pt-1"
+                >
+                  +{goals.length - 5} more · View all
+                </button>
+              ) : (
+                <Link
+                  href="/goals"
+                  className="block text-center text-xs text-slate-500 hover:text-violet-400 transition-colors pt-1"
+                >
+                  View all goals →
+                </Link>
+              )}
             </>
           )}
         </div>

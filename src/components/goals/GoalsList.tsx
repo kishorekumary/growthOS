@@ -5,8 +5,9 @@ import {
   Target, Plus, Check, Trash2, Loader2, AlertCircle,
   Dumbbell, Wallet, BookOpen, Sparkles, Briefcase,
   ChevronDown, ChevronUp, CalendarDays, CalendarRange, TrendingUp, Pencil, RotateCcw,
-  Image as ImageIcon,
+  Image as ImageIcon, Maximize2,
 } from 'lucide-react'
+import GoalsFocusModal from './GoalsFocusModal'
 import { createSupabaseBrowserClient } from '@/lib/supabase'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -981,6 +982,7 @@ export default function GoalsList() {
   const [deletingId, setDeletingId]     = useState<string | null>(null)
   const [tab, setTab]                   = useState<TabView>('timeframe')
   const [activeCategory, setActiveCat]  = useState<Category>('fitness')
+  const [focusOpen, setFocusOpen]       = useState(false)
 
   const fetchGoals = useCallback(async () => {
     const supabase = createSupabaseBrowserClient()
@@ -1060,8 +1062,27 @@ export default function GoalsList() {
           {active.length} in progress
           {completed.length > 0 && ` · ${completed.length} achieved`}
         </p>
-        <AddGoalModal onAdd={fetchGoals} />
+        <div className="flex items-center gap-2">
+          {active.length > 0 && (
+            <button
+              onClick={() => setFocusOpen(true)}
+              className="flex items-center gap-1.5 text-xs text-slate-500 hover:text-violet-400 transition-colors"
+              aria-label="Focus mode"
+            >
+              <Maximize2 className="h-3.5 w-3.5" />
+              Focus
+            </button>
+          )}
+          <AddGoalModal onAdd={fetchGoals} />
+        </div>
       </div>
+
+      <GoalsFocusModal
+        goals={active}
+        title="Active Goals"
+        open={focusOpen}
+        onClose={() => setFocusOpen(false)}
+      />
 
       {/* Tabs */}
       <div className="flex gap-1 rounded-lg border border-white/10 bg-white/3 p-1">
