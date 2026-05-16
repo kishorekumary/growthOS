@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import {
   Flame, Plus, Trash2, Check, Loader2, AlertCircle,
-  RefreshCw, RotateCcw, XCircle, Trophy, Pencil,
+  RefreshCw, RotateCcw, XCircle, Trophy, Pencil, Crown,
 } from 'lucide-react'
 import { createSupabaseBrowserClient } from '@/lib/supabase'
 import { Button } from '@/components/ui/button'
@@ -26,6 +26,7 @@ interface Habit {
   streak_count: number
   longest_streak: number
   last_done_at: string | null
+  is_keystone: boolean
 }
 
 interface HabitLog {
@@ -278,11 +279,15 @@ function EditHabitModal({ habit, onClose, onSave }: {
 
 // ─── Weekly Score Card ────────────────────────────────────────
 
-function WeeklyScoreCard({ done, missed }: { done: number; missed: number }) {
+function WeeklyScoreCard({
+  done, missed, weightedDone, weightedTotal,
+}: {
+  done: number; missed: number; weightedDone: number; weightedTotal: number
+}) {
   const total = done + missed
   if (total === 0) return null
 
-  const score = Math.round((done / total) * 100)
+  const score = weightedTotal > 0 ? Math.round((weightedDone / weightedTotal) * 100) : 0
   const { label, color, bar } =
     score >= 80 ? { label: 'Excellent week! 🎯', color: 'text-emerald-400', bar: 'bg-emerald-500' } :
     score >= 60 ? { label: 'Good progress 💪',   color: 'text-sky-400',     bar: 'bg-sky-500'     } :
@@ -307,7 +312,7 @@ function WeeklyScoreCard({ done, missed }: { done: number; missed: number }) {
           <p className="text-xs text-slate-500">
             <span className="text-red-400 font-medium">{missed}</span> missed
           </p>
-          <p className="text-xs text-slate-600">{total} logged this week</p>
+          <p className="text-xs text-slate-600">{total} logged · keystone 2×</p>
         </div>
       </div>
       <div className="h-1.5 rounded-full bg-white/5 overflow-hidden">
@@ -330,6 +335,7 @@ export default function HabitTracker() {
   const [loading, setLoading]             = useState(true)
   const [fetchError, setFetchError]       = useState<string | null>(null)
   const [markingId, setMarkingId]         = useState<string | null>(null)
+  const [keystoneId, setKeystoneId]       = useState<string | null>(null)
   const [editTarget, setEditTarget]       = useState<Habit | null>(null)
 
   const fetchData = useCallback(async () => {
@@ -348,7 +354,7 @@ export default function HabitTracker() {
     const [habitsRes, logsRes] = await Promise.all([
       supabase
         .from('personality_habits')
-        .select('id, habit_name, category, frequency, streak_count, longest_streak, last_done_at')
+        .select('id, habit_name, category, frequency, streak_count, longest_streak, last_done_at, is_keystone')
         .eq('user_id', session.user.id)
         .order('created_at', { ascending: true }),
       supabase
@@ -479,6 +485,20 @@ export default function HabitTracker() {
     setWeekLogs(prev => prev.filter(l => l.habit_id !== id))
   }
 
+  async function toggleKeystone(habit: Habit) {
+    if (keystoneId) return
+    const keystoneCount = habits.filter(h => h.is_keystone).length
+    if (!habit.is_keystone && keystoneCount >= 2) return  // enforced in UI
+    setKeystoneId(habit.id)
+    const next = !habit.is_keystone
+    setHabits(prev => prev.map(h => h.id === habit.id ? { ...h, is_keystone: next } : h))
+    const supabase = createSupabaseBrowserClient()
+    await supabase.from('personality_habits')
+      .update({ is_keystone: next })
+      .eq('id', habit.id)
+    setKeystoneId(null)
+  }
+
   if (loading) return (
     <div className="flex items-center justify-center py-12">
       <Loader2 className="h-5 w-5 animate-spin text-slate-500" />
@@ -496,14 +516,25 @@ export default function HabitTracker() {
     </div>
   )
 
-  // Pending first, then done — skipped habits are hidden from the main list
+  // Keystone first, then pending, then done — skipped habits shown below
   const pending = habits.filter(h => getStatus(h.id) === 'pending')
   const done    = habits.filter(h => getStatus(h.id) === 'done')
   const skipped = habits.filter(h => getStatus(h.id) === 'missed')
-  const sortedHabits = [...pending, ...done]
+  const sortedHabits = [
+    ...pending.filter(h => h.is_keystone),
+    ...pending.filter(h => !h.is_keystone),
+    ...done.filter(h => h.is_keystone),
+    ...done.filter(h => !h.is_keystone),
+  ]
 
-  const weekDone   = weekLogs.filter(l => l.status === 'done').length
-  const weekMissed = weekLogs.filter(l => l.status === 'missed').length
+  const keystoneCount = habits.filter(h => h.is_keystone).length
+
+  // Weighted score: keystone logs count 2×, regular logs count 1×
+  const habitWeight = (id: string) => habits.find(h => h.id === id)?.is_keystone ? 2 : 1
+  const weekDone      = weekLogs.filter(l => l.status === 'done').length
+  const weekMissed    = weekLogs.filter(l => l.status === 'missed').length
+  const weightedDone  = weekLogs.filter(l => l.status === 'done').reduce((s, l) => s + habitWeight(l.habit_id), 0)
+  const weightedTotal = weekLogs.reduce((s, l) => s + habitWeight(l.habit_id), 0)
   const topStreak  = habits.reduce((m, h) => Math.max(m, h.streak_count), 0)
 
   return (
@@ -532,7 +563,7 @@ export default function HabitTracker() {
       </div>
 
       {/* Weekly score */}
-      <WeeklyScoreCard done={weekDone} missed={weekMissed} />
+      <WeeklyScoreCard done={weekDone} missed={weekMissed} weightedDone={weightedDone} weightedTotal={weightedTotal} />
 
       {/* Empty state */}
       {habits.length === 0 && (
@@ -543,24 +574,34 @@ export default function HabitTracker() {
         </div>
       )}
 
+      {/* Keystone hint */}
+      {keystoneCount < 2 && habits.length >= 2 && (
+        <p className="text-xs text-amber-500/60 px-1 flex items-center gap-1.5">
+          <Crown className="h-3 w-3" />
+          Tap the crown on up to 2 habits to mark them as keystone — they count 2× in your score.
+        </p>
+      )}
+
       {/* Habit list */}
       <div className="space-y-2">
         {sortedHabits.map(habit => {
           const status = getStatus(habit.id)
           const cat    = CATEGORY_STYLES[habit.category] ?? CATEGORY_STYLES.mindset
+          const canMarkKeystone = habit.is_keystone || keystoneCount < 2
 
           return (
             <div
               key={habit.id}
               className={cn(
                 'group flex items-center gap-3 rounded-xl border px-4 py-3.5 transition-all',
-                status === 'done'    && 'border-emerald-500/20 bg-emerald-500/5',
-                status === 'pending' && 'border-white/10 bg-white/5 hover:border-white/20',
+                habit.is_keystone && status === 'pending' && 'border-amber-500/40 bg-gradient-to-r from-amber-500/10 to-transparent shadow-[0_0_12px_-4px_rgba(245,158,11,0.3)]',
+                habit.is_keystone && status === 'done'    && 'border-amber-500/20 bg-gradient-to-r from-amber-500/5 to-emerald-500/5',
+                !habit.is_keystone && status === 'done'    && 'border-emerald-500/20 bg-emerald-500/5',
+                !habit.is_keystone && status === 'pending' && 'border-white/10 bg-white/5 hover:border-white/20',
               )}
             >
               {/* Status button */}
               {status === 'pending' ? (
-                // Two buttons: check (done) + X (missed)
                 <div className="flex items-center gap-1.5 shrink-0">
                   <button
                     onClick={() => markDone(habit)}
@@ -583,7 +624,6 @@ export default function HabitTracker() {
                   </button>
                 </div>
               ) : (
-                // Single undo button (done = green, missed = red)
                 <button
                   onClick={() => undoLog(habit)}
                   disabled={markingId === habit.id}
@@ -599,12 +639,12 @@ export default function HabitTracker() {
                     <Loader2 className="h-3 w-3 animate-spin text-white" />
                   ) : status === 'done' ? (
                     <>
-                      <Check    className="h-3 w-3 text-white group-hover/undo:hidden" />
+                      <Check     className="h-3 w-3 text-white group-hover/undo:hidden" />
                       <RotateCcw className="h-3 w-3 text-slate-300 hidden group-hover/undo:block" />
                     </>
                   ) : (
                     <>
-                      <XCircle  className="h-3 w-3 text-white group-hover/undo:hidden" />
+                      <XCircle   className="h-3 w-3 text-white group-hover/undo:hidden" />
                       <RotateCcw className="h-3 w-3 text-slate-300 hidden group-hover/undo:block" />
                     </>
                   )}
@@ -613,14 +653,25 @@ export default function HabitTracker() {
 
               {/* Info */}
               <div className="flex-1 min-w-0 space-y-0.5">
-                <p className={cn(
-                  'text-sm font-medium truncate',
-                  status === 'done'    && 'text-slate-500 line-through',
-                  status === 'pending' && 'text-white',
-                )}>
-                  {habit.habit_name}
-                </p>
+                <div className="flex items-center gap-1.5">
+                  {habit.is_keystone && (
+                    <Crown className="h-3.5 w-3.5 shrink-0 text-amber-400" />
+                  )}
+                  <p className={cn(
+                    'text-sm font-medium truncate',
+                    habit.is_keystone && status === 'pending' && 'text-amber-100',
+                    !habit.is_keystone && status === 'pending' && 'text-white',
+                    status === 'done' && 'text-slate-500 line-through',
+                  )}>
+                    {habit.habit_name}
+                  </p>
+                </div>
                 <div className="flex items-center gap-1.5 flex-wrap">
+                  {habit.is_keystone && (
+                    <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-amber-500/20 text-amber-300 font-medium tracking-wide uppercase">
+                      Keystone
+                    </span>
+                  )}
                   <span className={cn('text-xs px-1.5 py-0.5 rounded-full', cat.badge)}>
                     {cat.label}
                   </span>
@@ -638,6 +689,30 @@ export default function HabitTracker() {
                   </span>
                 </div>
               )}
+
+              {/* Crown toggle */}
+              <button
+                onClick={() => canMarkKeystone && toggleKeystone(habit)}
+                disabled={!!keystoneId || !canMarkKeystone}
+                aria-label={habit.is_keystone ? 'Remove keystone' : 'Mark as keystone'}
+                title={
+                  habit.is_keystone ? 'Remove keystone'
+                  : canMarkKeystone ? 'Mark as keystone (2× score weight)'
+                  : 'Maximum 2 keystone habits'
+                }
+                className={cn(
+                  'shrink-0 transition-all opacity-0 group-hover:opacity-100',
+                  habit.is_keystone
+                    ? 'text-amber-400 opacity-100 hover:text-amber-300'
+                    : canMarkKeystone
+                      ? 'text-slate-600 hover:text-amber-400'
+                      : 'text-slate-800 cursor-not-allowed',
+                )}
+              >
+                {keystoneId === habit.id
+                  ? <Loader2 className="h-4 w-4 animate-spin" />
+                  : <Crown className="h-4 w-4" />}
+              </button>
 
               {/* Edit / Delete */}
               <button
