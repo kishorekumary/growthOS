@@ -151,13 +151,12 @@ export async function GET(req: NextRequest) {
     const tz = s.timezone ?? 'UTC'
     const { h, dateStr } = localTime(tz)
 
-    // Find which configured times are due now and haven't been sent yet today
+    // Fire all configured reminder times that haven't been sent yet today.
+    // isDue() window check is skipped — cron runs once daily so we send everything due.
     const reminderTimes: string[] = s.reminder_times ?? ['08:00', '18:00']
     const sentToday: Record<string, string> = s.sent_today ?? {}
 
-    const dueTimes = reminderTimes.filter(t =>
-      isDue(t, tz) && sentToday[t] !== dateStr
-    )
+    const dueTimes = reminderTimes.filter(t => sentToday[t] !== dateStr)
 
     if (!dueTimes.length) continue
 
