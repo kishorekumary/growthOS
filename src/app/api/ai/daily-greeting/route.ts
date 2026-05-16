@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server'
 import { createSupabaseServerClient } from '@/lib/supabase-server'
 import { openai } from '@/lib/claude'
 
-export async function GET() {
+export async function GET(req: Request) {
   const supabase = createSupabaseServerClient()
   const { data: { user } } = await supabase.auth.getUser()
 
@@ -30,8 +30,11 @@ export async function GET() {
 
   const name = profile?.full_name?.split(' ')[0] ?? 'there'
   const goals = profile?.primary_goals?.join(', ') ?? 'personal growth'
-  const hour = new Date().getHours()
-  const timeOfDay = hour < 12 ? 'morning' : hour < 17 ? 'afternoon' : 'evening'
+  // Use the client's local time-of-day so the AI message matches the header greeting
+  const clientT = new URL(req.url).searchParams.get('t')
+  const timeOfDay = (['morning', 'afternoon', 'evening', 'night'] as const).includes(clientT as never)
+    ? (clientT as 'morning' | 'afternoon' | 'evening' | 'night')
+    : (() => { const h = new Date().getHours(); return h < 12 ? 'morning' : h < 17 ? 'afternoon' : h < 21 ? 'evening' : 'night' })()
 
   const systemPrompt = `You are a warm, encouraging personal growth coach for Zenith app.
 Write a 2-sentence personalized daily ${timeOfDay} message for ${name}.

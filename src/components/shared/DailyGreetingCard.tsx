@@ -3,11 +3,19 @@
 import { useEffect, useState } from 'react'
 import { Sparkles } from 'lucide-react'
 
-function getGreeting() {
+function getTimeOfDay(): 'morning' | 'afternoon' | 'evening' | 'night' {
   const hour = new Date().getHours()
-  if (hour < 12) return 'Good morning'
-  if (hour < 17) return 'Good afternoon'
-  if (hour < 21) return 'Good evening'
+  if (hour < 12) return 'morning'
+  if (hour < 17) return 'afternoon'
+  if (hour < 21) return 'evening'
+  return 'night'
+}
+
+function getGreeting() {
+  const t = getTimeOfDay()
+  if (t === 'morning')   return 'Good morning'
+  if (t === 'afternoon') return 'Good afternoon'
+  if (t === 'evening')   return 'Good evening'
   return 'Good night'
 }
 
@@ -16,7 +24,7 @@ export default function DailyGreetingCard({ firstName }: { firstName: string }) 
   const [isLoading, setIsLoading] = useState(true)
 
   useEffect(() => {
-    fetch('/api/ai/daily-greeting')
+    fetch(`/api/ai/daily-greeting?t=${getTimeOfDay()}`)
       .then((r) => r.json())
       .then((data) => setMessage(data.message ?? null))
       .catch(() => setMessage(null))
