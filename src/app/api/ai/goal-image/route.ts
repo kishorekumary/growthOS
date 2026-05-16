@@ -1,6 +1,5 @@
 import { createSupabaseServerClient } from '@/lib/supabase-server'
 import { createSupabaseAdminClient } from '@/lib/supabase-admin'
-import { openai } from '@/lib/openai'
 
 export async function POST(req: Request) {
   // ── Auth ──────────────────────────────────────────────────────
@@ -16,31 +15,28 @@ export async function POST(req: Request) {
 
   const admin = createSupabaseAdminClient()
 
-  // ── Generate image (returns a temporary URL) ─────────────────
-  let tempUrl: string
+  // ── Generate image via Pollinations.ai (free, no API key) ─────
+  // Returns the image directly as a binary response.
+  let imageBuffer: Buffer
   try {
-    const imageResponse = await openai.images.generate({
-      model: 'dall-e-2',
-      prompt: `${prompt}. Make it inspiring, aspirational and high quality.`,
-      n: 1,
-      size: '512x512',
-    })
-    const url = (imageResponse.data ?? [])[0]?.url
-    if (!url) return Response.json({ error: 'DALL-E returned no image URL' }, { status: 500 })
-    tempUrl = url
+    const encodedPrompt = encodeURIComponent(
+      `${prompt}. Inspiring, aspirational, high quality, photorealistic.`
+    )
+    const pollinationsUrl =
+      `https://image.pollinations.ai/prompt/${encodedPrompt}?width=1024&height=1024&model=flux&nologo=true`
+
+    const imageRes = await fetch(pollinationsUrl, { signal: AbortSignal.timeout(60_000) })
+    if (!imageRes.ok) throw new Error(`Pollinations returned ${imageRes.status}`)
+    imageBuffer = Buffer.from(await imageRes.arrayBuffer())
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : String(err)
-    console.error('[goal-image] DALL-E error:', msg)
+    console.error('[goal-image] generation error:', msg)
     return Response.json({ error: `Image generation failed: ${msg}` }, { status: 500 })
   }
 
-  // ── Fetch image bytes and upload to Supabase Storage ─────────
+  // ── Upload to Supabase Storage ────────────────────────────────
   const path = `${user.id}/${goalId}.png`
   try {
-    const imageRes = await fetch(tempUrl)
-    if (!imageRes.ok) throw new Error(`Failed to fetch generated image: ${imageRes.status}`)
-    const imageBuffer = Buffer.from(await imageRes.arrayBuffer())
-
     await admin.storage.createBucket('goal-visions', { public: true }).catch(() => {})
 
     const { error: uploadError } = await admin.storage
@@ -60,7 +56,6 @@ export async function POST(req: Request) {
   // ── Persist URL on the goal ───────────────────────────────────
   const { data: { publicUrl } } = admin.storage.from('goal-visions').getPublicUrl(path)
 
-  // Use admin client — server client session cookie may not resolve in API routes
   const { error: updateError } = await admin
     .from('user_goals')
     .update({ vision_image_url: publicUrl })
