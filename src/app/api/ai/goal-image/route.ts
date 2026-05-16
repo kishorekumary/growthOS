@@ -20,10 +20,10 @@ export async function POST(req: Request) {
   let imageBuffer: Buffer
   try {
     const encodedPrompt = encodeURIComponent(
-      `${prompt}. Inspiring, aspirational, high quality, photorealistic.`
+      `${prompt}, masterpiece, best quality, highly detailed, sharp focus, professional`
     )
     const pollinationsUrl =
-      `https://image.pollinations.ai/prompt/${encodedPrompt}?width=1024&height=1024&model=flux&nologo=true`
+      `https://image.pollinations.ai/prompt/${encodedPrompt}?width=1024&height=768&model=flux-realism&nologo=true&enhance=true`
 
     const imageRes = await fetch(pollinationsUrl, { signal: AbortSignal.timeout(60_000) })
     if (!imageRes.ok) throw new Error(`Pollinations returned ${imageRes.status}`)

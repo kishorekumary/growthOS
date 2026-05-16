@@ -484,7 +484,7 @@ function EditGoalModal({
 
 function GoalVisionModal({ goal, onImageSaved }: { goal: Goal; onImageSaved: (url: string) => void }) {
   const [open, setOpen] = useState(false)
-  const [prompt, setPrompt] = useState('')
+  const [description, setDescription] = useState('')
   const [activeStyle, setActiveStyle] = useState(0)
   const [generating, setGenerating] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -493,24 +493,26 @@ function GoalVisionModal({ goal, onImageSaved }: { goal: Goal; onImageSaved: (ur
   function handleOpenChange(v: boolean) {
     setOpen(v)
     if (v) {
-      setPrompt(goal.title)
+      setDescription('')
       setPreviewUrl(goal.vision_image_url)
       setError(null)
     }
   }
 
   const STYLES = [
-    { label: 'Photorealistic', suffix: 'photorealistic, ultra-detailed, 4K photography' },
-    { label: 'Artistic',       suffix: 'vibrant digital art, illustration style' },
-    { label: 'Cinematic',      suffix: 'cinematic lighting, dramatic atmosphere, movie still' },
-    { label: 'Motivational',   suffix: 'motivational poster, bold composition, inspiring' },
+    { label: '📸 Realistic',   suffix: 'ultra-realistic photography, 4K, natural lighting, highly detailed' },
+    { label: '🎨 Artistic',    suffix: 'vibrant digital painting, detailed illustration, concept art' },
+    { label: '🎬 Cinematic',   suffix: 'cinematic scene, dramatic golden hour lighting, epic composition, movie still' },
+    { label: '✨ Aspirational', suffix: 'luxury lifestyle, aspirational, polished, magazine cover quality' },
   ]
 
+  // The description field is optional — if blank, fall back to the goal title
+  const effectivePrompt = description.trim() || goal.title
+
   async function generate() {
-    if (!prompt.trim()) return
     setGenerating(true)
     setError(null)
-    const fullPrompt = `${prompt.trim()}, ${STYLES[activeStyle].suffix}`
+    const fullPrompt = `${effectivePrompt}, ${STYLES[activeStyle].suffix}`
     try {
       const res = await fetch('/api/ai/goal-image', {
         method: 'POST',
@@ -545,12 +547,12 @@ function GoalVisionModal({ goal, onImageSaved }: { goal: Goal; onImageSaved: (ur
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Sparkles className="h-4 w-4 text-violet-400" />
-            Visualize Goal
+            Visualize: {goal.title}
           </DialogTitle>
         </DialogHeader>
         <div className="space-y-4">
           {/* Preview */}
-          <div className="relative w-full aspect-square rounded-xl overflow-hidden bg-white/5 border border-white/10 flex items-center justify-center">
+          <div className="relative w-full aspect-video rounded-xl overflow-hidden bg-white/5 border border-white/10 flex items-center justify-center">
             {previewUrl ? (
               <img src={previewUrl} alt="Goal vision" className="w-full h-full object-cover" />
             ) : (
@@ -560,25 +562,29 @@ function GoalVisionModal({ goal, onImageSaved }: { goal: Goal; onImageSaved: (ur
               </div>
             )}
             {generating && (
-              <div className="absolute inset-0 flex items-center justify-center bg-slate-950/70 backdrop-blur-sm">
-                <div className="flex flex-col items-center gap-2">
-                  <Loader2 className="h-8 w-8 animate-spin text-violet-400" />
-                  <p className="text-xs text-slate-300">Creating your vision...</p>
-                </div>
+              <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-slate-950/75 backdrop-blur-sm">
+                <Loader2 className="h-8 w-8 animate-spin text-violet-400" />
+                <p className="text-xs text-slate-300">Generating your vision… (~20s)</p>
               </div>
             )}
           </div>
 
-          {/* Prompt */}
+          {/* Description — optional, falls back to goal title */}
           <div className="space-y-1.5">
-            <Label className="text-slate-300 text-xs">Describe your vision</Label>
+            <Label className="text-slate-300 text-xs">
+              Visual description
+              <span className="ml-1.5 text-slate-600 font-normal">(optional — leave blank to use goal title)</span>
+            </Label>
             <textarea
-              value={prompt}
-              onChange={e => setPrompt(e.target.value)}
-              rows={2}
-              placeholder="e.g. Beautiful modern house with a lush garden at sunset..."
-              className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-white placeholder:text-slate-500 resize-none focus:outline-none focus:ring-2 focus:ring-violet-500"
+              value={description}
+              onChange={e => setDescription(e.target.value)}
+              rows={3}
+              placeholder={`e.g. "A spacious modern family home with large windows, a lush green garden, warm evening light — the kind of home that feels like a true sanctuary"`}
+              className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-white placeholder:text-slate-600 resize-none focus:outline-none focus:ring-2 focus:ring-violet-500"
             />
+            <p className="text-[11px] text-slate-600">
+              The more specific and visual your description, the better the result. Describe the scene, mood, and details you want to see.
+            </p>
           </div>
 
           {/* Style chips */}
@@ -609,12 +615,12 @@ function GoalVisionModal({ goal, onImageSaved }: { goal: Goal; onImageSaved: (ur
 
           <Button
             onClick={generate}
-            disabled={generating || !prompt.trim()}
+            disabled={generating}
             className="w-full bg-violet-600 hover:bg-violet-700 text-white gap-2"
           >
             {generating
               ? <><Loader2 className="h-4 w-4 animate-spin" /> Generating...</>
-              : <><Sparkles className="h-4 w-4" /> {previewUrl ? 'Regenerate Vision' : 'Generate Vision'}</>
+              : <><Sparkles className="h-4 w-4" /> {previewUrl ? 'Regenerate' : 'Generate Vision'}</>
             }
           </Button>
         </div>
