@@ -234,7 +234,9 @@ export async function GET(req: NextRequest) {
         to:   s.phone_number,
         from: process.env.TWILIO_FROM_NUMBER,
         url:  callUrl,
-      }).catch(() => {})
+      }).catch((err: unknown) => {
+        console.error('[cron/reminders] Twilio call failed for user', s.user_id, (err as Error)?.message ?? err)
+      })
     }
 
     // Telegram
