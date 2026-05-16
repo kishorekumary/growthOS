@@ -321,7 +321,8 @@ export default function BookMindMap({ bookId, bookTitle, initialJson, onClose, r
   // Refs for traversal — read inside the keydown handler without stale closures
   const traversalIdxRef = useRef(traversalIdx)
   traversalIdxRef.current = traversalIdx
-  const dfsLengthRef = useRef(0) // kept in sync after dfsOrder is computed below
+  const dfsLengthRef   = useRef(0)            // kept in sync after dfsOrder is computed below
+  const dfsOrderRef    = useRef<MindNode[]>([]) // kept in sync after dfsOrder is computed below
 
   // Pre-order DFS traversal: root → first child → deepest → next sibling (top-to-bottom)
   const dfsOrder = useMemo(() => {
@@ -335,7 +336,8 @@ export default function BookMindMap({ bookId, bookTitle, initialJson, onClose, r
     dfs('root')
     return result
   }, [nodes])
-  dfsLengthRef.current = dfsOrder.length
+  dfsLengthRef.current  = dfsOrder.length
+  dfsOrderRef.current   = dfsOrder
 
   // Keep focused match index in bounds when matches change
   useEffect(() => {
@@ -444,16 +446,34 @@ export default function BookMindMap({ bookId, bookTitle, initialJson, onClose, r
         if (e.key === 'Enter' || e.key === 'ArrowDown') { e.preventDefault(); nextMatch(); return }
         if ((e.shiftKey && e.key === 'Enter') || e.key === 'ArrowUp') { e.preventDefault(); prevMatch(); return }
       }
-      // ← / → arrow-key tree traversal (when traversal is active and no input is focused)
+      // Arrow-key tree traversal (when traversal is active and no input is focused)
       if (traversalIdxRef.current !== null && !showSearch && !inInput) {
-        if (e.key === 'ArrowRight' || e.key === 'ArrowDown') {
+        // ← / → walk the DFS pre-order sequence (previous / next node overall)
+        if (e.key === 'ArrowRight') {
           e.preventDefault()
           setTraversalIdx(i => Math.min(dfsLengthRef.current - 1, (i ?? 0) + 1))
           return
         }
-        if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') {
+        if (e.key === 'ArrowLeft') {
           e.preventDefault()
           setTraversalIdx(i => Math.max(0, (i ?? 0) - 1))
+          return
+        }
+        // ↑ / ↓ jump to the previous / next sibling at the same level
+        if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
+          e.preventDefault()
+          const cur = dfsOrderRef.current[traversalIdxRef.current]
+          if (cur) {
+            const siblings = nodesRef.current
+              .filter(n => n.parentId === cur.parentId)
+              .sort((a, b) => a.y - b.y)
+            const si = siblings.findIndex(n => n.id === cur.id)
+            const target = e.key === 'ArrowUp' ? siblings[si - 1] : siblings[si + 1]
+            if (target) {
+              const newIdx = dfsOrderRef.current.findIndex(n => n.id === target.id)
+              if (newIdx !== -1) setTraversalIdx(newIdx)
+            }
+          }
           return
         }
       }
@@ -1434,7 +1454,7 @@ export default function BookMindMap({ bookId, bookTitle, initialJson, onClose, r
                       ? 'Root'
                       : `Depth ${getDepth(dfsOrder[traversalIdx]?.id ?? 'root', nodes)}`}
                   </p>
-                  <span className="hidden sm:inline text-[10px] text-slate-700">← → arrow keys to navigate · Esc to exit</span>
+                  <span className="hidden sm:inline text-[10px] text-slate-700">← → traverse tree &nbsp;·&nbsp; ↑ ↓ same-level siblings &nbsp;·&nbsp; Esc exit</span>
                 </div>
               </div>
 
