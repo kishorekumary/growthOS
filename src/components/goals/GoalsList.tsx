@@ -37,7 +37,7 @@ const CATEGORY_CONFIG: Record<Category, { label: string; icon: typeof Target; co
   fitness: { label: 'Fitness', icon: Dumbbell,  color: 'text-emerald-400', bg: 'bg-emerald-500/10', border: 'border-emerald-500/20' },
   finance: { label: 'Finance', icon: Wallet,    color: 'text-sky-400',     bg: 'bg-sky-500/10',     border: 'border-sky-500/20'     },
   books:   { label: 'Books',   icon: BookOpen,  color: 'text-amber-400',   bg: 'bg-amber-500/10',   border: 'border-amber-500/20'   },
-  general: { label: 'General', icon: Sparkles,   color: 'text-violet-400', bg: 'bg-violet-500/10', border: 'border-violet-500/20' },
+  general: { label: 'Personal', icon: Sparkles,   color: 'text-violet-400', bg: 'bg-violet-500/10', border: 'border-violet-500/20' },
   career:  { label: 'Career',  icon: Briefcase,  color: 'text-rose-400',   bg: 'bg-rose-500/10',   border: 'border-rose-500/20'   },
 }
 
@@ -110,7 +110,11 @@ function DateStatus({ targetDate }: { targetDate: string }) {
   const date = parseISO(targetDate)
   const days = differenceInDays(date, new Date())
   const formatted = format(date, 'MMM d, yyyy')
-  if (isPast(date) && days < 0) return <span className="text-xs text-red-400">{formatted} · {Math.abs(days)}d overdue</span>
+  if (isPast(date) && days < 0) {
+    const n = Math.abs(days)
+    const label = n === 1 ? 'Due yesterday' : `${n} days overdue`
+    return <span className="text-xs text-red-400">{formatted} · {label}</span>
+  }
   if (days === 0) return <span className="text-xs text-amber-400">{formatted} · Due today</span>
   if (days <= 7)  return <span className="text-xs text-amber-400">{formatted} · {days}d left</span>
   if (days <= 30) return <span className="text-xs text-slate-400">{formatted} · {days}d left</span>
@@ -813,7 +817,7 @@ function GoalSection({
             ))
           ) : (
             <p className="text-xs text-slate-600 py-1">
-              No {cfg.label.toLowerCase()} goals yet — hit Add to set one.
+              Nothing set for {cfg.label.toLowerCase()} yet — add a goal to get started.
             </p>
           )}
         </div>
@@ -891,7 +895,7 @@ function CategorySection({
         </div>
       ) : (
         <p className="text-xs text-slate-600 py-1">
-          No {cfg.label.toLowerCase()} goals yet — hit Add to set one.
+          Nothing here yet — add a goal to get started.
         </p>
       )}
     </div>
@@ -919,7 +923,7 @@ function CompletedList({
         className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-slate-500 hover:text-slate-400 transition-colors"
       >
         {show ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
-        Completed ({goals.length})
+        Achieved ({goals.length})
       </button>
       {show && (
         <div className="space-y-2">
@@ -931,8 +935,8 @@ function CompletedList({
                 <button
                   type="button"
                   onClick={() => onUncomplete(goal.id)}
-                  title="Move back to goals"
-                  aria-label="Move back to goals"
+                  title="Mark as in progress"
+                  aria-label="Mark as in progress"
                   className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-emerald-500/30 border-2 border-emerald-500 hover:bg-slate-500/30 hover:border-slate-500 transition-all cursor-pointer"
                 >
                   <Check className="h-3 w-3 text-emerald-400 group-hover:hidden" />
@@ -946,7 +950,7 @@ function CompletedList({
                     </span>
                   </div>
                   {goal.completed_at && (
-                    <p className="text-xs text-emerald-600">✓ Completed {format(new Date(goal.completed_at), 'MMM d, yyyy')}</p>
+                    <p className="text-xs text-emerald-600">✓ Achieved {format(new Date(goal.completed_at), 'MMM d, yyyy')}</p>
                   )}
                 </div>
                 <button
@@ -1044,8 +1048,8 @@ export default function GoalsList() {
   const customGoals = byTimeframe('custom')
 
   const TABS: { value: TabView; label: string }[] = [
-    { value: 'timeframe', label: 'By Timeframe' },
-    { value: 'category',  label: 'By Category'  },
+    { value: 'timeframe', label: 'Timeline' },
+    { value: 'category',  label: 'Category' },
   ]
 
   return (
@@ -1053,8 +1057,8 @@ export default function GoalsList() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <p className="text-xs text-slate-500">
-          {active.length} active goal{active.length !== 1 ? 's' : ''}
-          {completed.length > 0 && ` · ${completed.length} completed`}
+          {active.length} in progress
+          {completed.length > 0 && ` · ${completed.length} achieved`}
         </p>
         <AddGoalModal onAdd={fetchGoals} />
       </div>

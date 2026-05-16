@@ -20,7 +20,7 @@ export default function GoalsPage() {
         </div>
         <div>
           <h1 className="text-2xl font-bold text-white">My Goals</h1>
-          <p className="text-slate-400 text-sm mt-0.5">Track what matters across every area of your life</p>
+          <p className="text-slate-400 text-sm mt-0.5">Define what success looks like — then make it happen.</p>
         </div>
       </div>
 
