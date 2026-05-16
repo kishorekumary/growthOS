@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useRef, useEffect, useCallback, useMemo } from 'react'
-import { X, Trash2, GitBranch, Loader2, Check, Pencil, Upload, Plus, Undo2, Link2, Eye, EyeOff, Search, ChevronLeft, ChevronRight, Download } from 'lucide-react'
+import { X, Trash2, GitBranch, Loader2, Check, Pencil, Upload, Plus, Undo2, Link2, Eye, EyeOff, Search, ChevronLeft, ChevronRight, Download, MoreHorizontal, Save } from 'lucide-react'
 import { createSupabaseBrowserClient } from '@/lib/supabase'
 import { cn } from '@/lib/utils'
 
@@ -224,6 +224,17 @@ function HighlightedLabel({ text, query }: { text: string; query: string }) {
   )
 }
 
+// Returns the ancestor chain from root down to nodeId (inclusive)
+function getAncestorPath(nodeId: string, nodes: MindNode[]): MindNode[] {
+  const path: MindNode[] = []
+  let cur = nodes.find(n => n.id === nodeId)
+  while (cur) {
+    path.unshift(cur)
+    cur = cur.parentId ? nodes.find(n => n.id === cur!.parentId) : undefined
+  }
+  return path
+}
+
 // ─── Props ────────────────────────────────────────────────────
 
 interface Props {
@@ -258,6 +269,9 @@ export default function BookMindMap({ bookId, bookTitle, initialJson, onClose, r
   const [canUndo, setCanUndo]       = useState(false)
   const [isDirty, setIsDirty]       = useState(false)
   const [showCloseConfirm, setShowCloseConfirm] = useState(false)
+  const [isMobile, setIsMobile] = useState(false)
+  const [showMobileMenu, setShowMobileMenu] = useState(false)
+  const [traversalIdx, setTraversalIdx] = useState<number | null>(null)
 
   const [copySuccess, setCopySuccess] = useState(false)
 
@@ -303,6 +317,19 @@ export default function BookMindMap({ bookId, bookTitle, initialJson, onClose, r
   }, [nodes, searchQuery])
 
   const matchIds = useMemo(() => new Set(searchMatches.map(n => n.id)), [searchMatches])
+
+  // Pre-order DFS traversal: root → first child → deepest → next sibling (top-to-bottom)
+  const dfsOrder = useMemo(() => {
+    const result: MindNode[] = []
+    function dfs(nodeId: string) {
+      const node = nodes.find(n => n.id === nodeId)
+      if (!node) return
+      result.push(node)
+      nodes.filter(n => n.parentId === nodeId).sort((a, b) => a.y - b.y).forEach(c => dfs(c.id))
+    }
+    dfs('root')
+    return result
+  }, [nodes])
 
   // Keep focused match index in bounds when matches change
   useEffect(() => {
@@ -423,6 +450,47 @@ export default function BookMindMap({ bookId, bookTitle, initialJson, onClose, r
     if (showImport) setImportTargetId('root')
   }, [showImport])
 
+  // Mobile breakpoint detection
+  useEffect(() => {
+    const check = () => setIsMobile(window.innerWidth < 640)
+    check()
+    window.addEventListener('resize', check)
+    return () => window.removeEventListener('resize', check)
+  }, [])
+
+  // Auto-scroll to root node on first render
+  useEffect(() => {
+    const root = nodes.find(n => n.id === 'root')
+    if (!root || !scrollContainerRef.current) return
+    const c = scrollContainerRef.current
+    setTimeout(() => {
+      c.scrollTo({
+        left: Math.max(0, root.x - 40),
+        top:  Math.max(0, root.y + NODE_H / 2 - c.clientHeight / 2),
+        behavior: 'smooth',
+      })
+    }, 150)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  // Scroll canvas to keep the traversal-focused node centered, and clamp index on tree changes
+  useEffect(() => {
+    if (traversalIdx === null) return
+    if (traversalIdx >= dfsOrder.length) {
+      setTraversalIdx(Math.max(0, dfsOrder.length - 1))
+      return
+    }
+    const node = dfsOrder[traversalIdx]
+    if (!node || !scrollContainerRef.current) return
+    const c  = scrollContainerRef.current
+    const nw = nodeWidth(node.label)
+    c.scrollTo({
+      left: Math.max(0, node.x + nw / 2 - c.clientWidth / 2),
+      top:  Math.max(0, node.y + NODE_H / 2 - c.clientHeight / 2),
+      behavior: 'smooth',
+    })
+  }, [traversalIdx, dfsOrder])
+
   // ── Import ────────────────────────────────────────────────
 
   function handleImportAdd() {
@@ -483,8 +551,10 @@ export default function BookMindMap({ bookId, bookTitle, initialJson, onClose, r
   }
 
   // ── Drag / connect refs ───────────────────────────────────
-  const moveRef  = useRef<{ id: string; ox: number; oy: number; mx: number; my: number } | null>(null)
-  const connRef  = useRef<{ fromId: string } | null>(null)
+  const moveRef      = useRef<{ id: string; ox: number; oy: number; mx: number; my: number } | null>(null)
+  const connRef      = useRef<{ fromId: string } | null>(null)
+  const touchMoveRef = useRef<{ id: string; ox: number; oy: number; startTX: number; startTY: number } | null>(null)
+  const lastTouchRef = useRef(0)
   const [connPos, setConnPos] = useState<{ x: number; y: number } | null>(null)
   const canvasRef = useRef<HTMLDivElement>(null)
 
@@ -531,20 +601,51 @@ export default function BookMindMap({ bookId, bookTitle, initialJson, onClose, r
       moveRef.current = null
     }
 
+    function handleTouchMove(e: TouchEvent) {
+      if (touchMoveRef.current && e.touches.length === 1) {
+        const touch = e.touches[0]
+        const { id, ox, oy, startTX, startTY } = touchMoveRef.current
+        const dx = touch.clientX - startTX
+        const dy = touch.clientY - startTY
+        setNodes(prev =>
+          prev.map(n => n.id === id ? { ...n, x: Math.max(4, ox + dx), y: Math.max(4, oy + dy) } : n)
+        )
+        e.preventDefault()
+      }
+    }
+
+    function handleTouchEnd() {
+      touchMoveRef.current = null
+    }
+
     window.addEventListener('mousemove', handleMouseMove)
     window.addEventListener('mouseup', handleMouseUp)
+    window.addEventListener('touchmove', handleTouchMove, { passive: false })
+    window.addEventListener('touchend', handleTouchEnd)
     return () => {
       window.removeEventListener('mousemove', handleMouseMove)
       window.removeEventListener('mouseup', handleMouseUp)
+      window.removeEventListener('touchmove', handleTouchMove)
+      window.removeEventListener('touchend', handleTouchEnd)
     }
   }, [])
 
   function startMove(e: React.MouseEvent, node: MindNode) {
     if (node.id === 'root' || isReadOnly || reparentId) return
+    if (Date.now() - lastTouchRef.current < 500) return // skip synthesized mouse events after touch
     pushHistory()
     moveRef.current = { id: node.id, ox: node.x, oy: node.y, mx: e.clientX, my: e.clientY }
     e.stopPropagation()
     e.preventDefault()
+  }
+
+  function startTouchMove(e: React.TouchEvent, node: MindNode) {
+    if (node.id === 'root' || isReadOnly || reparentId) return
+    const touch = e.touches[0]
+    lastTouchRef.current = Date.now()
+    pushHistory()
+    touchMoveRef.current = { id: node.id, ox: node.x, oy: node.y, startTX: touch.clientX, startTY: touch.clientY }
+    e.stopPropagation()
   }
 
   function startConn(e: React.MouseEvent, fromId: string) {
@@ -610,99 +711,194 @@ export default function BookMindMap({ bookId, bookTitle, initialJson, onClose, r
     <div className="fixed inset-0 z-[60] flex flex-col" style={{ background: '#090912' }}>
 
       {/* ── Header ── */}
-      <div className="flex items-center gap-3 px-4 py-2.5 border-b border-white/8 bg-black/40 backdrop-blur shrink-0">
+      <div className="flex items-center gap-2 px-3 py-2.5 border-b border-white/8 bg-black/40 backdrop-blur shrink-0">
         <GitBranch className="h-4 w-4 text-violet-400 shrink-0" />
-        <p className="text-sm font-semibold text-white truncate flex-1">{bookTitle}</p>
-        <span className="hidden sm:block text-xs text-slate-500 shrink-0">Mind Map</span>
+        <p className="text-sm font-semibold text-white truncate flex-1 min-w-0">{bookTitle}</p>
 
-        {/* Read-only toggle */}
-        <button
-          onClick={() => { setIsReadOnly(r => !r); setReparentId(null) }}
-          title={isReadOnly ? 'Switch to edit mode' : 'Switch to read-only mode'}
-          className={cn(
-            'flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium border transition-all shrink-0',
-            isReadOnly
-              ? 'bg-amber-500/15 border-amber-500/40 text-amber-300 hover:bg-amber-500/25'
-              : 'bg-white/5 border-white/10 text-slate-300 hover:bg-white/10'
+        {/* Desktop toolbar */}
+        <div className="hidden sm:flex items-center gap-2 shrink-0">
+          <span className="text-xs text-slate-500">Mind Map</span>
+
+          <button
+            onClick={() => { setIsReadOnly(r => !r); setReparentId(null) }}
+            title={isReadOnly ? 'Switch to edit mode' : 'Switch to read-only mode'}
+            className={cn(
+              'flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium border transition-all',
+              isReadOnly
+                ? 'bg-amber-500/15 border-amber-500/40 text-amber-300 hover:bg-amber-500/25'
+                : 'bg-white/5 border-white/10 text-slate-300 hover:bg-white/10'
+            )}
+          >
+            {isReadOnly ? <Eye className="h-3 w-3" /> : <EyeOff className="h-3 w-3" />}
+            {isReadOnly ? 'Read Only' : 'View'}
+          </button>
+
+          {!isReadOnly && (
+            <>
+              <button
+                onClick={undo}
+                disabled={!canUndo}
+                title="Undo (⌘Z)"
+                className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium bg-white/5 hover:bg-white/10 text-slate-300 border border-white/10 transition-all disabled:opacity-30 disabled:cursor-not-allowed"
+              >
+                <Undo2 className="h-3 w-3" />
+                Undo
+              </button>
+
+              <button
+                onClick={() => { setShowImport(true); setImportError(null) }}
+                className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium bg-white/5 hover:bg-white/10 text-slate-300 border border-white/10 transition-all"
+              >
+                <Upload className="h-3 w-3" />
+                Import
+              </button>
+
+              <button
+                onClick={save}
+                disabled={saving}
+                className={cn(
+                  'flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium transition-all',
+                  savedFlash
+                    ? 'bg-emerald-600 text-white'
+                    : 'bg-violet-600 hover:bg-violet-700 text-white disabled:opacity-50'
+                )}
+              >
+                {saving ? <Loader2 className="h-3 w-3 animate-spin" />
+                  : savedFlash ? <Check className="h-3 w-3" /> : null}
+                {savedFlash ? 'Saved!' : 'Save'}
+              </button>
+            </>
           )}
-        >
-          {isReadOnly ? <Eye className="h-3 w-3" /> : <EyeOff className="h-3 w-3" />}
-          {isReadOnly ? 'Read Only' : 'View'}
-        </button>
 
-        {!isReadOnly && (
-          <>
-            <button
-              onClick={undo}
-              disabled={!canUndo}
-              title="Undo (⌘Z)"
-              className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium bg-white/5 hover:bg-white/10 text-slate-300 border border-white/10 transition-all shrink-0 disabled:opacity-30 disabled:cursor-not-allowed"
-            >
-              <Undo2 className="h-3 w-3" />
-              Undo
-            </button>
+          <button
+            onClick={() => setShowSearch(s => !s)}
+            title="Search nodes (⌘F)"
+            className={cn(
+              'flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium border transition-all',
+              showSearch
+                ? 'bg-amber-500/15 border-amber-500/40 text-amber-300'
+                : 'bg-white/5 border-white/10 text-slate-300 hover:bg-white/10'
+            )}
+          >
+            <Search className="h-3 w-3" />
+            Search
+          </button>
 
-            <button
-              onClick={() => { setShowImport(true); setImportError(null) }}
-              className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium bg-white/5 hover:bg-white/10 text-slate-300 border border-white/10 transition-all shrink-0"
-            >
-              <Upload className="h-3 w-3" />
-              Import
-            </button>
+          <button
+            onClick={exportMarkdown}
+            title="Copy as Markdown (# ## ### headings)"
+            className={cn(
+              'flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium border transition-all',
+              copySuccess
+                ? 'bg-emerald-500/20 border-emerald-500/40 text-emerald-300'
+                : 'bg-white/5 border-white/10 text-slate-300 hover:bg-white/10'
+            )}
+          >
+            {copySuccess ? <Check className="h-3 w-3" /> : <Download className="h-3 w-3" />}
+            {copySuccess ? 'Copied!' : 'Export'}
+          </button>
 
+          <button
+            onClick={handleClose}
+            className="rounded-lg p-1.5 text-slate-500 hover:text-white hover:bg-white/10 transition-colors"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+
+        {/* Mobile compact toolbar */}
+        <div className="flex sm:hidden items-center gap-0.5 shrink-0">
+          {/* Edit / View toggle icon-only */}
+          <button
+            onClick={() => { setIsReadOnly(r => !r); setReparentId(null) }}
+            title={isReadOnly ? 'Switch to edit mode' : 'Switch to read-only mode'}
+            className={cn(
+              'rounded-lg p-2 transition-colors',
+              isReadOnly ? 'text-amber-300 bg-amber-500/15' : 'text-slate-400 hover:text-white hover:bg-white/10'
+            )}
+          >
+            {isReadOnly ? <Eye className="h-4 w-4" /> : <EyeOff className="h-4 w-4" />}
+          </button>
+
+          {/* Save icon-only (edit mode only) */}
+          {!isReadOnly && (
             <button
               onClick={save}
               disabled={saving}
               className={cn(
-                'flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium transition-all shrink-0',
-                savedFlash
-                  ? 'bg-emerald-600 text-white'
-                  : 'bg-violet-600 hover:bg-violet-700 text-white disabled:opacity-50'
+                'rounded-lg p-2 transition-colors disabled:opacity-50',
+                savedFlash ? 'text-emerald-400' : 'text-violet-400 hover:text-violet-300 hover:bg-white/10'
               )}
             >
-              {saving ? <Loader2 className="h-3 w-3 animate-spin" />
-                : savedFlash ? <Check className="h-3 w-3" /> : null}
-              {savedFlash ? 'Saved!' : 'Save'}
+              {saving
+                ? <Loader2 className="h-4 w-4 animate-spin" />
+                : savedFlash ? <Check className="h-4 w-4" /> : <Save className="h-4 w-4" />}
             </button>
-          </>
-        )}
-
-        {/* Search toggle */}
-        <button
-          onClick={() => setShowSearch(s => !s)}
-          title="Search nodes (⌘F)"
-          className={cn(
-            'flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium border transition-all shrink-0',
-            showSearch
-              ? 'bg-amber-500/15 border-amber-500/40 text-amber-300'
-              : 'bg-white/5 border-white/10 text-slate-300 hover:bg-white/10'
           )}
-        >
-          <Search className="h-3 w-3" />
-          <span className="hidden sm:inline">Search</span>
-        </button>
 
-        {/* Export to Markdown */}
-        <button
-          onClick={exportMarkdown}
-          title="Copy as Markdown (# ## ### headings)"
-          className={cn(
-            'flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium border transition-all shrink-0',
-            copySuccess
-              ? 'bg-emerald-500/20 border-emerald-500/40 text-emerald-300'
-              : 'bg-white/5 border-white/10 text-slate-300 hover:bg-white/10'
-          )}
-        >
-          {copySuccess ? <Check className="h-3 w-3" /> : <Download className="h-3 w-3" />}
-          <span className="hidden sm:inline">{copySuccess ? 'Copied!' : 'Export'}</span>
-        </button>
+          {/* More menu (Undo · Import · Search · Export) */}
+          <div className="relative">
+            {showMobileMenu && (
+              <div className="fixed inset-0 z-[29]" onClick={() => setShowMobileMenu(false)} />
+            )}
+            <button
+              onClick={() => setShowMobileMenu(m => !m)}
+              className={cn(
+                'rounded-lg p-2 transition-colors',
+                showMobileMenu ? 'text-white bg-white/10' : 'text-slate-400 hover:text-white hover:bg-white/10'
+              )}
+            >
+              <MoreHorizontal className="h-4 w-4" />
+            </button>
+            {showMobileMenu && (
+              <div className="absolute right-0 top-full mt-1 z-30 rounded-xl border border-white/10 bg-slate-900 shadow-2xl py-1.5 min-w-[160px]">
+                {!isReadOnly && (
+                  <button
+                    onClick={() => { undo(); setShowMobileMenu(false) }}
+                    disabled={!canUndo}
+                    className="flex w-full items-center gap-2.5 px-3.5 py-2.5 text-sm text-slate-300 hover:bg-white/5 disabled:opacity-40 transition-colors"
+                  >
+                    <Undo2 className="h-3.5 w-3.5" /> Undo
+                  </button>
+                )}
+                {!isReadOnly && (
+                  <button
+                    onClick={() => { setShowImport(true); setImportError(null); setShowMobileMenu(false) }}
+                    className="flex w-full items-center gap-2.5 px-3.5 py-2.5 text-sm text-slate-300 hover:bg-white/5 transition-colors"
+                  >
+                    <Upload className="h-3.5 w-3.5" /> Import
+                  </button>
+                )}
+                <button
+                  onClick={() => { setShowSearch(s => !s); setShowMobileMenu(false) }}
+                  className={cn(
+                    'flex w-full items-center gap-2.5 px-3.5 py-2.5 text-sm hover:bg-white/5 transition-colors',
+                    showSearch ? 'text-amber-300' : 'text-slate-300'
+                  )}
+                >
+                  <Search className="h-3.5 w-3.5" /> Search
+                </button>
+                <button
+                  onClick={() => { exportMarkdown(); setShowMobileMenu(false) }}
+                  className="flex w-full items-center gap-2.5 px-3.5 py-2.5 text-sm text-slate-300 hover:bg-white/5 transition-colors"
+                >
+                  {copySuccess
+                    ? <Check className="h-3.5 w-3.5 text-emerald-400" />
+                    : <Download className="h-3.5 w-3.5" />}
+                  {copySuccess ? 'Copied!' : 'Export'}
+                </button>
+              </div>
+            )}
+          </div>
 
-        <button
-          onClick={handleClose}
-          className="rounded-lg p-1.5 text-slate-500 hover:text-white hover:bg-white/10 transition-colors shrink-0"
-        >
-          <X className="h-4 w-4" />
-        </button>
+          {/* Close */}
+          <button
+            onClick={handleClose}
+            className="rounded-lg p-1.5 text-slate-500 hover:text-white hover:bg-white/10 transition-colors"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        </div>
       </div>
 
       {/* ── Search bar ── */}
@@ -782,16 +978,25 @@ export default function BookMindMap({ bookId, bookTitle, initialJson, onClose, r
         <div className="px-4 py-1.5 border-b border-white/5 bg-white/[0.015] shrink-0">
           {isReadOnly ? (
             <p className="text-[11px] text-slate-600">
-              <span className="text-amber-500">Read-only</span> — click <span className="text-amber-400">View</span> in the header to switch to edit mode
+              <span className="text-amber-500">Read-only</span> —{' '}
+              <span className="hidden sm:inline">click <span className="text-amber-400">View</span> in the header</span>
+              <span className="sm:hidden">tap the eye icon</span> to switch to edit mode
             </p>
           ) : (
-            <p className="text-[11px] text-slate-600">
-              Drag <span className="text-violet-500">●</span> right edge to branch &nbsp;·&nbsp;
-              <span className="text-violet-500">✎</span> edit &nbsp;·&nbsp;
-              <span className="text-amber-500">＋</span> inject level &nbsp;·&nbsp;
-              <span className="text-cyan-500">⇌</span> move branch to another node &nbsp;·&nbsp;
-              ⌘Z undo
-            </p>
+            <>
+              <p className="hidden sm:block text-[11px] text-slate-600">
+                Drag <span className="text-violet-500">●</span> right edge to branch &nbsp;·&nbsp;
+                <span className="text-violet-500">✎</span> edit &nbsp;·&nbsp;
+                <span className="text-amber-500">＋</span> inject level &nbsp;·&nbsp;
+                <span className="text-cyan-500">⇌</span> move branch to another node &nbsp;·&nbsp;
+                ⌘Z undo
+              </p>
+              <p className="sm:hidden text-[11px] text-slate-600">
+                <span className="text-violet-500">Tap</span> node to edit &nbsp;·&nbsp;
+                <span className="text-violet-500">Hold &amp; drag</span> to move &nbsp;·&nbsp;
+                Drag <span className="text-violet-500">●</span> right edge to branch
+              </p>
+            </>
           )}
         </div>
       )}
@@ -942,8 +1147,9 @@ export default function BookMindMap({ bookId, bookTitle, initialJson, onClose, r
             const isValidTarget = !!reparentId && node.id !== reparentId && !isDescendant(node.id, reparentId, nodesRef.current)
 
             // Search highlight states
-            const isSearchMatch = matchIds.has(node.id)
-            const isSearchFocus = isSearchMatch && searchMatches[searchMatchIdx]?.id === node.id
+            const isSearchMatch    = matchIds.has(node.id)
+            const isSearchFocus    = isSearchMatch && searchMatches[searchMatchIdx]?.id === node.id
+            const isTraversalFocus = traversalIdx !== null && dfsOrder[traversalIdx]?.id === node.id
 
             return (
               <div
@@ -953,13 +1159,15 @@ export default function BookMindMap({ bookId, bookTitle, initialJson, onClose, r
                   'transition-all duration-150',
                   isBeingMoved
                     ? 'shadow-[0_0_20px_rgba(6,182,212,0.5)] animate-pulse z-20'
-                    : isSearchFocus
-                      ? 'shadow-[0_0_22px_rgba(251,191,36,0.6)] z-20'
-                      : isSearchMatch
-                        ? 'shadow-[0_0_12px_rgba(251,191,36,0.3)] z-10'
-                        : isValidTarget
-                          ? 'cursor-pointer hover:shadow-[0_0_18px_rgba(6,182,212,0.45)] hover:z-10'
-                          : 'hover:shadow-[0_0_16px_rgba(124,58,237,0.35)] hover:z-10',
+                    : isTraversalFocus
+                      ? 'shadow-[0_0_26px_rgba(52,211,153,0.55)] z-20'
+                      : isSearchFocus
+                        ? 'shadow-[0_0_22px_rgba(251,191,36,0.6)] z-20'
+                        : isSearchMatch
+                          ? 'shadow-[0_0_12px_rgba(251,191,36,0.3)] z-10'
+                          : isValidTarget
+                            ? 'cursor-pointer hover:shadow-[0_0_18px_rgba(6,182,212,0.45)] hover:z-10'
+                            : 'hover:shadow-[0_0_16px_rgba(124,58,237,0.35)] hover:z-10',
                   !isReadOnly && !reparentId && !isRoot ? 'cursor-move' : '',
                   isReadOnly ? 'cursor-default' : '',
                 )}
@@ -967,26 +1175,37 @@ export default function BookMindMap({ bookId, bookTitle, initialJson, onClose, r
                   left: node.x, top: node.y, width: nw, height: NODE_H,
                   borderColor: isBeingMoved
                     ? 'rgba(6,182,212,0.7)'
-                    : isSearchFocus
-                      ? 'rgba(251,191,36,0.8)'
-                      : isSearchMatch
-                        ? 'rgba(251,191,36,0.4)'
-                        : isValidTarget && reparentId
-                          ? 'rgba(6,182,212,0.35)'
-                          : isRoot
-                            ? 'rgba(124,58,237,0.55)'
-                            : color + '44',
+                    : isTraversalFocus
+                      ? 'rgba(52,211,153,0.85)'
+                      : isSearchFocus
+                        ? 'rgba(251,191,36,0.8)'
+                        : isSearchMatch
+                          ? 'rgba(251,191,36,0.4)'
+                          : isValidTarget && reparentId
+                            ? 'rgba(6,182,212,0.35)'
+                            : isRoot
+                              ? 'rgba(124,58,237,0.55)'
+                              : color + '44',
                   background: isBeingMoved
                     ? 'rgba(6,182,212,0.15)'
-                    : isSearchFocus
-                      ? 'rgba(251,191,36,0.12)'
-                      : isRoot
-                        ? 'rgba(109,40,217,0.25)'
-                        : 'rgba(12,12,26,0.88)',
+                    : isTraversalFocus
+                      ? 'rgba(6,78,59,0.30)'
+                      : isSearchFocus
+                        ? 'rgba(251,191,36,0.12)'
+                        : isRoot
+                          ? 'rgba(109,40,217,0.25)'
+                          : 'rgba(12,12,26,0.88)',
                   backdropFilter: 'blur(10px)',
                 }}
                 onMouseDown={isReadOnly || reparentId || isRoot ? undefined : e => startMove(e, node)}
-                onClick={reparentId && !isBeingMoved ? () => completeReparent(node.id) : undefined}
+                onTouchStart={isReadOnly || reparentId || isRoot ? undefined : e => startTouchMove(e, node)}
+                onClick={
+                  reparentId && !isBeingMoved
+                    ? () => completeReparent(node.id)
+                    : (isMobile && !isReadOnly && !isRoot && !isEditing)
+                      ? () => { setEditingId(node.id); setEditLabel(node.label) }
+                      : undefined
+                }
               >
                 {/* Tooltip — always show full label on hover */}
                 {!isEditing && (
@@ -1025,7 +1244,7 @@ export default function BookMindMap({ bookId, bookTitle, initialJson, onClose, r
                 ) : (
                   <span
                     className="flex-1 min-w-0 text-xs font-medium leading-snug truncate"
-                    style={{ color: isBeingMoved ? '#67e8f9' : isSearchFocus ? '#fef3c7' : isRoot ? '#c4b5fd' : color }}
+                    style={{ color: isBeingMoved ? '#67e8f9' : isTraversalFocus ? '#6ee7b7' : isSearchFocus ? '#fef3c7' : isRoot ? '#c4b5fd' : color }}
                   >
                     <HighlightedLabel text={node.label} query={searchQuery} />
                   </span>
@@ -1109,6 +1328,82 @@ export default function BookMindMap({ bookId, bookTitle, initialJson, onClose, r
             )
           })}
         </div>
+      </div>
+
+      {/* ── Mobile tree navigation bar ── */}
+      <div className="flex sm:hidden flex-col border-t border-white/8 bg-[#06060f]/95 backdrop-blur shrink-0">
+        {traversalIdx === null ? (
+          /* Dormant state — slim "Navigate" trigger */
+          <button
+            onClick={() => setTraversalIdx(0)}
+            className="flex items-center justify-center gap-2 py-2.5 text-xs text-slate-500 hover:text-slate-300 active:text-white transition-colors"
+          >
+            <GitBranch className="h-3.5 w-3.5" />
+            Navigate tree
+          </button>
+        ) : (
+          /* Active traversal */
+          <>
+            {/* Breadcrumb path */}
+            <div className="flex items-center gap-0.5 px-4 pt-2.5 overflow-hidden min-w-0">
+              {getAncestorPath(dfsOrder[traversalIdx]?.id ?? 'root', nodes).map((n, i, arr) => (
+                <span key={n.id} className="flex items-center gap-0.5 min-w-0">
+                  {i > 0 && <span className="text-slate-700 shrink-0 mx-0.5">›</span>}
+                  <span
+                    className={cn(
+                      'text-[10px] truncate',
+                      i === arr.length - 1
+                        ? 'text-emerald-400 font-semibold max-w-[140px]'
+                        : 'text-slate-600 max-w-[60px]'
+                    )}
+                  >
+                    {n.label}
+                  </span>
+                </span>
+              ))}
+              <span className="ml-auto shrink-0 text-[10px] text-slate-600 pl-2">
+                {traversalIdx + 1}/{dfsOrder.length}
+              </span>
+            </div>
+
+            {/* Prev / label / Next / Close */}
+            <div className="flex items-center gap-1 px-2 pb-2.5 pt-1">
+              <button
+                onClick={() => setTraversalIdx(i => Math.max(0, (i ?? 0) - 1))}
+                disabled={traversalIdx === 0}
+                className="flex items-center justify-center w-10 h-10 rounded-xl bg-white/5 border border-white/8 text-slate-300 hover:bg-white/10 active:bg-white/15 disabled:opacity-25 transition-all shrink-0"
+              >
+                <ChevronLeft className="h-5 w-5" />
+              </button>
+
+              <div className="flex-1 min-w-0 text-center px-1">
+                <p className="text-sm font-semibold text-white truncate leading-tight">
+                  {dfsOrder[traversalIdx]?.label}
+                </p>
+                <p className="text-[10px] text-slate-600 mt-0.5">
+                  {getDepth(dfsOrder[traversalIdx]?.id ?? 'root', nodes) === 0
+                    ? 'Root'
+                    : `Depth ${getDepth(dfsOrder[traversalIdx]?.id ?? 'root', nodes)}`}
+                </p>
+              </div>
+
+              <button
+                onClick={() => setTraversalIdx(i => Math.min(dfsOrder.length - 1, (i ?? 0) + 1))}
+                disabled={traversalIdx === dfsOrder.length - 1}
+                className="flex items-center justify-center w-10 h-10 rounded-xl bg-white/5 border border-white/8 text-slate-300 hover:bg-white/10 active:bg-white/15 disabled:opacity-25 transition-all shrink-0"
+              >
+                <ChevronRight className="h-5 w-5" />
+              </button>
+
+              <button
+                onClick={() => setTraversalIdx(null)}
+                className="flex items-center justify-center w-8 h-8 ml-1 rounded-lg text-slate-600 hover:text-slate-300 hover:bg-white/5 transition-all shrink-0"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+          </>
+        )}
       </div>
 
       {/* Unsaved changes confirm dialog */}
