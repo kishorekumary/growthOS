@@ -4,6 +4,7 @@ import { Brain, Dumbbell, Wallet, BookOpen, ArrowRight, Flame, Trophy, TrendingU
 import { createSupabaseServerClient } from '@/lib/supabase-server'
 import DailyGreetingCard from '@/components/shared/DailyGreetingCard'
 import DailyPractice from '@/components/shared/DailyPractice'
+import QuickReset from '@/components/shared/QuickReset'
 import TodoWidget from '@/components/todos/TodoWidget'
 
 export default async function DashboardPage() {
@@ -165,8 +166,13 @@ export default async function DashboardPage() {
         ))}
       </div>
 
+      {/* Quick Reset */}
+      <div className="mt-6">
+        <QuickReset />
+      </div>
+
       {/* Daily Practice — pledge, affirmations, gratitude */}
-      <div className="mt-8">
+      <div className="mt-4">
         <DailyPractice />
       </div>
     </div>
