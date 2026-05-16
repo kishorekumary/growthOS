@@ -2,8 +2,8 @@
 
 import { useState, useEffect, useRef, useCallback } from 'react'
 import {
-  Timer, Play, Pause, Square, Plus, Trash2, ChevronLeft,
-  Loader2, Check, GripVertical, RotateCcw, Bell, Pencil, Copy, SkipForward,
+  Timer, Play, Pause, Square, Plus, Trash2, ChevronLeft, ChevronUp, ChevronDown,
+  Loader2, Check, RotateCcw, Bell, Pencil, Copy, SkipForward,
 } from 'lucide-react'
 import { createSupabaseBrowserClient } from '@/lib/supabase'
 import { Button } from '@/components/ui/button'
@@ -123,12 +123,14 @@ function CircularTimer({ progress, label, seconds, color }: {
 
 // ─── Step builder row ─────────────────────────────────────────
 
-function StepRow({ step, index, total, onChange, onRemove }: {
+function StepRow({ step, index, total, onChange, onRemove, onMoveUp, onMoveDown }: {
   step: Step
   index: number
   total: number
   onChange: (field: 'label' | 'duration', value: string | number) => void
   onRemove: () => void
+  onMoveUp?: () => void
+  onMoveDown?: () => void
 }) {
   const mins = Math.floor(step.duration / 60)
   const secs = step.duration % 60
@@ -154,7 +156,35 @@ function StepRow({ step, index, total, onChange, onRemove }: {
 
   return (
     <div className="flex items-center gap-2 rounded-lg border border-white/10 bg-white/5 px-3 py-2.5">
-      <GripVertical className="h-4 w-4 text-slate-700 shrink-0" />
+      {/* Up / down reorder buttons */}
+      <div className="flex flex-col shrink-0">
+        <button
+          type="button"
+          onClick={onMoveUp}
+          disabled={index === 0}
+          className={cn(
+            'flex h-4 w-4 items-center justify-center rounded transition-colors',
+            index === 0
+              ? 'text-slate-800 cursor-not-allowed'
+              : 'text-slate-500 hover:text-white hover:bg-white/10',
+          )}
+        >
+          <ChevronUp className="h-3.5 w-3.5" />
+        </button>
+        <button
+          type="button"
+          onClick={onMoveDown}
+          disabled={index === total - 1}
+          className={cn(
+            'flex h-4 w-4 items-center justify-center rounded transition-colors',
+            index === total - 1
+              ? 'text-slate-800 cursor-not-allowed'
+              : 'text-slate-500 hover:text-white hover:bg-white/10',
+          )}
+        >
+          <ChevronDown className="h-3.5 w-3.5" />
+        </button>
+      </div>
       <span className="text-xs text-slate-600 w-5 shrink-0 text-center">{index + 1}.</span>
 
       {/* Label */}
@@ -430,6 +460,15 @@ export default function FocusTimer() {
     setSteps(prev => prev.map((s, i) => i === idx ? { ...s, [field]: value } : s))
   }
 
+  function moveStep(from: number, to: number) {
+    setSteps(prev => {
+      const next = [...prev]
+      const [removed] = next.splice(from, 1)
+      next.splice(to, 0, removed)
+      return next
+    })
+  }
+
   // ── Render ────────────────────────────────────────────────
 
   if (loading) return (
@@ -566,6 +605,8 @@ export default function FocusTimer() {
               total={steps.length}
               onChange={(f, v) => updateStep(i, f, v)}
               onRemove={() => setSteps(prev => prev.filter((_, idx) => idx !== i))}
+              onMoveUp={i > 0 ? () => moveStep(i, i - 1) : undefined}
+              onMoveDown={i < steps.length - 1 ? () => moveStep(i, i + 1) : undefined}
             />
           ))}
           <button type="button"
