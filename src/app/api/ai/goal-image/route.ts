@@ -15,15 +15,16 @@ export async function POST(req: Request) {
 
   const admin = createSupabaseAdminClient()
 
-  // ── Generate image via Pollinations.ai (free, no API key) ─────
-  // Returns the image directly as a binary response.
+  // ── Generate image via Pollinations.ai ────────────────────────
+  // Random seed ensures a fresh generation even for the same prompt
+  const seed = Math.floor(Math.random() * 2_147_483_647)
   let imageBuffer: Buffer
   try {
     const encodedPrompt = encodeURIComponent(
       `${prompt}, masterpiece, best quality, highly detailed, sharp focus, professional`
     )
-    const pollinationsUrl =
-      `https://image.pollinations.ai/prompt/${encodedPrompt}?width=1024&height=768&model=flux-realism&nologo=true&enhance=true`
+    const pollinationsUrl = `https://image.pollinations.ai/prompt/${encodedPrompt}` +
+      `?width=1024&height=768&model=flux-realism&nologo=true&enhance=true&seed=${seed}`
 
     const imageRes = await fetch(pollinationsUrl, { signal: AbortSignal.timeout(60_000) })
     if (!imageRes.ok) throw new Error(`Pollinations returned ${imageRes.status}`)
@@ -35,13 +36,15 @@ export async function POST(req: Request) {
   }
 
   // ── Upload to Supabase Storage ────────────────────────────────
-  const path = `${user.id}/${goalId}.png`
+  // Versioned filename so the CDN never serves a stale cached file
+  const version = Date.now()
+  const path = `${user.id}/${goalId}-${version}.png`
   try {
     await admin.storage.createBucket('goal-visions', { public: true }).catch(() => {})
 
     const { error: uploadError } = await admin.storage
       .from('goal-visions')
-      .upload(path, imageBuffer, { upsert: true, contentType: 'image/png' })
+      .upload(path, imageBuffer, { contentType: 'image/png' })
 
     if (uploadError) {
       console.error('[goal-image] upload error:', uploadError)
