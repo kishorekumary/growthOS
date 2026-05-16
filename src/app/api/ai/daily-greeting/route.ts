@@ -33,7 +33,7 @@ export async function GET() {
   const hour = new Date().getHours()
   const timeOfDay = hour < 12 ? 'morning' : hour < 17 ? 'afternoon' : 'evening'
 
-  const systemPrompt = `You are a warm, encouraging personal growth coach for GrowthOS app.
+  const systemPrompt = `You are a warm, encouraging personal growth coach for Zenith app.
 Write a 2-sentence personalized daily ${timeOfDay} message for ${name}.
 User context: ${profile?.occupation ? `works as ${profile.occupation}` : 'professional'},
 from ${profile?.country ?? 'the world'}, focused on: ${goals}.

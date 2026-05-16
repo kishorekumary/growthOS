@@ -5,6 +5,7 @@ import { createSupabaseServerClient } from '@/lib/supabase-server'
 import Sidebar from '@/components/layout/Sidebar'
 import BottomNav from '@/components/layout/BottomNav'
 import ServiceWorkerRegister from '@/components/layout/ServiceWorkerRegister'
+import ZenithIcon from '@/components/layout/ZenithIcon'
 
 export default async function MainLayout({ children }: { children: React.ReactNode }) {
   const supabase = createSupabaseServerClient()
@@ -19,24 +20,20 @@ export default async function MainLayout({ children }: { children: React.ReactNo
     .single()
 
   return (
-    <div className="min-h-screen bg-slate-950 text-white">
+    <div className="min-h-screen text-white">
       <Sidebar
         userName={profile?.full_name ?? user.email ?? 'User'}
         userEmail={user.email ?? ''}
         avatarUrl={profile?.avatar_url ?? null}
       />
 
-      {/* Mobile top bar — hidden on desktop where sidebar is shown */}
-      <header className="fixed top-0 left-0 right-0 z-40 flex h-14 items-center justify-between border-b border-white/10 bg-slate-950/95 backdrop-blur-sm px-4 md:hidden">
-        <Link href="/dashboard" className="flex items-center gap-2 hover:opacity-80 transition-opacity">
-          <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-purple-600/20 border border-purple-500/30">
-            <span className="text-xs">🌱</span>
-          </div>
-          <span className="text-base font-bold text-white tracking-tight">
-            Growth<span className="text-purple-400">OS</span>
-          </span>
+      {/* Mobile top bar */}
+      <header className="fixed top-0 left-0 right-0 z-40 flex h-14 items-center justify-between border-b border-white/[0.06] bg-[#06060f]/95 backdrop-blur-md px-4 md:hidden">
+        <Link href="/dashboard" className="flex items-center gap-2.5 hover:opacity-80 transition-opacity">
+          <ZenithIcon className="h-7 w-7" />
+          <span className="text-base font-bold text-white tracking-tight">Zenith</span>
         </Link>
-        <Link href="/settings" className="flex h-8 w-8 items-center justify-center rounded-lg text-slate-400 hover:text-white hover:bg-white/5 transition-colors">
+        <Link href="/settings" className="flex h-8 w-8 items-center justify-center rounded-lg text-slate-500 hover:text-white hover:bg-white/[0.06] transition-colors">
           <Settings className="h-4 w-4" />
         </Link>
       </header>
@@ -46,7 +43,7 @@ export default async function MainLayout({ children }: { children: React.ReactNo
       </main>
       <BottomNav />
       <ServiceWorkerRegister />
-      <div className="fixed bottom-1.5 right-2 text-[9px] text-slate-700 font-mono select-none pointer-events-none z-50 hidden md:block">
+      <div className="fixed bottom-1.5 right-2 text-[9px] text-slate-800 font-mono select-none pointer-events-none z-50 hidden md:block">
         {process.env.NEXT_PUBLIC_GIT_BRANCH}/{process.env.NEXT_PUBLIC_GIT_COMMIT}
       </div>
     </div>

@@ -22,7 +22,7 @@ export async function POST(req: Request) {
   const typeData = mbtiType ? MBTI_TYPES[mbtiType] : null
   const name = profile?.full_name?.split(' ')[0] ?? 'there'
 
-  const systemPrompt = `You are a compassionate, insightful personal growth coach inside the GrowthOS app.
+  const systemPrompt = `You are a compassionate, insightful personal growth coach inside the Zenith app.
 You are chatting with ${name}${mbtiType ? `, who has an ${mbtiType} (${typeData?.name ?? ''}) personality type` : ''}.
 ${typeData ? `Key traits: ${typeData.tagline}. Their growth areas include: ${typeData.growth.slice(0, 3).join(', ')}.` : ''}
 ${profile?.primary_goals?.length ? `Their growth goals: ${profile.primary_goals.join(', ')}.` : ''}

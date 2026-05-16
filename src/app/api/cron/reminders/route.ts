@@ -54,14 +54,14 @@ function emailHtml(greeting: string, message: string, appUrl: string) {
 </head>
 <body>
   <div class="wrap">
-    <div class="logo">Growth<span>OS</span></div>
+    <div class="logo">Zenith</div>
     <div class="card">
       <h2>${greeting}</h2>
       <p>${message}</p>
     </div>
     <a href="${appUrl}/todos" class="cta">Open My Tasks</a>
     <div class="footer">
-      GrowthOS &nbsp;·&nbsp;
+      Zenith &nbsp;·&nbsp;
       <a href="${appUrl}/settings">Manage notifications</a>
     </div>
   </div>
@@ -188,7 +188,7 @@ export async function GET(req: NextRequest) {
     }
 
     const pushPayload = JSON.stringify({
-      title: 'GrowthOS Reminder 🌱',
+      title: 'Zenith Reminder ⚡',
       body:  taskMsg,
       url:   '/todos',
     })
@@ -218,9 +218,9 @@ export async function GET(req: NextRequest) {
       const email = authUser?.user?.email
       if (email) {
         await resend.emails.send({
-          from:    process.env.RESEND_FROM_EMAIL ?? 'GrowthOS <onboarding@resend.dev>',
+          from:    process.env.RESEND_FROM_EMAIL ?? 'Zenith <onboarding@resend.dev>',
           to:      email,
-          subject: isEvening ? 'Your GrowthOS Evening Check-In' : 'Your GrowthOS Morning Reminder',
+          subject: isEvening ? 'Your Zenith Evening Check-In' : 'Your Zenith Morning Reminder',
           html:    emailHtml(greeting, taskMsg, appUrl),
         }).catch(() => {})
       }
@@ -241,7 +241,7 @@ export async function GET(req: NextRequest) {
     // Telegram
     if (s.telegram_enabled && s.telegram_chat_id) {
       const telegramText = [
-        `${isEvening ? '🌙' : '🌅'} <b>GrowthOS Reminder</b>`,
+        `${isEvening ? '🌙' : '🌅'} <b>Zenith Reminder</b>`,
         '',
         taskMsg,
         '',

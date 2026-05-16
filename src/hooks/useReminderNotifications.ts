@@ -72,7 +72,7 @@ export function useReminderNotifications() {
         if (minAgo >= 0 && minAgo < 2) {
           firedTodayRef.current.add(fireKey)
           try {
-            new Notification('GrowthOS Reminder 🌱', {
+            new Notification('Zenith Reminder ⚡', {
               body: "Time to check your tasks and goals — keep the momentum going!",
               icon: '/icon-192.png',
               badge: '/icon-96.png',

@@ -41,7 +41,7 @@ export async function POST() {
   }
 
   const payload = JSON.stringify({
-    title: 'GrowthOS Test 🌱',
+    title: 'Zenith Test ⚡',
     body:  'Push notifications are working!',
     url:   '/todos',
   })

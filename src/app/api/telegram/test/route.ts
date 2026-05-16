@@ -21,7 +21,7 @@ export async function POST() {
   }
 
   const ok = await sendTelegramMessage(chatId, [
-    '🌱 <b>GrowthOS Test</b>',
+    '⚡ <b>Zenith Test</b>',
     '',
     'Telegram notifications are working! You will receive reminders here at your configured times.',
   ].join('\n'))

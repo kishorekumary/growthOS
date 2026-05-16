@@ -4,7 +4,7 @@ self.addEventListener('activate', event => event.waitUntil(clients.claim()))
 self.addEventListener('push', event => {
   const data = event.data?.json() ?? {}
   event.waitUntil(
-    self.registration.showNotification(data.title ?? 'GrowthOS Reminder', {
+    self.registration.showNotification(data.title ?? 'Zenith Reminder', {
       body:  data.body  ?? 'Time to check your tasks!',
       icon:  '/icon-192.png',
       badge: '/icon-96.png',
