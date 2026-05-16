@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
-import { Pencil, Save, X, Plus, Trash2, Loader2, Sparkles, Heart, ScrollText } from 'lucide-react'
+import { Pencil, Save, X, Plus, Trash2, Loader2, Sparkles, Heart, ScrollText, ChevronLeft, ChevronRight, Maximize2 } from 'lucide-react'
 import { createSupabaseBrowserClient } from '@/lib/supabase'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
@@ -81,6 +81,8 @@ function ListEditor({
 
 // ─── Main component ───────────────────────────────────────────
 
+const TAB_ORDER: Tab[] = ['pledge', 'affirmations', 'gratitude']
+
 export default function DailyPractice() {
   const [practice, setPractice] = useState<Practice | null>(null)
   const [loading, setLoading]   = useState(true)
@@ -88,6 +90,8 @@ export default function DailyPractice() {
   const [draft, setDraft]       = useState<Practice>(EMPTY)
   const [saving, setSaving]     = useState(false)
   const [activeTab, setActiveTab] = useState<Tab>('pledge')
+  const [fullscreen, setFullscreen] = useState(false)
+  const [fading, setFading]         = useState(false)
 
   const fetchPractice = useCallback(async () => {
     const supabase = createSupabaseBrowserClient()
@@ -117,6 +121,17 @@ export default function DailyPractice() {
 
   function cancelEdit() {
     setEditing(false)
+  }
+
+  function navigate(dir: 1 | -1) {
+    setFading(true)
+    setTimeout(() => {
+      setActiveTab(t => {
+        const i = TAB_ORDER.indexOf(t)
+        return TAB_ORDER[(i + dir + TAB_ORDER.length) % TAB_ORDER.length]
+      })
+      setFading(false)
+    }, 200)
   }
 
   async function save() {
@@ -262,20 +277,140 @@ export default function DailyPractice() {
     )
   }
 
-  // ── Read mode ───────────────────────────────────────────────
+  // ── Full-screen overlay ─────────────────────────────────────
   const TabIcon = currentTab.icon
+
+  if (fullscreen) {
+    return (
+      <div
+        className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4 bg-black/70 backdrop-blur-sm"
+        onClick={e => { if (e.target === e.currentTarget) setFullscreen(false) }}
+      >
+        <div className="w-full max-w-md rounded-2xl border border-white/10 bg-slate-900 shadow-2xl overflow-hidden">
+          {/* Header */}
+          <div className="flex items-center justify-between px-5 pt-5 pb-3">
+            <button
+              onClick={() => navigate(-1)}
+              className="p-2 rounded-full bg-white/5 hover:bg-white/10 text-slate-500 hover:text-white transition-colors"
+            >
+              <ChevronLeft className="h-5 w-5" />
+            </button>
+
+            <div className="flex flex-col items-center gap-1">
+              <div className={cn('flex items-center gap-1.5 text-sm font-semibold', currentTab.accent)}>
+                <TabIcon className="h-4 w-4" />
+                {currentTab.label}
+              </div>
+              {/* Dot indicators */}
+              <div className="flex gap-1.5 items-center mt-0.5">
+                {TAB_ORDER.map(t => (
+                  <button
+                    key={t}
+                    onClick={() => {
+                      if (t === activeTab) return
+                      setFading(true)
+                      setTimeout(() => { setActiveTab(t); setFading(false) }, 200)
+                    }}
+                    className={cn(
+                      'h-1 rounded-full transition-all duration-300',
+                      t === activeTab ? cn('w-4', currentTab.ring.replace('ring-', 'bg-')) : 'w-1 bg-white/20 hover:bg-white/40',
+                    )}
+                  />
+                ))}
+              </div>
+            </div>
+
+            <button
+              onClick={() => setFullscreen(false)}
+              className="p-2 rounded-full bg-white/5 hover:bg-white/10 text-slate-500 hover:text-white transition-colors"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          </div>
+
+          {/* Content */}
+          <div className={cn(
+            'px-6 py-4 min-h-[200px] max-h-[55vh] overflow-y-auto transition-opacity duration-[200ms]',
+            fading ? 'opacity-0' : 'opacity-100',
+          )}>
+            {activeTab === 'pledge' && (
+              practice!.pledge
+                ? <blockquote className="text-lg font-light text-amber-100/90 leading-relaxed italic text-center whitespace-pre-wrap">
+                    {practice!.pledge}
+                  </blockquote>
+                : <p className="text-slate-500 text-sm text-center pt-6">No pledge set yet.</p>
+            )}
+
+            {activeTab === 'affirmations' && (
+              practice!.affirmations.length > 0
+                ? <ul className="space-y-3">
+                    {practice!.affirmations.map((a, i) => (
+                      <li key={i} className="flex items-start gap-3">
+                        <span className="mt-0.5 h-5 w-5 shrink-0 rounded-full bg-violet-500/30 flex items-center justify-center">
+                          <span className="text-[10px] font-bold text-violet-300">{i + 1}</span>
+                        </span>
+                        <span className="text-base text-white leading-relaxed">{a}</span>
+                      </li>
+                    ))}
+                  </ul>
+                : <p className="text-slate-500 text-sm text-center pt-6">No affirmations set yet.</p>
+            )}
+
+            {activeTab === 'gratitude' && (
+              practice!.gratitude.length > 0
+                ? <ul className="space-y-3">
+                    {practice!.gratitude.map((g, i) => (
+                      <li key={i} className="flex items-start gap-3">
+                        <Heart className="h-4 w-4 shrink-0 mt-0.5 text-emerald-400/60" />
+                        <span className="text-base text-slate-200 leading-relaxed">{g}</span>
+                      </li>
+                    ))}
+                  </ul>
+                : <p className="text-slate-500 text-sm text-center pt-6">No gratitude entries set yet.</p>
+            )}
+          </div>
+
+          {/* Footer */}
+          <div className="flex items-center justify-between px-5 pb-5 pt-3 border-t border-white/5">
+            <button
+              onClick={() => navigate(1)}
+              className="p-2 rounded-full bg-white/5 hover:bg-white/10 text-slate-500 hover:text-white transition-colors"
+            >
+              <ChevronRight className="h-5 w-5" />
+            </button>
+            <button
+              type="button"
+              onClick={() => { setFullscreen(false); openEdit() }}
+              className="flex items-center gap-1.5 text-xs text-slate-500 hover:text-white transition-colors"
+            >
+              <Pencil className="h-3 w-3" /> Edit
+            </button>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  // ── Read mode ───────────────────────────────────────────────
   return (
-    <div className="rounded-2xl border border-white/10 bg-white/3 p-5 space-y-4">
+    <button
+      type="button"
+      onClick={() => setFullscreen(true)}
+      className="w-full text-left rounded-2xl border border-white/10 bg-white/3 p-5 space-y-4 hover:border-white/20 transition-colors group"
+    >
       {/* Header */}
       <div className="flex items-center justify-between">
         <span className="text-sm font-semibold text-white">Daily Practice</span>
-        <button
-          type="button"
-          onClick={openEdit}
-          className="flex items-center gap-1.5 text-xs text-slate-500 hover:text-white transition-colors"
-        >
-          <Pencil className="h-3 w-3" /> Edit
-        </button>
+        <div className="flex items-center gap-2">
+          <Maximize2 className="h-3.5 w-3.5 text-slate-600 group-hover:text-slate-400 transition-colors" />
+          <button
+            type="button"
+            onClick={e => { e.stopPropagation(); openEdit() }}
+            className="flex items-center gap-1.5 text-xs text-slate-500 hover:text-white transition-colors"
+          >
+            <Pencil className="h-3 w-3" /> Edit
+          </button>
+        </div>
       </div>
 
       {tabBar}
@@ -326,6 +461,6 @@ export default function DailyPractice() {
         {activeTab === 'affirmations' && `${practice!.affirmations.length} affirmation${practice!.affirmations.length !== 1 ? 's' : ''}`}
         {activeTab === 'gratitude'    && `${practice!.gratitude.length} gratitude entr${practice!.gratitude.length !== 1 ? 'ies' : 'y'}`}
       </p>
-    </div>
+    </button>
   )
 }
