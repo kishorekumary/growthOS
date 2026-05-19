@@ -372,7 +372,13 @@ export default function HabitTracker() {
       setLogsUnavail(true)
       const today = todayStr()
       const missedIds = readTodayMissed()
-      setWeekLogs(missedIds.map(id => ({ habit_id: id, log_date: today, status: 'missed' as const })))
+      const missedLogs: HabitLog[] = missedIds.map(id => ({ habit_id: id, log_date: today, status: 'missed' }))
+      // Reconstruct done entries for today from personality_habits.last_done_at so that
+      // weekDone (WeeklyScoreCard "completed" count) and getStatus both reflect reality after refresh.
+      const doneLogs: HabitLog[] = (habitsRes.data as Habit[])
+        .filter(h => h.last_done_at && localDateStr(new Date(h.last_done_at)) === today)
+        .map(h => ({ habit_id: h.id, log_date: today, status: 'done' }))
+      setWeekLogs([...missedLogs, ...doneLogs])
     } else {
       setLogsUnavail(false)
       setWeekLogs((logsRes.data as HabitLog[]) ?? [])
