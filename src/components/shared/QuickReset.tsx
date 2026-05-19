@@ -1,13 +1,13 @@
 'use client'
 
 import { useState, useEffect, useRef, useCallback } from 'react'
-import { Wind, Sparkles, Brain, X, ChevronLeft, ChevronRight, Loader2, RefreshCw, Zap, Target } from 'lucide-react'
-import { differenceInDays, parseISO } from 'date-fns'
+import { Wind, Sparkles, Brain, X, ChevronLeft, ChevronRight, Loader2, RefreshCw, Zap, Target, CheckSquare, Circle } from 'lucide-react'
+import { differenceInDays, isBefore, parseISO, startOfDay } from 'date-fns'
 import { createSupabaseBrowserClient } from '@/lib/supabase'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 
-type Mode = 'menu' | 'breathing' | 'affirmations' | 'ai' | 'goals'
+type Mode = 'menu' | 'breathing' | 'affirmations' | 'ai' | 'goals' | 'tasks'
 
 // ─── Box breathing phases ─────────────────────────────────────────
 const PHASES = [
@@ -376,6 +376,91 @@ function GoalsView() {
   )
 }
 
+// ─── Tasks view ──────────────────────────────────────────────────
+interface Todo {
+  id: string
+  title: string
+  due_date: string | null
+  is_completed: boolean
+}
+
+function TasksView() {
+  const [todos, setTodos]     = useState<Todo[]>([])
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    async function load() {
+      const supabase = createSupabaseBrowserClient()
+      const { data: { session } } = await supabase.auth.getSession()
+      if (!session?.user) { setLoading(false); return }
+      const { data } = await supabase
+        .from('user_todos')
+        .select('id, title, due_date, is_completed')
+        .eq('user_id', session.user.id)
+        .eq('is_completed', false)
+        .order('due_date', { ascending: true, nullsFirst: false })
+        .order('created_at', { ascending: false })
+      setTodos((data as Todo[] | null) ?? [])
+      setLoading(false)
+    }
+    load()
+  }, [])
+
+  async function complete(id: string) {
+    setTodos(prev => prev.filter(t => t.id !== id))
+    const supabase = createSupabaseBrowserClient()
+    const now = new Date().toISOString()
+    await supabase
+      .from('user_todos')
+      .update({ is_completed: true, completed_at: now, updated_at: now })
+      .eq('id', id)
+  }
+
+  if (loading) {
+    return <div className="flex justify-center py-14"><Loader2 className="h-5 w-5 animate-spin text-slate-500" /></div>
+  }
+
+  if (todos.length === 0) {
+    return (
+      <div className="text-center py-10 space-y-3">
+        <CheckSquare className="h-8 w-8 text-sky-400/40 mx-auto" />
+        <p className="text-slate-400 text-sm">All caught up — no pending tasks.</p>
+      </div>
+    )
+  }
+
+  return (
+    <div className="flex flex-col gap-3">
+      <p className="text-[11px] text-sky-400/60 uppercase tracking-widest text-center">
+        {todos.length} pending task{todos.length !== 1 ? 's' : ''}
+      </p>
+      <div className="space-y-1.5 max-h-[55vh] overflow-y-auto pr-1">
+        {todos.map(todo => {
+          const overdue = todo.due_date
+            ? isBefore(parseISO(todo.due_date), startOfDay(new Date()))
+            : false
+          return (
+            <button
+              key={todo.id}
+              onClick={() => complete(todo.id)}
+              className="group w-full flex items-center gap-3 rounded-xl bg-white/5 hover:bg-sky-500/10 px-3 py-3 text-left transition-colors"
+            >
+              <Circle className="h-4 w-4 shrink-0 text-slate-600 group-hover:text-sky-400 transition-colors" />
+              <span className="flex-1 min-w-0 text-sm text-slate-200 group-hover:text-white transition-colors truncate">
+                {todo.title}
+              </span>
+              {overdue && (
+                <span className="text-xs shrink-0 font-medium text-red-400">Overdue</span>
+              )}
+            </button>
+          )
+        })}
+      </div>
+      <p className="text-[10px] text-slate-600 text-center">Tap a task to mark it done</p>
+    </div>
+  )
+}
+
 // ─── Mode config ──────────────────────────────────────────────────
 const MODES = [
   {
@@ -418,6 +503,16 @@ const MODES = [
     hover:  'hover:bg-amber-500/15',
     desc:   'All your active goals',
   },
+  {
+    id:     'tasks'        as Mode,
+    label:  'Tasks',
+    icon:   CheckSquare,
+    accent: 'text-sky-400',
+    border: 'border-sky-500/20',
+    bg:     'bg-sky-500/8',
+    hover:  'hover:bg-sky-500/15',
+    desc:   'Pending tasks — tap to complete',
+  },
 ]
 
 // ─── Main export ──────────────────────────────────────────────────
@@ -450,8 +545,8 @@ export default function QuickReset() {
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-2">
-            {MODES.map(m => {
+          <div className="grid grid-cols-3 gap-2">
+            {MODES.map((m, i) => {
               const Icon = m.icon
               return (
                 <button
@@ -459,6 +554,7 @@ export default function QuickReset() {
                   onClick={() => { setMode(m.id); setOpen(true) }}
                   className={cn(
                     'flex flex-col items-center gap-2 rounded-xl border py-3.5 px-2 transition-all active:scale-95',
+                    i === MODES.length - 1 && MODES.length % 3 === 2 ? 'col-span-1' : '',
                     m.border, m.bg, m.hover,
                   )}
                 >
@@ -548,6 +644,7 @@ export default function QuickReset() {
         {mode === 'affirmations' && <AffirmationsFlash />}
         {mode === 'ai'           && <AIResetMessage />}
         {mode === 'goals'        && <GoalsView />}
+        {mode === 'tasks'        && <TasksView />}
       </div>
     </div>
   )
