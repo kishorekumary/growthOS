@@ -272,7 +272,11 @@ export default function BookMindMap({ bookId, bookTitle, initialJson, onClose, r
   const [isMobile, setIsMobile] = useState(false)
   const [showMobileMenu, setShowMobileMenu] = useState(false)
   const [traversalIdx, setTraversalIdx] = useState<number | null>(null)
-  const [collapsedNodes, setCollapsedNodes] = useState<Set<string>>(new Set())
+  const [collapsedNodes, setCollapsedNodes] = useState<Set<string>>(() => {
+    const ns = initNodes()
+    const withChildren = new Set(ns.filter(n => n.parentId !== null).map(n => n.parentId!))
+    return new Set(ns.filter(n => n.id !== 'root' && withChildren.has(n.id)).map(n => n.id))
+  })
 
   const [copySuccess, setCopySuccess] = useState(false)
 
