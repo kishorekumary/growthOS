@@ -5,7 +5,7 @@ import { usePathname, useRouter } from 'next/navigation'
 import {
   LayoutDashboard, Brain, Dumbbell, Wallet, BookOpen,
   Target, CheckSquare, Timer, Newspaper, CalendarCheck,
-  Flame, NotebookPen, Settings, LogOut,
+  Flame, NotebookPen, Images, Settings, LogOut,
 } from 'lucide-react'
 import { createSupabaseBrowserClient } from '@/lib/supabase'
 import { cn } from '@/lib/utils'
@@ -24,6 +24,7 @@ const NAV_ITEMS = [
   { href: '/retro',               label: 'Retro',      icon: CalendarCheck },
   { href: '/challenges',          label: 'Challenges', icon: Flame },
   { href: '/personality/journal', label: 'Journal',    icon: NotebookPen },
+  { href: '/gallery',             label: 'Gallery',    icon: Images },
 ]
 
 interface SidebarProps {
