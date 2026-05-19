@@ -224,13 +224,8 @@ export default function FocusTimer() {
 
   // ── Render ────────────────────────────────────────────────
 
-  if (loading) return (
-    <div className="flex items-center justify-center py-16">
-      <Loader2 className="h-5 w-5 animate-spin text-slate-500" />
-    </div>
-  )
-
   // ── Run mode (driven by global context) ───────────────────
+  // Check runSeq before loading so navigating back mid-session shows the timer immediately
   if (runSeq) {
     const step     = runSeq.steps[stepIdx]
     const progress = step ? secondsLeft / step.duration : 0
@@ -316,6 +311,12 @@ export default function FocusTimer() {
       </div>
     )
   }
+
+  if (loading) return (
+    <div className="flex items-center justify-center py-16">
+      <Loader2 className="h-5 w-5 animate-spin text-slate-500" />
+    </div>
+  )
 
   // ── Build / edit mode ─────────────────────────────────────
   if (mode === 'build') {
