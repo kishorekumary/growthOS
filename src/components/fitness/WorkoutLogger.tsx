@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
-import { Plus, Trash2, Loader2, Check, Dumbbell } from 'lucide-react'
+import { Plus, Trash2, Loader2, Check, Dumbbell, Pencil, X } from 'lucide-react'
 import { createSupabaseBrowserClient } from '@/lib/supabase'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -56,8 +56,16 @@ export default function WorkoutLogger() {
   const [saved, setSaved]         = useState(false)
   const [error, setError]         = useState<string | null>(null)
 
-  const [recentLogs, setRecentLogs] = useState<WorkoutLog[]>([])
-  const [loadingLogs, setLoadingLogs] = useState(true)
+  const [recentLogs, setRecentLogs]     = useState<WorkoutLog[]>([])
+  const [loadingLogs, setLoadingLogs]   = useState(true)
+
+  const [editingId, setEditingId]       = useState<string | null>(null)
+  const [editDate, setEditDate]         = useState('')
+  const [editType, setEditType]         = useState<WorkoutType>('strength')
+  const [editDuration, setEditDuration] = useState('')
+  const [editExercises, setEditExercises] = useState<Exercise[]>([{ name: '', sets: '', reps: '' }])
+  const [editNotes, setEditNotes]       = useState('')
+  const [editSaving, setEditSaving]     = useState(false)
 
   const fetchRecentLogs = useCallback(async () => {
     const supabase = createSupabaseBrowserClient()
@@ -86,6 +94,67 @@ export default function WorkoutLogger() {
 
   function updateExercise(i: number, field: keyof Exercise, value: string) {
     setExercises(prev => prev.map((ex, idx) => idx === i ? { ...ex, [field]: value } : ex))
+  }
+
+  function startEdit(log: WorkoutLog) {
+    setEditingId(log.id)
+    setEditDate(log.log_date)
+    setEditType(log.workout_type)
+    setEditDuration(log.duration_mins > 0 ? String(log.duration_mins) : '')
+    setEditExercises(
+      log.exercises?.length
+        ? log.exercises.map(e => ({ name: e.name, sets: String(e.sets), reps: e.reps }))
+        : [{ name: '', sets: '', reps: '' }]
+    )
+    setEditNotes(log.notes ?? '')
+  }
+
+  function cancelEdit() { setEditingId(null) }
+
+  function addEditExercise() {
+    setEditExercises(prev => [...prev, { name: '', sets: '', reps: '' }])
+  }
+
+  function removeEditExercise(i: number) {
+    setEditExercises(prev => prev.filter((_, idx) => idx !== i))
+  }
+
+  function updateEditExercise(i: number, field: keyof Exercise, value: string) {
+    setEditExercises(prev => prev.map((ex, idx) => idx === i ? { ...ex, [field]: value } : ex))
+  }
+
+  async function handleEditSave() {
+    if (!editingId || editSaving) return
+    setEditSaving(true)
+    const supabase = createSupabaseBrowserClient()
+    const cleanExercises = editType === 'rest'
+      ? []
+      : editExercises.filter(e => e.name.trim()).map(e => ({
+          name: e.name.trim(),
+          sets: Number(e.sets) || 0,
+          reps: e.reps.trim() || '0',
+        }))
+    const { error } = await supabase
+      .from('workout_logs')
+      .update({
+        log_date:      editDate,
+        workout_type:  editType,
+        duration_mins: Number(editDuration) || 0,
+        exercises:     cleanExercises,
+        notes:         editNotes.trim() || null,
+      })
+      .eq('id', editingId)
+    if (!error) {
+      setRecentLogs(prev => prev.map(l =>
+        l.id === editingId
+          ? { ...l, log_date: editDate, workout_type: editType,
+              duration_mins: Number(editDuration) || 0,
+              exercises: cleanExercises, notes: editNotes.trim() || null }
+          : l
+      ))
+      setEditingId(null)
+    }
+    setEditSaving(false)
   }
 
   async function saveLog() {
@@ -295,10 +364,135 @@ export default function WorkoutLogger() {
           <div className="space-y-2">
             {recentLogs.map((log) => {
               const wt = WORKOUT_TYPES.find(w => w.value === log.workout_type)
+              const isEditing = editingId === log.id
+
+              if (isEditing) {
+                return (
+                  <div key={log.id} className="rounded-xl border border-violet-500/30 bg-white/5 p-4 space-y-4">
+                    {/* Date */}
+                    <div className="flex items-center justify-between gap-2">
+                      <input
+                        type="date"
+                        value={editDate}
+                        max={todayStr()}
+                        onChange={e => setEditDate(e.target.value)}
+                        className="rounded-lg border border-white/10 bg-white/5 px-3 py-1.5 text-sm text-white focus:outline-none focus:ring-1 focus:ring-violet-500"
+                      />
+                      <button type="button" onClick={cancelEdit} className="text-slate-500 hover:text-white transition-colors">
+                        <X className="h-4 w-4" />
+                      </button>
+                    </div>
+
+                    {/* Type */}
+                    <div className="grid grid-cols-5 gap-1.5">
+                      {WORKOUT_TYPES.map(({ value, label, icon }) => (
+                        <button
+                          key={value}
+                          type="button"
+                          onClick={() => setEditType(value)}
+                          className={cn(
+                            'flex flex-col items-center gap-1 rounded-lg border py-2 px-1 text-xs font-medium transition-all',
+                            editType === value
+                              ? 'border-violet-500 bg-violet-500/20 text-white'
+                              : 'border-white/10 bg-white/5 text-slate-400 hover:border-white/20'
+                          )}
+                        >
+                          <span className="text-base">{icon}</span>
+                          {label}
+                        </button>
+                      ))}
+                    </div>
+
+                    {/* Duration */}
+                    {editType !== 'rest' && (
+                      <Input
+                        type="number"
+                        min="1"
+                        max="300"
+                        placeholder="Duration (minutes)"
+                        value={editDuration}
+                        onChange={e => setEditDuration(e.target.value)}
+                        className="border-white/20 bg-white/5 text-white placeholder:text-slate-500 focus-visible:ring-violet-500"
+                      />
+                    )}
+
+                    {/* Exercises */}
+                    {editType === 'strength' && (
+                      <div className="space-y-2">
+                        {editExercises.map((ex, i) => (
+                          <div key={i} className="flex gap-2 items-center">
+                            <Input
+                              placeholder="Exercise"
+                              value={ex.name}
+                              onChange={e => updateEditExercise(i, 'name', e.target.value)}
+                              className="flex-1 border-white/20 bg-white/5 text-white placeholder:text-slate-500 text-sm focus-visible:ring-violet-500"
+                            />
+                            <Input
+                              placeholder="Sets"
+                              type="number"
+                              min="1"
+                              value={ex.sets}
+                              onChange={e => updateEditExercise(i, 'sets', e.target.value)}
+                              className="w-16 border-white/20 bg-white/5 text-white placeholder:text-slate-500 text-sm focus-visible:ring-violet-500"
+                            />
+                            <Input
+                              placeholder="Reps"
+                              value={ex.reps}
+                              onChange={e => updateEditExercise(i, 'reps', e.target.value)}
+                              className="w-20 border-white/20 bg-white/5 text-white placeholder:text-slate-500 text-sm focus-visible:ring-violet-500"
+                            />
+                            {editExercises.length > 1 && (
+                              <button type="button" onClick={() => removeEditExercise(i)} className="text-slate-600 hover:text-red-400 transition-colors shrink-0">
+                                <Trash2 className="h-4 w-4" />
+                              </button>
+                            )}
+                          </div>
+                        ))}
+                        <button
+                          type="button"
+                          onClick={addEditExercise}
+                          className="flex items-center gap-1.5 text-xs text-violet-400 hover:text-violet-300 transition-colors"
+                        >
+                          <Plus className="h-3.5 w-3.5" /> Add exercise
+                        </button>
+                      </div>
+                    )}
+
+                    {/* Notes */}
+                    <textarea
+                      value={editNotes}
+                      onChange={e => setEditNotes(e.target.value)}
+                      placeholder="Notes (optional)"
+                      rows={2}
+                      className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-white placeholder:text-slate-500 resize-none focus:outline-none focus:ring-1 focus:ring-violet-500"
+                    />
+
+                    <div className="flex gap-2">
+                      <Button
+                        onClick={handleEditSave}
+                        disabled={editSaving}
+                        size="sm"
+                        className="bg-violet-600 hover:bg-violet-700 text-white h-8 px-4"
+                      >
+                        {editSaving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : 'Save'}
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={cancelEdit}
+                        className="border-white/10 bg-transparent text-slate-400 hover:text-white h-8 px-4"
+                      >
+                        Cancel
+                      </Button>
+                    </div>
+                  </div>
+                )
+              }
+
               return (
                 <div
                   key={log.id}
-                  className="rounded-xl border border-white/10 bg-white/5 px-4 py-3 flex items-center gap-3"
+                  className="group rounded-xl border border-white/10 bg-white/5 px-4 py-3 flex items-center gap-3"
                 >
                   <span className="text-xl shrink-0">{wt?.icon ?? '🏋️'}</span>
                   <div className="flex-1 min-w-0">
@@ -316,6 +510,14 @@ export default function WorkoutLogger() {
                       <p className="text-xs text-slate-400 mt-0.5 truncate">{log.notes}</p>
                     )}
                   </div>
+                  <button
+                    type="button"
+                    onClick={() => startEdit(log)}
+                    title="Edit workout"
+                    className="opacity-0 group-hover:opacity-100 text-slate-600 hover:text-violet-400 transition-all shrink-0"
+                  >
+                    <Pencil className="h-3.5 w-3.5" />
+                  </button>
                 </div>
               )
             })}
