@@ -138,6 +138,25 @@ function StepRow({ step, index, total, onChange, onRemove, onMoveUp, onMoveDown 
   )
 }
 
+// ─── Sequence order (persisted in localStorage, no schema change) ─────────────
+
+const LS_ORDER_KEY = 'focus_seq_order'
+
+function applyStoredOrder(seqs: Sequence[]): Sequence[] {
+  try {
+    const stored: string[] = JSON.parse(localStorage.getItem(LS_ORDER_KEY) ?? '[]')
+    if (!stored.length) return seqs
+    const map = new Map(seqs.map(s => [s.id, s]))
+    const ordered = stored.flatMap(id => (map.has(id) ? [map.get(id)!] : []))
+    const remaining = seqs.filter(s => !stored.includes(s.id))
+    return [...ordered, ...remaining]
+  } catch { return seqs }
+}
+
+function saveOrder(seqs: Sequence[]) {
+  localStorage.setItem(LS_ORDER_KEY, JSON.stringify(seqs.map(s => s.id)))
+}
+
 // ─── Main component ───────────────────────────────────────────
 
 type LocalMode = 'list' | 'build'
@@ -170,7 +189,7 @@ export default function FocusTimer() {
       .select('*')
       .eq('user_id', session.user.id)
       .order('created_at', { ascending: false })
-    setSequences((data as Sequence[]) ?? [])
+    setSequences(applyStoredOrder((data as Sequence[]) ?? []))
     setLoading(false)
   }, [])
 
@@ -208,8 +227,22 @@ export default function FocusTimer() {
     fetchSeqs()
   }
 
+  function moveSequence(from: number, to: number) {
+    setSequences(prev => {
+      const next = [...prev]
+      const [item] = next.splice(from, 1)
+      next.splice(to, 0, item)
+      saveOrder(next)
+      return next
+    })
+  }
+
   async function deleteSequence(id: string) {
-    setSequences(prev => prev.filter(s => s.id !== id))
+    setSequences(prev => {
+      const next = prev.filter(s => s.id !== id)
+      saveOrder(next)
+      return next
+    })
     const supabase = createSupabaseBrowserClient()
     await supabase.from('focus_sequences').delete().eq('id', id)
   }
@@ -398,12 +431,24 @@ export default function FocusTimer() {
         </div>
       ) : (
         <div className="space-y-3">
-          {sequences.map(seq => {
+          {sequences.map((seq, idx) => {
             const total = totalSecs(seq.steps)
             return (
               <div key={seq.id}
                 className="group rounded-xl border border-white/10 bg-white/3 p-4 hover:border-white/20 transition-all">
                 <div className="flex items-start gap-3">
+                  <div className="flex flex-col shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
+                    <button onClick={() => moveSequence(idx, idx - 1)} disabled={idx === 0} title="Move up"
+                      className={cn('flex h-4 w-4 items-center justify-center rounded transition-colors',
+                        idx === 0 ? 'text-slate-800 cursor-not-allowed' : 'text-slate-500 hover:text-white hover:bg-white/10')}>
+                      <ChevronUp className="h-3.5 w-3.5" />
+                    </button>
+                    <button onClick={() => moveSequence(idx, idx + 1)} disabled={idx === sequences.length - 1} title="Move down"
+                      className={cn('flex h-4 w-4 items-center justify-center rounded transition-colors',
+                        idx === sequences.length - 1 ? 'text-slate-800 cursor-not-allowed' : 'text-slate-500 hover:text-white hover:bg-white/10')}>
+                      <ChevronDown className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
                   <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-violet-500/15 border border-violet-500/20">
                     <Timer className="h-4 w-4 text-violet-400" />
                   </div>
