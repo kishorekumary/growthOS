@@ -198,7 +198,13 @@ export default function TodoList({ initialTodos = [] }: { initialTodos?: Todo[] 
   }
 
   const filtered  = applyFilter(todos)
-  const completed = todos.filter(t => t.is_completed)
+  const completed = todos
+    .filter(t => t.is_completed)
+    .sort((a, b) => {
+      if (!a.completed_at) return 1
+      if (!b.completed_at) return -1
+      return new Date(b.completed_at).getTime() - new Date(a.completed_at).getTime()
+    })
 
   if (loading) return (
     <div className="flex items-center justify-center py-16">
