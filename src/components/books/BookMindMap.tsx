@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useRef, useEffect, useCallback, useMemo } from 'react'
-import { X, Trash2, GitBranch, Loader2, Check, Pencil, Upload, Plus, Undo2, Link2, Eye, EyeOff, Search, ChevronLeft, ChevronRight, Download, MoreHorizontal, Save, Navigation } from 'lucide-react'
+import { X, Trash2, GitBranch, Loader2, Check, Pencil, Upload, Plus, Undo2, Link2, Eye, EyeOff, Search, ChevronLeft, ChevronRight, ChevronDown, Download, MoreHorizontal, Save, Navigation } from 'lucide-react'
 import { createSupabaseBrowserClient } from '@/lib/supabase'
 import { cn } from '@/lib/utils'
 
@@ -272,12 +272,22 @@ export default function BookMindMap({ bookId, bookTitle, initialJson, onClose, r
   const [isMobile, setIsMobile] = useState(false)
   const [showMobileMenu, setShowMobileMenu] = useState(false)
   const [traversalIdx, setTraversalIdx] = useState<number | null>(null)
+  const [collapsedNodes, setCollapsedNodes] = useState<Set<string>>(new Set())
 
   const [copySuccess, setCopySuccess] = useState(false)
 
   function handleClose() {
     if (isDirty && !isReadOnly) { setShowCloseConfirm(true); return }
     onClose()
+  }
+
+  function toggleCollapse(nodeId: string) {
+    setCollapsedNodes(prev => {
+      const next = new Set(prev)
+      if (next.has(nodeId)) next.delete(nodeId)
+      else next.add(nodeId)
+      return next
+    })
   }
 
   function exportMarkdown() {
@@ -310,11 +320,21 @@ export default function BookMindMap({ bookId, bookTitle, initialJson, onClose, r
   const searchInputRef   = useRef<HTMLInputElement>(null)
   const scrollContainerRef = useRef<HTMLDivElement>(null)
 
+  const visibleNodes = useMemo(() => {
+    function isVisible(nodeId: string): boolean {
+      const node = nodes.find(n => n.id === nodeId)
+      if (!node || !node.parentId) return true
+      if (collapsedNodes.has(node.parentId)) return false
+      return isVisible(node.parentId)
+    }
+    return nodes.filter(n => isVisible(n.id))
+  }, [nodes, collapsedNodes])
+
   const searchMatches = useMemo(() => {
     const q = searchQuery.trim().toLowerCase()
     if (!q) return []
-    return nodes.filter(n => n.label.toLowerCase().includes(q))
-  }, [nodes, searchQuery])
+    return visibleNodes.filter(n => n.label.toLowerCase().includes(q))
+  }, [visibleNodes, searchQuery])
 
   const matchIds = useMemo(() => new Set(searchMatches.map(n => n.id)), [searchMatches])
 
@@ -328,14 +348,14 @@ export default function BookMindMap({ bookId, bookTitle, initialJson, onClose, r
   const dfsOrder = useMemo(() => {
     const result: MindNode[] = []
     function dfs(nodeId: string) {
-      const node = nodes.find(n => n.id === nodeId)
+      const node = visibleNodes.find(n => n.id === nodeId)
       if (!node) return
       result.push(node)
-      nodes.filter(n => n.parentId === nodeId).sort((a, b) => a.y - b.y).forEach(c => dfs(c.id))
+      visibleNodes.filter(n => n.parentId === nodeId).sort((a, b) => a.y - b.y).forEach(c => dfs(c.id))
     }
     dfs('root')
     return result
-  }, [nodes])
+  }, [visibleNodes])
   dfsLengthRef.current  = dfsOrder.length
   dfsOrderRef.current   = dfsOrder
 
@@ -552,6 +572,7 @@ export default function BookMindMap({ bookId, bookTitle, initialJson, onClose, r
     if (rootNode) rootNode.label = bookTitle
     pushHistory()
     setNodes(newNodes)
+    setCollapsedNodes(new Set())
     setImportText(''); setImportError(null); setShowImport(false)
   }
 
@@ -719,6 +740,11 @@ export default function BookMindMap({ bookId, bookTitle, initialJson, onClose, r
     collect(id)
     setNodes(prev => prev.filter(n => !toDelete.has(n.id)))
     if (editingId && toDelete.has(editingId)) setEditingId(null)
+    setCollapsedNodes(prev => {
+      const next = new Set(prev)
+      toDelete.forEach(id => next.delete(id))
+      return next
+    })
   }
 
   async function save() {
@@ -1030,7 +1056,8 @@ export default function BookMindMap({ bookId, bookTitle, initialJson, onClose, r
                 Drag <span className="text-violet-500">●</span> right edge to branch &nbsp;·&nbsp;
                 <span className="text-violet-500">✎</span> edit &nbsp;·&nbsp;
                 <span className="text-amber-500">＋</span> inject level &nbsp;·&nbsp;
-                <span className="text-cyan-500">⇌</span> move branch to another node &nbsp;·&nbsp;
+                <span className="text-cyan-500">⇌</span> move branch &nbsp;·&nbsp;
+                <span className="text-violet-400">◉</span> collapse/expand &nbsp;·&nbsp;
                 ⌘Z undo
               </p>
               <p className="sm:hidden text-[11px] text-slate-600">
@@ -1141,7 +1168,7 @@ export default function BookMindMap({ bookId, bookTitle, initialJson, onClose, r
             width={canvasW} height={canvasH}
             style={{ overflow: 'visible' }}
           >
-            {nodes.filter(n => n.parentId).map(child => {
+            {visibleNodes.filter(n => n.parentId).map(child => {
               const parent = nodesRef.current.find(p => p.id === child.parentId)
               if (!parent) return null
               const d = getDepth(child.id, nodesRef.current)
@@ -1176,7 +1203,7 @@ export default function BookMindMap({ bookId, bookTitle, initialJson, onClose, r
           </svg>
 
           {/* ── Nodes ── */}
-          {nodes.map(node => {
+          {visibleNodes.map(node => {
             const isRoot        = node.id === 'root'
             const isEditing     = editingId === node.id
             const d             = getDepth(node.id, nodes)
@@ -1292,6 +1319,26 @@ export default function BookMindMap({ bookId, bookTitle, initialJson, onClose, r
                   >
                     <HighlightedLabel text={node.label} query={searchQuery} />
                   </span>
+                )}
+
+                {/* Collapse/expand — available in any mode for nodes with children */}
+                {hasChildren && !reparentId && !isEditing && (
+                  <button
+                    type="button"
+                    onMouseDown={e => e.stopPropagation()}
+                    onClick={e => { e.stopPropagation(); toggleCollapse(node.id) }}
+                    title={collapsedNodes.has(node.id) ? 'Expand children' : 'Collapse children'}
+                    className={cn(
+                      'shrink-0 flex items-center justify-center w-4 h-4 rounded-full border transition-all',
+                      collapsedNodes.has(node.id)
+                        ? 'opacity-100 border-violet-500/60 bg-violet-500/20 text-violet-400 hover:bg-violet-500/35'
+                        : 'opacity-0 group-hover:opacity-100 border-slate-600/40 bg-slate-800/60 text-slate-500 hover:border-violet-500/50 hover:bg-violet-500/15 hover:text-violet-400'
+                    )}
+                  >
+                    {collapsedNodes.has(node.id)
+                      ? <ChevronRight className="h-2.5 w-2.5" />
+                      : <ChevronDown className="h-2.5 w-2.5" />}
+                  </button>
                 )}
 
                 {/* Edit controls — hidden in readonly or reparent mode */}

@@ -6,6 +6,7 @@ import DailyGreetingCard from '@/components/shared/DailyGreetingCard'
 import DailyPractice from '@/components/shared/DailyPractice'
 import QuickReset from '@/components/shared/QuickReset'
 import TodoWidget from '@/components/todos/TodoWidget'
+import DashboardGoalsCard from '@/components/goals/DashboardGoalsCard'
 
 export default async function DashboardPage() {
   const supabase = createSupabaseServerClient()
@@ -24,6 +25,7 @@ export default async function DashboardPage() {
     { data: completedBooks },
     { data: currentBook },
     { data: todayTodos },
+    { data: activeGoals },
   ] = await Promise.all([
     supabase.from('user_profiles').select('full_name').eq('id', user.id).single(),
     supabase.from('personality_habits').select('streak_count').eq('user_id', user.id),
@@ -46,6 +48,12 @@ export default async function DashboardPage() {
       .order('due_date', { ascending: true, nullsFirst: true })
       .order('created_at', { ascending: false })
       .limit(6),
+    supabase
+      .from('user_goals')
+      .select('id, title, category, timeframe, target_date, is_completed')
+      .eq('user_id', user.id)
+      .eq('is_completed', false)
+      .order('target_date', { ascending: true, nullsFirst: false }),
   ])
 
   const activeHabits = habits?.filter((h) => h.streak_count > 0).length ?? 0
@@ -169,6 +177,11 @@ export default async function DashboardPage() {
       {/* Quick Reset */}
       <div className="mt-6">
         <QuickReset />
+      </div>
+
+      {/* Goals overview */}
+      <div className="mt-4">
+        <DashboardGoalsCard goals={activeGoals ?? []} />
       </div>
 
       {/* Daily Practice — pledge, affirmations, gratitude */}
