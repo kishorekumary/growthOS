@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useRef, useCallback } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import {
   Timer, Play, Pause, Square, Plus, Trash2, ChevronLeft, ChevronUp, ChevronDown,
   Loader2, Check, RotateCcw, Bell, Pencil, Copy, SkipForward,
@@ -10,20 +10,11 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { cn } from '@/lib/utils'
+import { useTimer, type Sequence } from '@/contexts/TimerContext'
 
 // ─── Types ────────────────────────────────────────────────────
 
-interface Step {
-  label: string
-  duration: number  // seconds
-}
-
-interface Sequence {
-  id: string
-  name: string
-  steps: Step[]
-  created_at: string
-}
+interface Step { label: string; duration: number }
 
 // ─── Utilities ────────────────────────────────────────────────
 
@@ -49,64 +40,19 @@ function fmtCountdown(secs: number) {
   return `${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`
 }
 
-// Five-tone ascending chime + two accent beeps via Web Audio API
-function playAlarm() {
-  try {
-    const AudioCtx = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext
-    const ctx = new AudioCtx()
-    // C5 – E5 – G5 chime, then two C6 accent beeps for a longer reminder
-    const tones: { freq: number; t: number; duration: number }[] = [
-      { freq: 523.25,  t: 0,    duration: 0.55 },  // C5
-      { freq: 659.25,  t: 0.22, duration: 0.55 },  // E5
-      { freq: 783.99,  t: 0.44, duration: 0.55 },  // G5
-      { freq: 1046.50, t: 1.05, duration: 0.65 },  // C6 — first accent beep
-      { freq: 1046.50, t: 1.90, duration: 0.65 },  // C6 — second accent beep
-    ]
-    tones.forEach(({ freq, t, duration }) => {
-      const osc  = ctx.createOscillator()
-      const gain = ctx.createGain()
-      osc.connect(gain)
-      gain.connect(ctx.destination)
-      osc.type = 'sine'
-      osc.frequency.value = freq
-      const at = ctx.currentTime + t
-      gain.gain.setValueAtTime(0, at)
-      gain.gain.linearRampToValueAtTime(0.85, at + 0.04)
-      gain.gain.exponentialRampToValueAtTime(0.001, at + duration)
-      osc.start(at)
-      osc.stop(at + duration + 0.05)
-    })
-  } catch { /* blocked by autoplay policy */ }
-}
-
-async function showNotification(title: string, body: string) {
-  if (!('Notification' in window)) return
-  if (Notification.permission === 'default') await Notification.requestPermission()
-  if (Notification.permission === 'granted') {
-    const n = new Notification(title, { body, icon: '/icon-192.png', silent: false })
-    setTimeout(() => n.close(), 3000)
-  }
-}
-
 // ─── Circular countdown ring ──────────────────────────────────
 
 function CircularTimer({ progress, label, seconds, color }: {
-  progress: number
-  label: string
-  seconds: number
-  color: string
+  progress: number; label: string; seconds: number; color: string
 }) {
   const r    = 84
   const circ = 2 * Math.PI * r
   const offset = circ * (1 - Math.max(0, Math.min(1, progress)))
-
   return (
     <div className="relative">
       <svg width="210" height="210" className="-rotate-90">
         <circle cx="105" cy="105" r={r} fill="none" stroke="rgba(255,255,255,0.05)" strokeWidth="12" />
-        <circle
-          cx="105" cy="105" r={r}
-          fill="none" stroke="currentColor" strokeWidth="12" strokeLinecap="round"
+        <circle cx="105" cy="105" r={r} fill="none" stroke="currentColor" strokeWidth="12" strokeLinecap="round"
           strokeDasharray={circ} strokeDashoffset={offset}
           className={cn('transition-[stroke-dashoffset] duration-500', color)}
         />
@@ -124,112 +70,64 @@ function CircularTimer({ progress, label, seconds, color }: {
 // ─── Step builder row ─────────────────────────────────────────
 
 function StepRow({ step, index, total, onChange, onRemove, onMoveUp, onMoveDown }: {
-  step: Step
-  index: number
-  total: number
+  step: Step; index: number; total: number
   onChange: (field: 'label' | 'duration', value: string | number) => void
-  onRemove: () => void
-  onMoveUp?: () => void
-  onMoveDown?: () => void
+  onRemove: () => void; onMoveUp?: () => void; onMoveDown?: () => void
 }) {
   const mins = Math.floor(step.duration / 60)
   const secs = step.duration % 60
-
-  // Use string state so the user can clear the field while typing
   const [mStr, setMStr] = useState(String(mins))
   const [sStr, setSStr] = useState(String(secs))
-
-  // Keep local display in sync when parent resets steps (e.g. after save)
   useEffect(() => { setMStr(String(Math.floor(step.duration / 60))) }, [step.duration])
 
   function commitMins(val: string) {
     const n = Math.max(0, Math.min(99, parseInt(val) || 0))
-    setMStr(String(n))
-    onChange('duration', n * 60 + secs)
+    setMStr(String(n)); onChange('duration', n * 60 + secs)
   }
-
   function commitSecs(val: string) {
     const n = Math.max(0, Math.min(59, parseInt(val) || 0))
-    setSStr(String(n))
-    onChange('duration', mins * 60 + n)
+    setSStr(String(n)); onChange('duration', mins * 60 + n)
   }
 
   return (
     <div className="flex items-center gap-2 rounded-lg border border-white/10 bg-white/5 px-3 py-2.5">
-      {/* Up / down reorder buttons */}
       <div className="flex flex-col shrink-0">
-        <button
-          type="button"
-          onClick={onMoveUp}
-          disabled={index === 0}
-          className={cn(
-            'flex h-4 w-4 items-center justify-center rounded transition-colors',
-            index === 0
-              ? 'text-slate-800 cursor-not-allowed'
-              : 'text-slate-500 hover:text-white hover:bg-white/10',
-          )}
-        >
+        <button type="button" onClick={onMoveUp} disabled={index === 0}
+          className={cn('flex h-4 w-4 items-center justify-center rounded transition-colors',
+            index === 0 ? 'text-slate-800 cursor-not-allowed' : 'text-slate-500 hover:text-white hover:bg-white/10')}>
           <ChevronUp className="h-3.5 w-3.5" />
         </button>
-        <button
-          type="button"
-          onClick={onMoveDown}
-          disabled={index === total - 1}
-          className={cn(
-            'flex h-4 w-4 items-center justify-center rounded transition-colors',
-            index === total - 1
-              ? 'text-slate-800 cursor-not-allowed'
-              : 'text-slate-500 hover:text-white hover:bg-white/10',
-          )}
-        >
+        <button type="button" onClick={onMoveDown} disabled={index === total - 1}
+          className={cn('flex h-4 w-4 items-center justify-center rounded transition-colors',
+            index === total - 1 ? 'text-slate-800 cursor-not-allowed' : 'text-slate-500 hover:text-white hover:bg-white/10')}>
           <ChevronDown className="h-3.5 w-3.5" />
         </button>
       </div>
       <span className="text-xs text-slate-600 w-5 shrink-0 text-center">{index + 1}.</span>
-
-      {/* Label */}
-      <input
-        value={step.label}
-        onChange={e => onChange('label', e.target.value)}
+      <input value={step.label} onChange={e => onChange('label', e.target.value)}
         placeholder="Step name"
-        className="flex-1 min-w-0 bg-transparent text-sm text-white placeholder:text-slate-600 focus:outline-none"
-      />
-
-      {/* Duration — minutes : seconds */}
+        className="flex-1 min-w-0 bg-transparent text-sm text-white placeholder:text-slate-600 focus:outline-none" />
       <div className="flex items-center gap-1.5 shrink-0">
         <div className="flex flex-col items-center gap-0.5">
-          <input
-            type="number" min={0} max={99}
-            value={mStr}
+          <input type="number" min={0} max={99} value={mStr}
             onChange={e => setMStr(e.target.value)}
             onBlur={e => commitMins(e.target.value)}
             onKeyDown={e => { if (e.key === 'Enter') commitMins(mStr) }}
-            className={cn(
-              'w-14 rounded border border-white/15 bg-slate-800 px-2 py-1 text-center text-sm font-medium',
-              'text-white focus:outline-none focus:border-violet-500',
-              '[appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none'
-            )}
-          />
+            className={cn('w-14 rounded border border-white/15 bg-slate-800 px-2 py-1 text-center text-sm font-medium text-white focus:outline-none focus:border-violet-500',
+              '[appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none')} />
           <span className="text-[10px] text-slate-600 leading-none">min</span>
         </div>
         <span className="text-slate-500 font-medium text-base leading-none pb-3">:</span>
         <div className="flex flex-col items-center gap-0.5">
-          <input
-            type="number" min={0} max={59}
-            value={sStr}
+          <input type="number" min={0} max={59} value={sStr}
             onChange={e => setSStr(e.target.value)}
             onBlur={e => commitSecs(e.target.value)}
             onKeyDown={e => { if (e.key === 'Enter') commitSecs(sStr) }}
-            className={cn(
-              'w-14 rounded border border-white/15 bg-slate-800 px-2 py-1 text-center text-sm font-medium',
-              'text-white focus:outline-none focus:border-violet-500',
-              '[appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none'
-            )}
-          />
+            className={cn('w-14 rounded border border-white/15 bg-slate-800 px-2 py-1 text-center text-sm font-medium text-white focus:outline-none focus:border-violet-500',
+              '[appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none')} />
           <span className="text-[10px] text-slate-600 leading-none">sec</span>
         </div>
       </div>
-
       {total > 1 && (
         <button type="button" onClick={onRemove}
           className="shrink-0 ml-1 text-slate-700 hover:text-red-400 transition-colors">
@@ -242,7 +140,7 @@ function StepRow({ step, index, total, onChange, onRemove, onMoveUp, onMoveDown 
 
 // ─── Main component ───────────────────────────────────────────
 
-type Mode = 'list' | 'build' | 'run'
+type LocalMode = 'list' | 'build'
 
 const DEFAULT_STEPS: Step[] = [
   { label: 'Focus',       duration: 25 * 60 },
@@ -250,9 +148,12 @@ const DEFAULT_STEPS: Step[] = [
 ]
 
 export default function FocusTimer() {
+  // Timer engine lives in context — persists across navigation
+  const { runSeq, stepIdx, secondsLeft, paused, done, startSequence, togglePause, stopTimer, skipStep, restartStep } = useTimer()
+
   const [sequences, setSequences] = useState<Sequence[]>([])
   const [loading, setLoading]     = useState(true)
-  const [mode, setMode]           = useState<Mode>('list')
+  const [mode, setMode]           = useState<LocalMode>('list')
 
   // Build / edit state
   const [editingId, setEditingId] = useState<string | null>(null)
@@ -260,22 +161,6 @@ export default function FocusTimer() {
   const [steps, setSteps]         = useState<Step[]>(DEFAULT_STEPS)
   const [saving, setSaving]       = useState(false)
 
-  // Run display state
-  const [runSeq, setRunSeq]           = useState<Sequence | null>(null)
-  const [stepIdx, setStepIdx]         = useState(0)
-  const [secondsLeft, setSecondsLeft] = useState(0)
-  const [paused, setPaused]           = useState(false)
-  const [done, setDone]               = useState(false)
-
-  // Refs — read inside worker callbacks to avoid stale closures
-  const runSeqRef   = useRef<Sequence | null>(null)
-  const stepIdxRef  = useRef(0)
-  const endTimeRef  = useRef(0)
-  const workerRef   = useRef<Worker | null>(null)
-  const advanceRef  = useRef<() => void>(() => {})
-  const pausedRef   = useRef(false)
-
-  // ── Data ──────────────────────────────────────────────────
   const fetchSeqs = useCallback(async () => {
     const supabase = createSupabaseBrowserClient()
     const { data: { session } } = await supabase.auth.getSession()
@@ -291,133 +176,20 @@ export default function FocusTimer() {
 
   useEffect(() => { fetchSeqs() }, [fetchSeqs])
 
-  useEffect(() => {
-    if ('Notification' in window && Notification.permission === 'default') {
-      Notification.requestPermission()
-    }
-  }, [])
-
-  // Spin up the Web Worker once — it runs off-thread so it's never throttled by tab visibility
-  useEffect(() => {
-    if (typeof Worker === 'undefined') return
-    const w = new Worker('/timer-worker.js')
-    w.onmessage = (e: MessageEvent) => {
-      if (e.data.type === 'tick') {
-        setSecondsLeft(Math.ceil(e.data.remaining / 1000))
-      } else if (e.data.type === 'done') {
-        advanceRef.current()
-      }
-    }
-    workerRef.current = w
-    return () => { w.terminate(); workerRef.current = null }
-  }, [])
-
-  // ── Timer engine ──────────────────────────────────────────
-
-  function advanceStep() {
-    const seq = runSeqRef.current
-    if (!seq) return
-    const nextIdx = stepIdxRef.current + 1
-
-    if (nextIdx >= seq.steps.length) {
-      setDone(true)
-      playAlarm()
-      showNotification('Focus session complete! 🎉', `All ${seq.steps.length} steps finished. Great work!`)
-      return
-    }
-
-    playAlarm()
-    showNotification(
-      `✓ ${seq.steps[stepIdxRef.current].label} done`,
-      `Up next: ${seq.steps[nextIdx].label} — ${fmtDuration(seq.steps[nextIdx].duration)}`
-    )
-    stepIdxRef.current = nextIdx
-    setStepIdx(nextIdx)
-    endTimeRef.current = Date.now() + seq.steps[nextIdx].duration * 1000
-    setSecondsLeft(seq.steps[nextIdx].duration)
-    workerRef.current?.postMessage({ type: 'start', endTimeMs: endTimeRef.current })
-  }
-
-  // Keep the ref current so the worker's onmessage always calls the latest version
-  advanceRef.current = advanceStep
-
-  // ── Controls ──────────────────────────────────────────────
-
-  function startSequence(seq: Sequence) {
-    if (!seq.steps.length) return
-    runSeqRef.current  = seq
-    stepIdxRef.current = 0
-    pausedRef.current  = false
-    setRunSeq(seq); setStepIdx(0); setDone(false); setPaused(false)
-    setSecondsLeft(seq.steps[0].duration)
-    setMode('run')
-    endTimeRef.current = Date.now() + seq.steps[0].duration * 1000
-    workerRef.current?.postMessage({ type: 'start', endTimeMs: endTimeRef.current })
-  }
-
-  function togglePause() {
-    if (pausedRef.current) {
-      endTimeRef.current = Date.now() + secondsLeft * 1000
-      pausedRef.current  = false
-      setPaused(false)
-      workerRef.current?.postMessage({ type: 'start', endTimeMs: endTimeRef.current })
-    } else {
-      workerRef.current?.postMessage({ type: 'stop' })
-      pausedRef.current = true
-      setPaused(true)
-    }
-  }
-
-  function restartStep() {
-    const seq = runSeqRef.current
-    if (!seq) return
-    pausedRef.current = false
-    setPaused(false)
-    const dur = seq.steps[stepIdxRef.current].duration
-    endTimeRef.current = Date.now() + dur * 1000
-    setSecondsLeft(dur)
-    workerRef.current?.postMessage({ type: 'start', endTimeMs: endTimeRef.current })
-  }
-
-  function skipStep() {
-    workerRef.current?.postMessage({ type: 'stop' })
-    pausedRef.current = false
-    setPaused(false)
-    advanceStep()
-  }
-
-  function stopTimer() {
-    workerRef.current?.postMessage({ type: 'stop' })
-    runSeqRef.current  = null
-    pausedRef.current  = false
-    setMode('list'); setRunSeq(null); setDone(false); setPaused(false)
-  }
-
   // ── Sequence CRUD ─────────────────────────────────────────
 
-  function openNew() {
-    setEditingId(null)
-    setSeqName('')
-    setSteps([...DEFAULT_STEPS])
-    setMode('build')
-  }
+  function openNew() { setEditingId(null); setSeqName(''); setSteps([...DEFAULT_STEPS]); setMode('build') }
 
   function openEdit(seq: Sequence) {
-    setEditingId(seq.id)
-    setSeqName(seq.name)
-    setSteps(seq.steps.map(s => ({ ...s })))
-    setMode('build')
+    setEditingId(seq.id); setSeqName(seq.name)
+    setSteps(seq.steps.map(s => ({ ...s }))); setMode('build')
   }
 
   async function duplicateSequence(seq: Sequence) {
     const supabase = createSupabaseBrowserClient()
     const { data: { session } } = await supabase.auth.getSession()
     if (!session?.user) return
-    await supabase.from('focus_sequences').insert({
-      user_id: session.user.id,
-      name:    `Copy of ${seq.name}`,
-      steps:   seq.steps,
-    })
+    await supabase.from('focus_sequences').insert({ user_id: session.user.id, name: `Copy of ${seq.name}`, steps: seq.steps })
     fetchSeqs()
   }
 
@@ -427,26 +199,12 @@ export default function FocusTimer() {
     const supabase = createSupabaseBrowserClient()
     const { data: { session } } = await supabase.auth.getSession()
     if (!session?.user) { setSaving(false); return }
-
     if (editingId) {
-      await supabase.from('focus_sequences').update({
-        name:       seqName.trim(),
-        steps,
-        updated_at: new Date().toISOString(),
-      }).eq('id', editingId)
+      await supabase.from('focus_sequences').update({ name: seqName.trim(), steps, updated_at: new Date().toISOString() }).eq('id', editingId)
     } else {
-      await supabase.from('focus_sequences').insert({
-        user_id: session.user.id,
-        name:    seqName.trim(),
-        steps,
-      })
+      await supabase.from('focus_sequences').insert({ user_id: session.user.id, name: seqName.trim(), steps })
     }
-
-    setSaving(false)
-    setEditingId(null)
-    setSeqName('')
-    setSteps([...DEFAULT_STEPS])
-    setMode('list')
+    setSaving(false); setEditingId(null); setSeqName(''); setSteps([...DEFAULT_STEPS]); setMode('list')
     fetchSeqs()
   }
 
@@ -461,12 +219,7 @@ export default function FocusTimer() {
   }
 
   function moveStep(from: number, to: number) {
-    setSteps(prev => {
-      const next = [...prev]
-      const [removed] = next.splice(from, 1)
-      next.splice(to, 0, removed)
-      return next
-    })
+    setSteps(prev => { const next = [...prev]; const [r] = next.splice(from, 1); next.splice(to, 0, r); return next })
   }
 
   // ── Render ────────────────────────────────────────────────
@@ -477,8 +230,8 @@ export default function FocusTimer() {
     </div>
   )
 
-  // ── Run mode ──────────────────────────────────────────────
-  if (mode === 'run' && runSeq) {
+  // ── Run mode (driven by global context) ───────────────────
+  if (runSeq) {
     const step     = runSeq.steps[stepIdx]
     const progress = step ? secondsLeft / step.duration : 0
     const ringColor = done ? 'text-emerald-400' : paused ? 'text-slate-500' : 'text-violet-400'
@@ -513,12 +266,10 @@ export default function FocusTimer() {
                 <RotateCcw className="h-4 w-4" />
               </button>
               <button onClick={togglePause}
-                className={cn(
-                  'flex h-14 w-14 items-center justify-center rounded-full border-2 transition-all',
+                className={cn('flex h-14 w-14 items-center justify-center rounded-full border-2 transition-all',
                   paused
                     ? 'border-violet-400 bg-violet-500/20 text-violet-300 hover:bg-violet-500/30'
-                    : 'border-white/20 bg-white/5 text-white hover:border-violet-400 hover:bg-violet-500/10'
-                )}>
+                    : 'border-white/20 bg-white/5 text-white hover:border-violet-400 hover:bg-violet-500/10')}>
                 {paused ? <Play className="h-6 w-6" /> : <Pause className="h-6 w-6" />}
               </button>
               {stepIdx < runSeq.steps.length - 1 && (
@@ -542,12 +293,10 @@ export default function FocusTimer() {
 
             <div className="w-full space-y-1.5 pt-2">
               {runSeq.steps.map((s, i) => (
-                <div key={i} className={cn(
-                  'flex items-center gap-3 rounded-lg px-3 py-2 text-sm transition-all',
+                <div key={i} className={cn('flex items-center gap-3 rounded-lg px-3 py-2 text-sm transition-all',
                   i < stepIdx   && 'text-slate-600',
                   i === stepIdx && 'border border-violet-500/20 bg-violet-500/10 text-white font-medium',
-                  i > stepIdx   && 'text-slate-500',
-                )}>
+                  i > stepIdx   && 'text-slate-500')}>
                   {i < stepIdx   ? <Check className="h-3.5 w-3.5 text-emerald-500/60 shrink-0" />
                   : i === stepIdx ? <div className={cn('h-2 w-2 rounded-full shrink-0', paused ? 'bg-slate-500' : 'bg-violet-400 animate-pulse')} />
                   :                 <div className="h-2 w-2 rounded-full bg-slate-700 shrink-0" />}
@@ -578,36 +327,25 @@ export default function FocusTimer() {
             className="text-slate-400 hover:text-white transition-colors">
             <ChevronLeft className="h-5 w-5" />
           </button>
-          <h2 className="font-semibold text-white">
-            {editingId ? 'Edit Sequence' : 'New Sequence'}
-          </h2>
+          <h2 className="font-semibold text-white">{editingId ? 'Edit Sequence' : 'New Sequence'}</h2>
         </div>
 
         <div className="space-y-1.5">
           <Label className="text-slate-300">Sequence name</Label>
-          <Input
-            autoFocus
-            placeholder="e.g. Deep Work · 2h Block"
-            value={seqName}
+          <Input autoFocus placeholder="e.g. Deep Work · 2h Block" value={seqName}
             onChange={e => setSeqName(e.target.value)}
             onKeyDown={e => { if (e.key === 'Enter' && canSave) saveSequence() }}
-            className="border-white/20 bg-white/5 text-white placeholder:text-slate-500 focus-visible:ring-violet-500"
-          />
+            className="border-white/20 bg-white/5 text-white placeholder:text-slate-500 focus-visible:ring-violet-500" />
         </div>
 
         <div className="space-y-2">
           <Label className="text-slate-300">Steps</Label>
           {steps.map((step, i) => (
-            <StepRow
-              key={i}
-              step={step}
-              index={i}
-              total={steps.length}
+            <StepRow key={i} step={step} index={i} total={steps.length}
               onChange={(f, v) => updateStep(i, f, v)}
               onRemove={() => setSteps(prev => prev.filter((_, idx) => idx !== i))}
               onMoveUp={i > 0 ? () => moveStep(i, i - 1) : undefined}
-              onMoveDown={i < steps.length - 1 ? () => moveStep(i, i + 1) : undefined}
-            />
+              onMoveDown={i < steps.length - 1 ? () => moveStep(i, i + 1) : undefined} />
           ))}
           <button type="button"
             onClick={() => setSteps(prev => [...prev, { label: 'Focus', duration: 25 * 60 }])}
@@ -638,8 +376,7 @@ export default function FocusTimer() {
         <p className="text-xs text-slate-500">
           {sequences.length} saved sequence{sequences.length !== 1 ? 's' : ''}
         </p>
-        <Button size="sm" onClick={openNew}
-          className="bg-violet-600 hover:bg-violet-700 text-white gap-1.5">
+        <Button size="sm" onClick={openNew} className="bg-violet-600 hover:bg-violet-700 text-white gap-1.5">
           <Plus className="h-4 w-4" /> New Sequence
         </Button>
       </div>
@@ -682,7 +419,6 @@ export default function FocusTimer() {
                       ))}
                     </div>
                   </div>
-                  {/* Action buttons — edit/duplicate always visible; delete on hover */}
                   <div className="flex items-center gap-1.5 shrink-0">
                     <button onClick={() => openEdit(seq)} title="Edit"
                       className="flex h-7 w-7 items-center justify-center rounded-md text-slate-500 opacity-0 group-hover:opacity-100 hover:text-white hover:bg-white/8 transition-all">

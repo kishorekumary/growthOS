@@ -6,6 +6,8 @@ import Sidebar from '@/components/layout/Sidebar'
 import BottomNav from '@/components/layout/BottomNav'
 import ServiceWorkerRegister from '@/components/layout/ServiceWorkerRegister'
 import ZenithIcon from '@/components/layout/ZenithIcon'
+import { TimerProvider } from '@/contexts/TimerContext'
+import FloatingTimer from '@/components/focus/FloatingTimer'
 
 export default async function MainLayout({ children }: { children: React.ReactNode }) {
   const supabase = createSupabaseServerClient()
@@ -20,6 +22,7 @@ export default async function MainLayout({ children }: { children: React.ReactNo
     .single()
 
   return (
+    <TimerProvider>
     <div className="min-h-screen text-white">
       <Sidebar
         userName={profile?.full_name ?? user.email ?? 'User'}
@@ -42,10 +45,12 @@ export default async function MainLayout({ children }: { children: React.ReactNo
         {children}
       </main>
       <BottomNav />
+      <FloatingTimer />
       <ServiceWorkerRegister />
       <div className="fixed bottom-1.5 right-2 text-[9px] text-slate-800 font-mono select-none pointer-events-none z-50 hidden md:block">
         {process.env.NEXT_PUBLIC_GIT_BRANCH}/{process.env.NEXT_PUBLIC_GIT_COMMIT}
       </div>
     </div>
+    </TimerProvider>
   )
 }
