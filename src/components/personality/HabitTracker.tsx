@@ -389,7 +389,7 @@ export default function HabitTracker() {
     // Always fall back to last_done_at — covers both when habit_logs is unavailable
     // and when a done entry exists in personality_habits but is absent from habit_logs
     const habit = habits.find(h => h.id === habitId)
-    if (habit?.last_done_at && habit.last_done_at.startsWith(today)) return 'done'
+    if (habit?.last_done_at && localDateStr(new Date(habit.last_done_at)) === today) return 'done'
     return 'pending'
   }
 
