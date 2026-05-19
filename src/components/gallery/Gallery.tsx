@@ -1,23 +1,5 @@
 'use client'
 
-/*
-  One-time Supabase setup (run in SQL editor):
-
-  create table if not exists user_gallery (
-    id           uuid primary key default gen_random_uuid(),
-    user_id      uuid not null references auth.users(id) on delete cascade,
-    storage_path text not null,
-    url          text not null,
-    caption      text,
-    tags         text[] default '{}',
-    created_at   timestamptz default now()
-  );
-  alter table user_gallery enable row level security;
-  create policy "owner" on user_gallery for all using (auth.uid() = user_id);
-
-  Then in Storage → Buckets: create a bucket named "gallery" (public).
-*/
-
 import { useState, useRef, useEffect, useCallback } from 'react'
 import {
   Upload, X, Trash2, ZoomIn, ChevronLeft, ChevronRight,
