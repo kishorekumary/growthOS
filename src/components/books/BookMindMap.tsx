@@ -1311,10 +1311,13 @@ export default function BookMindMap({ bookId, bookTitle, initialJson, onClose, r
                         : undefined
                 }
               >
-                {/* Tooltip — always show full label on hover */}
+                {/* Tooltip — always show full label on hover or when traversal-focused */}
                 {!isEditing && (
                   <div
-                    className="pointer-events-none absolute left-0 bottom-[calc(100%+5px)] hidden group-hover:block z-20 max-w-[400px] rounded-lg border border-white/15 bg-slate-800/95 px-3 py-2 text-xs leading-relaxed shadow-xl backdrop-blur-sm whitespace-normal break-words"
+                    className={cn(
+                      'pointer-events-none absolute left-0 bottom-[calc(100%+5px)] z-20 max-w-[400px] rounded-lg border border-white/15 bg-slate-800/95 px-3 py-2 text-xs leading-relaxed shadow-xl backdrop-blur-sm whitespace-normal break-words',
+                      isTraversalFocus ? 'block' : 'hidden group-hover:block',
+                    )}
                     style={{ color }}
                   >
                     <HighlightedLabel text={node.label} query={searchQuery} />
