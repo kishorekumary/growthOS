@@ -343,10 +343,12 @@ export default function BookMindMap({ bookId, bookTitle, initialJson, onClose, r
   const matchIds = useMemo(() => new Set(searchMatches.map(n => n.id)), [searchMatches])
 
   // Refs for traversal — read inside the keydown handler without stale closures
-  const traversalIdxRef = useRef(traversalIdx)
-  traversalIdxRef.current = traversalIdx
-  const dfsLengthRef   = useRef(0)            // kept in sync after dfsOrder is computed below
-  const dfsOrderRef    = useRef<MindNode[]>([]) // kept in sync after dfsOrder is computed below
+  const traversalIdxRef     = useRef(traversalIdx)
+  traversalIdxRef.current   = traversalIdx
+  const dfsLengthRef        = useRef(0)
+  const dfsOrderRef         = useRef<MindNode[]>([])
+  const collapsedNodesRef   = useRef(collapsedNodes)
+  collapsedNodesRef.current = collapsedNodes
 
   // Pre-order DFS traversal: root → first child → deepest → next sibling (top-to-bottom)
   const dfsOrder = useMemo(() => {
@@ -391,6 +393,21 @@ export default function BookMindMap({ bookId, bookTitle, initialJson, onClose, r
   function closeSearch() { setShowSearch(false) }
   function nextMatch()   { setSearchMatchIdx(i => (i + 1) % searchMatches.length) }
   function prevMatch()   { setSearchMatchIdx(i => (i - 1 + searchMatches.length) % searchMatches.length) }
+
+  // Advance traversal: if the current node is collapsed and has children, expand it
+  // and step into its first child; otherwise just move to the next DFS node.
+  function goForward() {
+    const idx = traversalIdx ?? 0
+    const cur = dfsOrder[idx]
+    const isCollapsedWithChildren =
+      cur && collapsedNodes.has(cur.id) && nodes.some(n => n.parentId === cur.id)
+    if (isCollapsedWithChildren) {
+      setCollapsedNodes(prev => { const s = new Set(prev); s.delete(cur.id); return s })
+      setTraversalIdx(idx + 1)
+    } else {
+      setTraversalIdx(Math.min(dfsOrder.length - 1, idx + 1))
+    }
+  }
 
   // ── Undo history ──────────────────────────────────────────
   const historyRef = useRef<MindNode[][]>([])
@@ -475,7 +492,19 @@ export default function BookMindMap({ bookId, bookTitle, initialJson, onClose, r
         // ← / → walk the DFS pre-order sequence (previous / next node overall)
         if (e.key === 'ArrowRight') {
           e.preventDefault()
-          setTraversalIdx(i => Math.min(dfsLengthRef.current - 1, (i ?? 0) + 1))
+          const idx = traversalIdxRef.current ?? 0
+          const cur = dfsOrderRef.current[idx]
+          const isCollapsedWithChildren =
+            cur &&
+            collapsedNodesRef.current.has(cur.id) &&
+            nodesRef.current.some(n => n.parentId === cur.id)
+          if (isCollapsedWithChildren) {
+            // Expand the node and jump to its first child (pre-order: idx+1 after expansion)
+            setCollapsedNodes(prev => { const s = new Set(prev); s.delete(cur.id); return s })
+            setTraversalIdx(idx + 1)
+          } else {
+            setTraversalIdx(i => Math.min(dfsLengthRef.current - 1, (i ?? 0) + 1))
+          }
           return
         }
         if (e.key === 'ArrowLeft') {
@@ -1510,8 +1539,11 @@ export default function BookMindMap({ bookId, bookTitle, initialJson, onClose, r
               </div>
 
               <button
-                onClick={() => setTraversalIdx(i => Math.min(dfsOrder.length - 1, (i ?? 0) + 1))}
-                disabled={traversalIdx === dfsOrder.length - 1}
+                onClick={goForward}
+                disabled={
+                  traversalIdx === dfsOrder.length - 1 &&
+                  !(dfsOrder[traversalIdx ?? 0] && collapsedNodes.has(dfsOrder[traversalIdx ?? 0].id) && nodes.some(n => n.parentId === dfsOrder[traversalIdx ?? 0].id))
+                }
                 className="flex items-center justify-center w-9 h-9 rounded-xl bg-white/5 border border-white/8 text-slate-300 hover:bg-white/10 active:bg-white/15 disabled:opacity-25 transition-all shrink-0"
                 title="Next node (→ ArrowRight)"
               >
