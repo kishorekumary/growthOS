@@ -355,7 +355,7 @@ export default function BookMindMap({ bookId, bookTitle, initialJson, onClose, r
   const collapsedNodesRef   = useRef(collapsedNodes)
   collapsedNodesRef.current = collapsedNodes
 
-  // Pre-order DFS traversal: root → first child → deepest → next sibling (top-to-bottom)
+  // Pre-order DFS traversal: root subtree first, then any disconnected floating nodes sorted by y
   const dfsOrder = useMemo(() => {
     const result: MindNode[] = []
     function dfs(nodeId: string) {
@@ -365,6 +365,10 @@ export default function BookMindMap({ bookId, bookTitle, initialJson, onClose, r
       visibleNodes.filter(n => n.parentId === nodeId).sort((a, b) => a.y - b.y).forEach(c => dfs(c.id))
     }
     dfs('root')
+    visibleNodes
+      .filter(n => n.parentId === null && n.id !== 'root')
+      .sort((a, b) => a.y - b.y)
+      .forEach(n => dfs(n.id))
     return result
   }, [visibleNodes])
   dfsLengthRef.current  = dfsOrder.length
@@ -782,6 +786,19 @@ export default function BookMindMap({ bookId, bookTitle, initialJson, onClose, r
     e.preventDefault()
   }
 
+  function handleCanvasDoubleClick(e: React.MouseEvent) {
+    if (isReadOnly || reparentId) return
+    const { x, y } = canvasXY(e.clientX, e.clientY)
+    pushHistory()
+    const newId = uid()
+    const newNode: MindNode = {
+      id: newId, label: 'New node', parentId: null,
+      x: Math.max(8, x - MIN_W / 2), y: Math.max(8, y - NODE_H / 2),
+    }
+    setNodes(prev => [...prev, newNode])
+    setTimeout(() => { setEditingId(newId); setEditLabel('New node') }, 20)
+  }
+
   function startResize(e: React.MouseEvent, node: MindNode, side: 'left' | 'right' | 'top' | 'bottom') {
     pushHistory()
     resizeRef.current = {
@@ -1134,12 +1151,14 @@ export default function BookMindMap({ bookId, bookTitle, initialJson, onClose, r
                 <span className="text-amber-500">＋</span> inject level &nbsp;·&nbsp;
                 <span className="text-cyan-500">⇌</span> move branch &nbsp;·&nbsp;
                 <span className="text-violet-400">◉</span> collapse/expand &nbsp;·&nbsp;
+                <span className="text-slate-400">double-click canvas</span> for free node &nbsp;·&nbsp;
                 ⌘Z undo
               </p>
               <p className="sm:hidden text-[11px] text-slate-600">
                 <span className="text-violet-500">Tap</span> node to edit &nbsp;·&nbsp;
                 <span className="text-violet-500">Hold &amp; drag</span> to move &nbsp;·&nbsp;
-                Drag <span className="text-violet-500">●</span> right edge to branch
+                Drag <span className="text-violet-500">●</span> right edge to branch &nbsp;·&nbsp;
+                double-tap canvas for free node
               </p>
             </>
           )}
@@ -1236,6 +1255,7 @@ export default function BookMindMap({ bookId, bookTitle, initialJson, onClose, r
             backgroundImage: 'radial-gradient(circle, rgba(255,255,255,0.035) 1px, transparent 1px)',
             backgroundSize: '28px 28px',
           }}
+          onDoubleClick={handleCanvasDoubleClick}
         >
 
           {/* ── SVG edges ── */}
@@ -1345,6 +1365,7 @@ export default function BookMindMap({ bookId, bookTitle, initialJson, onClose, r
                 }}
                 onMouseDown={isReadOnly || reparentId || isRoot ? undefined : e => startMove(e, node)}
                 onTouchStart={isReadOnly || reparentId || isRoot ? undefined : e => startTouchMove(e, node)}
+                onDoubleClick={e => e.stopPropagation()}
                 onClick={
                   reparentId && !isBeingMoved
                     ? () => completeReparent(node.id)
