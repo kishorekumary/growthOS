@@ -22,17 +22,22 @@ export interface MindNode {
   parentId: string | null
   x: number
   y: number
+  w?: number
+  h?: number
 }
+
+function getNodeW(node: MindNode): number { return node.w ?? nodeWidth(node.label) }
+function getNodeH(node: MindNode): number { return node.h ?? NODE_H }
 
 function uid() {
   return Math.random().toString(36).slice(2, 10)
 }
 
 function bezier(p: MindNode, c: MindNode): string {
-  const x1 = p.x + nodeWidth(p.label)
-  const y1 = p.y + NODE_H / 2
+  const x1 = p.x + getNodeW(p)
+  const y1 = p.y + getNodeH(p) / 2
   const x2 = c.x
-  const y2 = c.y + NODE_H / 2
+  const y2 = c.y + getNodeH(c) / 2
   const cx = Math.max(40, (x2 - x1) / 2)
   return `M${x1},${y1} C${x1 + cx},${y1} ${x2 - cx},${y2} ${x2},${y2}`
 }
@@ -375,10 +380,9 @@ export default function BookMindMap({ bookId, bookTitle, initialJson, onClose, r
     const node = searchMatches[searchMatchIdx]
     if (!node || !scrollContainerRef.current) return
     const c  = scrollContainerRef.current
-    const nw = nodeWidth(node.label)
     c.scrollTo({
-      left: Math.max(0, node.x + nw / 2 - c.clientWidth / 2),
-      top:  Math.max(0, node.y + NODE_H / 2 - c.clientHeight / 2),
+      left: Math.max(0, node.x + getNodeW(node) / 2 - c.clientWidth / 2),
+      top:  Math.max(0, node.y + getNodeH(node) / 2 - c.clientHeight / 2),
       behavior: 'smooth',
     })
   }, [searchMatchIdx, searchMatches])
@@ -561,7 +565,7 @@ export default function BookMindMap({ bookId, bookTitle, initialJson, onClose, r
     setTimeout(() => {
       c.scrollTo({
         left: Math.max(0, root.x - 40),
-        top:  Math.max(0, root.y + NODE_H / 2 - c.clientHeight / 2),
+        top:  Math.max(0, root.y + getNodeH(root) / 2 - c.clientHeight / 2),
         behavior: 'smooth',
       })
     }, 150)
@@ -578,10 +582,9 @@ export default function BookMindMap({ bookId, bookTitle, initialJson, onClose, r
     const node = dfsOrder[traversalIdx]
     if (!node || !scrollContainerRef.current) return
     const c  = scrollContainerRef.current
-    const nw = nodeWidth(node.label)
     c.scrollTo({
-      left: Math.max(0, node.x + nw / 2 - c.clientWidth / 2),
-      top:  Math.max(0, node.y + NODE_H / 2 - c.clientHeight / 2),
+      left: Math.max(0, node.x + getNodeW(node) / 2 - c.clientWidth / 2),
+      top:  Math.max(0, node.y + getNodeH(node) / 2 - c.clientHeight / 2),
       behavior: 'smooth',
     })
   }, [traversalIdx, dfsOrder])
@@ -650,6 +653,11 @@ export default function BookMindMap({ bookId, bookTitle, initialJson, onClose, r
   const moveRef      = useRef<{ id: string; ox: number; oy: number; mx: number; my: number } | null>(null)
   const connRef      = useRef<{ fromId: string } | null>(null)
   const touchMoveRef = useRef<{ id: string; ox: number; oy: number; startTX: number; startTY: number } | null>(null)
+  const resizeRef    = useRef<{
+    id: string; side: 'left' | 'right' | 'top' | 'bottom'
+    startX: number; startY: number
+    origX: number; origY: number; origW: number; origH: number
+  } | null>(null)
   const lastTouchRef = useRef(0)
   const [connPos, setConnPos] = useState<{ x: number; y: number } | null>(null)
   const canvasRef = useRef<HTMLDivElement>(null)
@@ -662,6 +670,28 @@ export default function BookMindMap({ bookId, bookTitle, initialJson, onClose, r
 
   useEffect(() => {
     function handleMouseMove(e: MouseEvent) {
+      if (resizeRef.current) {
+        const { id, side, startX, startY, origX, origY, origW, origH } = resizeRef.current
+        const dx = e.clientX - startX
+        const dy = e.clientY - startY
+        setNodes(prev => prev.map(n => {
+          if (n.id !== id) return n
+          if (side === 'right') {
+            return { ...n, w: Math.max(MIN_W, origW + dx) }
+          }
+          if (side === 'left') {
+            const newW = Math.max(MIN_W, origW - dx)
+            return { ...n, w: newW, x: origX + origW - newW }
+          }
+          if (side === 'bottom') {
+            return { ...n, h: Math.max(NODE_H, origH + dy) }
+          }
+          // top
+          const newH = Math.max(NODE_H, origH - dy)
+          return { ...n, h: newH, y: origY + origH - newH }
+        }))
+        return
+      }
       if (moveRef.current) {
         const { id, ox, oy, mx, my } = moveRef.current
         const dx = e.clientX - mx
@@ -674,12 +704,13 @@ export default function BookMindMap({ bookId, bookTitle, initialJson, onClose, r
     }
 
     function handleMouseUp(e: MouseEvent) {
+      resizeRef.current = null
       if (connRef.current) {
         const { fromId } = connRef.current
         const { x, y } = canvasXY(e.clientX, e.clientY)
         const from = nodesRef.current.find(n => n.id === fromId)
         if (from) {
-          const dist = Math.hypot(x - (from.x + nodeWidth(from.label)), y - (from.y + NODE_H / 2))
+          const dist = Math.hypot(x - (from.x + getNodeW(from)), y - (from.y + getNodeH(from) / 2))
           if (dist > 24) {
             pushHistory()
             const newId = uid()
@@ -751,6 +782,18 @@ export default function BookMindMap({ bookId, bookTitle, initialJson, onClose, r
     e.preventDefault()
   }
 
+  function startResize(e: React.MouseEvent, node: MindNode, side: 'left' | 'right' | 'top' | 'bottom') {
+    pushHistory()
+    resizeRef.current = {
+      id: node.id, side,
+      startX: e.clientX, startY: e.clientY,
+      origX: node.x, origY: node.y,
+      origW: getNodeW(node), origH: getNodeH(node),
+    }
+    e.stopPropagation()
+    e.preventDefault()
+  }
+
   function commitEdit(id: string) {
     pushHistory()
     const label = editLabel.trim()
@@ -797,8 +840,8 @@ export default function BookMindMap({ bookId, bookTitle, initialJson, onClose, r
     setTimeout(() => setSavedFlash(false), 2000)
   }
 
-  const canvasW = Math.max(2400, Math.max(...nodes.map(n => n.x + nodeWidth(n.label))) + 400)
-  const canvasH = Math.max(1600, Math.max(...nodes.map(n => n.y + NODE_H)) + 400)
+  const canvasW = Math.max(2400, Math.max(...nodes.map(n => n.x + getNodeW(n))) + 400)
+  const canvasH = Math.max(1600, Math.max(...nodes.map(n => n.y + getNodeH(n))) + 400)
 
   const nodesWithChildren = new Set(nodes.filter(n => n.parentId).map(n => n.parentId!))
 
@@ -1242,7 +1285,8 @@ export default function BookMindMap({ bookId, bookTitle, initialJson, onClose, r
             const d             = getDepth(node.id, nodes)
             const color         = DEPTH_COLORS[d % DEPTH_COLORS.length]
             const hasChildren   = nodesWithChildren.has(node.id)
-            const nw            = nodeWidth(node.label)
+            const nw            = getNodeW(node)
+            const nh            = getNodeH(node)
 
             // Reparent mode states
             const isBeingMoved  = reparentId === node.id
@@ -1274,7 +1318,7 @@ export default function BookMindMap({ bookId, bookTitle, initialJson, onClose, r
                   isReadOnly ? 'cursor-default' : '',
                 )}
                 style={{
-                  left: node.x, top: node.y, width: nw, height: NODE_H,
+                  left: node.x, top: node.y, width: nw, height: nh,
                   borderColor: isBeingMoved
                     ? 'rgba(6,182,212,0.7)'
                     : isTraversalFocus
@@ -1472,6 +1516,36 @@ export default function BookMindMap({ bookId, bookTitle, initialJson, onClose, r
                       <div className="w-1.5 h-1.5 rounded-full bg-violet-400" />
                     </div>
                   </div>
+                )}
+
+                {/* Resize handles — edit mode only, not in reparent/editing */}
+                {!isReadOnly && !reparentId && !isEditing && (
+                  <>
+                    {/* Right */}
+                    <div
+                      className="absolute top-1 bottom-1 -right-1 w-2 cursor-ew-resize opacity-0 group-hover:opacity-100 transition-opacity z-10 rounded-r"
+                      style={{ background: 'linear-gradient(to right, transparent, rgba(124,58,237,0.35))' }}
+                      onMouseDown={e => startResize(e, node, 'right')}
+                    />
+                    {/* Left */}
+                    <div
+                      className="absolute top-1 bottom-1 -left-1 w-2 cursor-ew-resize opacity-0 group-hover:opacity-100 transition-opacity z-10 rounded-l"
+                      style={{ background: 'linear-gradient(to left, transparent, rgba(124,58,237,0.35))' }}
+                      onMouseDown={e => startResize(e, node, 'left')}
+                    />
+                    {/* Bottom */}
+                    <div
+                      className="absolute left-1 right-1 -bottom-1 h-2 cursor-ns-resize opacity-0 group-hover:opacity-100 transition-opacity z-10 rounded-b"
+                      style={{ background: 'linear-gradient(to bottom, transparent, rgba(124,58,237,0.35))' }}
+                      onMouseDown={e => startResize(e, node, 'bottom')}
+                    />
+                    {/* Top */}
+                    <div
+                      className="absolute left-1 right-1 -top-1 h-2 cursor-ns-resize opacity-0 group-hover:opacity-100 transition-opacity z-10 rounded-t"
+                      style={{ background: 'linear-gradient(to top, transparent, rgba(124,58,237,0.35))' }}
+                      onMouseDown={e => startResize(e, node, 'top')}
+                    />
+                  </>
                 )}
               </div>
             )
