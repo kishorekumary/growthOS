@@ -47,8 +47,8 @@ function speakAfterAlarm(text: string) {
   setTimeout(() => {
     window.speechSynthesis.cancel()
     const u = new SpeechSynthesisUtterance(text)
-    u.rate = 0.95
-    u.volume = 0.9
+    u.rate = 0.65
+    u.volume = 1.0
     window.speechSynthesis.speak(u)
   }, 2700)
 }
@@ -138,7 +138,7 @@ export function TimerProvider({ children }: { children: ReactNode }) {
       `✓ ${seq.steps[stepIdxRef.current].label} done`,
       `Up next: ${seq.steps[nextIdx].label} — ${fmtDuration(seq.steps[nextIdx].duration)}`
     )
-    speakAfterAlarm(`Up next: ${seq.steps[nextIdx].label}`)
+    speakAfterAlarm(seq.steps[nextIdx].label)
     stepIdxRef.current = nextIdx
     setStepIdx(nextIdx)
     endTimeRef.current = Date.now() + seq.steps[nextIdx].duration * 1000

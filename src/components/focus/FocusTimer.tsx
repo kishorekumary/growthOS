@@ -61,7 +61,7 @@ function CircularTimer({ progress, label, seconds, color }: {
         <span className="text-[2.4rem] font-bold text-white tabular-nums leading-none">
           {fmtCountdown(seconds)}
         </span>
-        <span className={cn('text-sm font-semibold text-center leading-snug mt-1 max-w-[130px] line-clamp-2', color)}>
+        <span className={cn('text-xl font-bold text-center leading-snug mt-1 max-w-[150px] line-clamp-2', color)}>
           {label}
         </span>
       </div>
