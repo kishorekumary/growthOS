@@ -41,6 +41,18 @@ async function showNotification(title: string, body: string) {
   }
 }
 
+// Speak text after the alarm tones finish (~2.6s)
+function speakAfterAlarm(text: string) {
+  if (!('speechSynthesis' in window)) return
+  setTimeout(() => {
+    window.speechSynthesis.cancel()
+    const u = new SpeechSynthesisUtterance(text)
+    u.rate = 0.95
+    u.volume = 0.9
+    window.speechSynthesis.speak(u)
+  }, 2700)
+}
+
 function fmtDuration(secs: number) {
   const h = Math.floor(secs / 3600), m = Math.floor((secs % 3600) / 60), s = secs % 60
   if (h > 0) return `${h}h ${m}m`
@@ -118,6 +130,7 @@ export function TimerProvider({ children }: { children: ReactNode }) {
       setDone(true)
       playAlarm()
       showNotification('Focus session complete! 🎉', `All ${seq.steps.length} steps finished. Great work!`)
+      speakAfterAlarm('Focus session complete! Great work!')
       return
     }
     playAlarm()
@@ -125,6 +138,7 @@ export function TimerProvider({ children }: { children: ReactNode }) {
       `✓ ${seq.steps[stepIdxRef.current].label} done`,
       `Up next: ${seq.steps[nextIdx].label} — ${fmtDuration(seq.steps[nextIdx].duration)}`
     )
+    speakAfterAlarm(`Up next: ${seq.steps[nextIdx].label}`)
     stepIdxRef.current = nextIdx
     setStepIdx(nextIdx)
     endTimeRef.current = Date.now() + seq.steps[nextIdx].duration * 1000

@@ -57,11 +57,13 @@ function CircularTimer({ progress, label, seconds, color }: {
           className={cn('transition-[stroke-dashoffset] duration-500', color)}
         />
       </svg>
-      <div className="absolute inset-0 flex flex-col items-center justify-center gap-1">
+      <div className="absolute inset-0 flex flex-col items-center justify-center gap-1 px-4">
         <span className="text-[2.4rem] font-bold text-white tabular-nums leading-none">
           {fmtCountdown(seconds)}
         </span>
-        <span className="text-xs text-slate-400 max-w-[130px] text-center truncate mt-1">{label}</span>
+        <span className={cn('text-sm font-semibold text-center leading-snug mt-1 max-w-[130px] line-clamp-2', color)}>
+          {label}
+        </span>
       </div>
     </div>
   )
@@ -286,7 +288,14 @@ export default function FocusTimer() {
         ) : (
           <>
             <CircularTimer progress={progress} label={step?.label ?? ''} seconds={secondsLeft} color={ringColor} />
-            <p className="text-xs text-slate-500">Step {stepIdx + 1} of {runSeq.steps.length}</p>
+            <div className="flex flex-col items-center gap-0.5">
+              <p className="text-xs text-slate-500">Step {stepIdx + 1} of {runSeq.steps.length}</p>
+              {stepIdx < runSeq.steps.length - 1 && (
+                <p className="text-[11px] text-slate-600">
+                  Next: <span className="text-slate-400">{runSeq.steps[stepIdx + 1].label}</span>
+                </p>
+              )}
+            </div>
 
             <div className="flex items-center gap-4">
               <button onClick={restartStep} title="Restart this step"
