@@ -197,6 +197,21 @@ export default function FocusTimer() {
 
   useEffect(() => { fetchSeqs() }, [fetchSeqs])
 
+  // Keyboard pause/resume: MediaPlayPause, Space, or P while timer is running
+  useEffect(() => {
+    if (!runSeq || done) return
+    function onKeyDown(e: KeyboardEvent) {
+      if (e.key === 'MediaPlayPause' ||
+          (e.key === ' ' && document.activeElement?.tagName !== 'INPUT' && document.activeElement?.tagName !== 'TEXTAREA' && document.activeElement?.tagName !== 'BUTTON') ||
+          (e.key === 'p' && document.activeElement?.tagName !== 'INPUT' && document.activeElement?.tagName !== 'TEXTAREA')) {
+        e.preventDefault()
+        togglePause()
+      }
+    }
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [runSeq, done, togglePause])
+
   // ── Sequence CRUD ─────────────────────────────────────────
 
   function openNew() { setEditingId(null); setSeqName(''); setSteps([...DEFAULT_STEPS]); setMode('build') }
