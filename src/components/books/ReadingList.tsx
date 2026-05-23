@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
-import { Loader2, Plus, Star, Sparkles, BookOpen, AlertCircle, GitBranch, Trash2 } from 'lucide-react'
+import { Loader2, Plus, Star, Sparkles, BookOpen, AlertCircle, GitBranch, Trash2, Quote, Scroll } from 'lucide-react'
 import { createSupabaseBrowserClient } from '@/lib/supabase'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -12,7 +12,8 @@ import {
 import { cn } from '@/lib/utils'
 import dynamic from 'next/dynamic'
 
-const BookMindMap = dynamic(() => import('./BookMindMap'), { ssr: false })
+const BookMindMap   = dynamic(() => import('./BookMindMap'),   { ssr: false })
+const BookInsights  = dynamic(() => import('./BookInsights'),  { ssr: false })
 
 type Status = 'want_to_read' | 'reading' | 'completed'
 
@@ -25,6 +26,8 @@ interface Book {
   rating: number | null
   ai_summary: string | null
   key_lessons: string | null
+  quotes: string | null
+  stories: string | null
 }
 
 interface AiData { summary: string; lessons: string[] }
@@ -336,9 +339,11 @@ export default function ReadingList() {
   const [fetchError, setFetchError]     = useState<string | null>(null)
   const [activeStatus, setActiveStatus] = useState<Status>('reading')
   const [selected, setSelected]         = useState<Book | null>(null)
-  const [mindMapBook, setMindMapBook]   = useState<Book | null>(null)
+  const [mindMapBook, setMindMapBook]         = useState<Book | null>(null)
   const [mindMapReadonly, setMindMapReadonly] = useState(false)
-  const [deleteTarget, setDeleteTarget] = useState<Book | null>(null)
+  const [insightsBook, setInsightsBook]       = useState<Book | null>(null)
+  const [insightsTab, setInsightsTab]         = useState<'quotes' | 'stories'>('quotes')
+  const [deleteTarget, setDeleteTarget]       = useState<Book | null>(null)
   const [deleting, setDeleting]         = useState(false)
 
   async function handleDelete() {
@@ -360,7 +365,7 @@ export default function ReadingList() {
 
       const { data, error } = await supabase
         .from('reading_log')
-        .select('id, book_title, author, genre, status, rating, ai_summary, key_lessons')
+        .select('id, book_title, author, genre, status, rating, ai_summary, key_lessons, quotes, stories')
         .eq('user_id', session.user.id)
         .order('updated_at', { ascending: false })
 
@@ -374,7 +379,7 @@ export default function ReadingList() {
         if (fallbackError) {
           setFetchError(fallbackError.message)
         } else {
-          setBooks(((fallback ?? []) as Book[]).map(b => ({ ...b, key_lessons: null })))
+          setBooks(((fallback ?? []) as Book[]).map(b => ({ ...b, key_lessons: null, quotes: null, stories: null })))
         }
       } else {
         setBooks((data as Book[]) ?? [])
@@ -498,6 +503,26 @@ export default function ReadingList() {
                         <GitBranch className="h-3.5 w-3.5" />
                       </button>
                     )}
+                    {book.quotes && book.quotes.startsWith('[') && (
+                      <button
+                        type="button"
+                        title="View quotes"
+                        onClick={e => { e.stopPropagation(); setInsightsTab('quotes'); setInsightsBook(book) }}
+                        className="text-amber-500 hover:text-amber-300 transition-colors"
+                      >
+                        <Quote className="h-3.5 w-3.5" />
+                      </button>
+                    )}
+                    {book.stories && book.stories.startsWith('[') && (
+                      <button
+                        type="button"
+                        title="View stories"
+                        onClick={e => { e.stopPropagation(); setInsightsTab('stories'); setInsightsBook(book) }}
+                        className="text-violet-500 hover:text-violet-300 transition-colors"
+                      >
+                        <Scroll className="h-3.5 w-3.5" />
+                      </button>
+                    )}
                     {book.status === 'completed' && book.rating && (
                       <div className="flex items-center gap-0.5">
                         {Array.from({ length: book.rating }).map((_, i) => (
@@ -518,6 +543,28 @@ export default function ReadingList() {
               >
                 <GitBranch className="h-3 w-3" />
                 Map
+              </button>
+
+              {/* Quotes button */}
+              <button
+                type="button"
+                onClick={() => { setInsightsTab('quotes'); setInsightsBook(book) }}
+                title="Open quotes"
+                className="shrink-0 flex items-center gap-1 rounded-lg border border-amber-500/30 bg-amber-500/10 px-2.5 py-1.5 text-[11px] font-medium text-amber-400 opacity-0 group-hover:opacity-100 hover:bg-amber-500/20 transition-all"
+              >
+                <Quote className="h-3 w-3" />
+                Quotes
+              </button>
+
+              {/* Stories button */}
+              <button
+                type="button"
+                onClick={() => { setInsightsTab('stories'); setInsightsBook(book) }}
+                title="Open stories"
+                className="shrink-0 flex items-center gap-1 rounded-lg border border-violet-500/30 bg-violet-500/10 px-2.5 py-1.5 text-[11px] font-medium text-violet-400 opacity-0 group-hover:opacity-100 hover:bg-violet-500/20 transition-all"
+              >
+                <Scroll className="h-3 w-3" />
+                Stories
               </button>
 
               {/* Delete button */}
@@ -584,6 +631,21 @@ export default function ReadingList() {
           readonly={mindMapReadonly}
           onClose={() => {
             setMindMapBook(null)
+            fetchBooks()
+          }}
+        />
+      )}
+
+      {/* Quotes / Stories overlay */}
+      {insightsBook && (
+        <BookInsights
+          bookId={insightsBook.id}
+          bookTitle={insightsBook.book_title}
+          initialQuotes={insightsBook.quotes}
+          initialStories={insightsBook.stories}
+          initialTab={insightsTab}
+          onClose={() => {
+            setInsightsBook(null)
             fetchBooks()
           }}
         />
