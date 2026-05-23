@@ -510,7 +510,7 @@ export default function BookMindMap({ bookId, bookTitle, initialJson, onClose, r
       }
       // Arrow-key tree traversal (when traversal is active and no input is focused)
       if (traversalIdxRef.current !== null && !showSearch && !inInput) {
-        // ← / → walk the DFS pre-order sequence (previous / next node overall)
+        // → first child (or expand if collapsed) · ← jump to parent
         if (e.key === 'ArrowRight') {
           e.preventDefault()
           const idx = traversalIdxRef.current ?? 0
@@ -530,7 +530,11 @@ export default function BookMindMap({ bookId, bookTitle, initialJson, onClose, r
         }
         if (e.key === 'ArrowLeft') {
           e.preventDefault()
-          setTraversalIdx(i => Math.max(0, (i ?? 0) - 1))
+          const cur = dfsOrderRef.current[traversalIdxRef.current]
+          if (cur?.parentId) {
+            const parentIdx = dfsOrderRef.current.findIndex(n => n.id === cur.parentId)
+            if (parentIdx !== -1) setTraversalIdx(parentIdx)
+          }
           return
         }
         // ↑ / ↓ jump to the previous / next sibling at the same level
@@ -1625,7 +1629,7 @@ export default function BookMindMap({ bookId, bookTitle, initialJson, onClose, r
                 onClick={() => setTraversalIdx(i => Math.max(0, (i ?? 0) - 1))}
                 disabled={traversalIdx === 0}
                 className="flex items-center justify-center w-9 h-9 rounded-xl bg-white/5 border border-white/8 text-slate-300 hover:bg-white/10 active:bg-white/15 disabled:opacity-25 transition-all shrink-0"
-                title="Previous node (← ArrowLeft)"
+                title="Go to parent node (← ArrowLeft)"
               >
                 <ChevronLeft className="h-4 w-4" />
               </button>
@@ -1640,7 +1644,7 @@ export default function BookMindMap({ bookId, bookTitle, initialJson, onClose, r
                       ? 'Root'
                       : `Depth ${getDepth(dfsOrder[traversalIdx]?.id ?? 'root', nodes)}`}
                   </p>
-                  <span className="hidden sm:inline text-[10px] text-slate-700">← → traverse tree &nbsp;·&nbsp; ↑ ↓ same-level siblings &nbsp;·&nbsp; Esc exit</span>
+                  <span className="hidden sm:inline text-[10px] text-slate-700">← parent &nbsp;·&nbsp; → children &nbsp;·&nbsp; ↑ ↓ siblings &nbsp;·&nbsp; Esc exit</span>
                 </div>
               </div>
 
