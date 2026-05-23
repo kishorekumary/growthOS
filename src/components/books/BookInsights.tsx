@@ -318,7 +318,7 @@ export default function BookInsights({
                     <div className="flex gap-3">
                       <Quote className="h-4 w-4 text-amber-500/60 shrink-0 mt-0.5" />
                       <div className="flex-1 min-w-0">
-                        <p className="text-sm text-amber-100/90 leading-relaxed italic">{q.text}</p>
+                        <p className="text-sm text-amber-100/90 leading-relaxed italic whitespace-pre-wrap">{q.text}</p>
                         {q.source && (
                           <p className="mt-1.5 text-xs text-slate-600">— {q.source}</p>
                         )}
@@ -431,7 +431,7 @@ export default function BookInsights({
                       <Scroll className="h-4 w-4 text-violet-500/60 shrink-0 mt-0.5" />
                       <div className="flex-1 min-w-0">
                         <p className="text-sm font-semibold text-white mb-1.5">{s.title}</p>
-                        <p className="text-sm text-slate-400 leading-relaxed whitespace-pre-wrap">{s.text}</p>
+                        <p className="text-sm text-slate-400 leading-relaxed whitespace-pre-wrap break-words">{s.text}</p>
                       </div>
                       {!isReadOnly && (
                         <div className="flex items-start gap-1 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
