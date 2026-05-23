@@ -1,19 +1,19 @@
 'use client'
 
 import { useState, useRef, useEffect, useCallback, useMemo } from 'react'
-import { X, Trash2, GitBranch, Loader2, Check, Pencil, Upload, Plus, Undo2, Link2, Eye, EyeOff, Search, ChevronLeft, ChevronRight, ChevronDown, Download, MoreHorizontal, Save, Navigation } from 'lucide-react'
+import { X, Trash2, GitBranch, Loader2, Check, Pencil, Upload, Plus, Undo2, Link2, Eye, EyeOff, Search, ChevronLeft, ChevronRight, ChevronDown, Download, MoreHorizontal, Save, Navigation, ChevronsDown } from 'lucide-react'
 import { createSupabaseBrowserClient } from '@/lib/supabase'
 import { cn } from '@/lib/utils'
 
-const NODE_H = 40
-const MIN_W  = 160
-const MAX_W  = 320
-const H_GAP  = 380
-const V_GAP  = 56
+const NODE_H = 52
+const MIN_W  = 190
+const MAX_W  = 520
+const H_GAP  = 440
+const V_GAP  = 80
 const DEPTH_COLORS = ['#7c3aed', '#06b6d4', '#10b981', '#f59e0b', '#ef4444', '#3b82f6']
 
 function nodeWidth(label: string): number {
-  return Math.max(MIN_W, Math.min(MAX_W, label.length * 7 + 56))
+  return Math.max(MIN_W, Math.min(MAX_W, label.length * 8.5 + 100))
 }
 
 export interface MindNode {
@@ -297,6 +297,10 @@ export default function BookMindMap({ bookId, bookTitle, initialJson, onClose, r
       else next.add(nodeId)
       return next
     })
+  }
+
+  function expandAll() {
+    setCollapsedNodes(new Set())
   }
 
   function exportMarkdown() {
@@ -946,6 +950,15 @@ export default function BookMindMap({ bookId, bookTitle, initialJson, onClose, r
           </button>
 
           <button
+            onClick={expandAll}
+            title="Expand all nodes"
+            className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium bg-white/5 hover:bg-white/10 text-slate-300 border border-white/10 transition-all"
+          >
+            <ChevronsDown className="h-3 w-3" />
+            Expand All
+          </button>
+
+          <button
             onClick={exportMarkdown}
             title="Copy as Markdown (# ## ### headings)"
             className={cn(
@@ -1040,6 +1053,12 @@ export default function BookMindMap({ bookId, bookTitle, initialJson, onClose, r
                   <Search className="h-3.5 w-3.5" /> Search
                 </button>
                 <button
+                  onClick={() => { expandAll(); setShowMobileMenu(false) }}
+                  className="flex w-full items-center gap-2.5 px-3.5 py-2.5 text-sm text-slate-300 hover:bg-white/5 transition-colors"
+                >
+                  <ChevronsDown className="h-3.5 w-3.5" /> Expand All
+                </button>
+                <button
                   onClick={() => { exportMarkdown(); setShowMobileMenu(false) }}
                   className="flex w-full items-center gap-2.5 px-3.5 py-2.5 text-sm text-slate-300 hover:bg-white/5 transition-colors"
                 >
@@ -1101,6 +1120,14 @@ export default function BookMindMap({ bookId, bookTitle, initialJson, onClose, r
             className="p-1 rounded text-slate-400 hover:text-white disabled:opacity-25 transition-colors"
           >
             <ChevronRight className="h-3.5 w-3.5" />
+          </button>
+          <button
+            onClick={expandAll}
+            title="Expand all nodes so all results are searchable"
+            className="flex items-center gap-1 px-2 py-0.5 rounded text-[11px] text-amber-300/70 hover:text-amber-300 border border-amber-500/20 hover:border-amber-500/40 transition-colors shrink-0"
+          >
+            <ChevronsDown className="h-3 w-3" />
+            Expand all
           </button>
           <button onClick={closeSearch} className="p-1 rounded text-slate-500 hover:text-white transition-colors">
             <X className="h-3.5 w-3.5" />
@@ -1321,7 +1348,7 @@ export default function BookMindMap({ bookId, bookTitle, initialJson, onClose, r
               <div
                 key={node.id}
                 className={cn(
-                  'absolute group flex items-center gap-1 rounded-lg border px-2.5',
+                  'absolute group flex items-center gap-2 rounded-lg border px-3.5',
                   'transition-all duration-150',
                   isBeingMoved
                     ? 'shadow-[0_0_20px_rgba(6,182,212,0.5)] animate-pulse z-20'
@@ -1410,12 +1437,12 @@ export default function BookMindMap({ bookId, bookTitle, initialJson, onClose, r
                     }}
                     onBlur={() => commitEdit(node.id)}
                     onMouseDown={e => e.stopPropagation()}
-                    className="flex-1 min-w-0 bg-transparent text-xs font-medium focus:outline-none"
+                    className="flex-1 min-w-0 bg-transparent text-sm font-medium focus:outline-none"
                     style={{ color: isRoot ? '#c4b5fd' : color }}
                   />
                 ) : (
                   <span
-                    className="flex-1 min-w-0 text-xs font-medium leading-snug truncate"
+                    className="flex-1 min-w-0 text-sm font-medium leading-snug truncate"
                     style={{ color: isBeingMoved ? '#67e8f9' : isTraversalFocus ? '#6ee7b7' : isSearchFocus ? '#fef3c7' : isRoot ? '#c4b5fd' : color }}
                   >
                     <HighlightedLabel text={node.label} query={searchQuery} />
@@ -1430,15 +1457,15 @@ export default function BookMindMap({ bookId, bookTitle, initialJson, onClose, r
                     onClick={e => { e.stopPropagation(); toggleCollapse(node.id) }}
                     title={collapsedNodes.has(node.id) ? 'Expand children' : 'Collapse children'}
                     className={cn(
-                      'shrink-0 flex items-center justify-center w-4 h-4 rounded-full border transition-all',
+                      'shrink-0 flex items-center justify-center w-6 h-6 rounded-full border transition-all',
                       collapsedNodes.has(node.id)
                         ? 'opacity-100 border-violet-500/60 bg-violet-500/20 text-violet-400 hover:bg-violet-500/35'
                         : 'opacity-0 group-hover:opacity-100 border-slate-600/40 bg-slate-800/60 text-slate-500 hover:border-violet-500/50 hover:bg-violet-500/15 hover:text-violet-400'
                     )}
                   >
                     {collapsedNodes.has(node.id)
-                      ? <ChevronRight className="h-2.5 w-2.5" />
-                      : <ChevronDown className="h-2.5 w-2.5" />}
+                      ? <ChevronRight className="h-3.5 w-3.5" />
+                      : <ChevronDown className="h-3.5 w-3.5" />}
                   </button>
                 )}
 
@@ -1452,9 +1479,9 @@ export default function BookMindMap({ bookId, bookTitle, initialJson, onClose, r
                         onMouseDown={e => e.stopPropagation()}
                         onClick={e => { e.stopPropagation(); insertBetweenChildren(node) }}
                         title="Insert a new level between this node and its children (⌘Z to undo)"
-                        className="shrink-0 opacity-0 group-hover:opacity-100 flex items-center justify-center w-4 h-4 rounded-full border border-amber-500/60 bg-amber-500/15 text-amber-400 hover:bg-amber-500/40 transition-all"
+                        className="shrink-0 opacity-0 group-hover:opacity-100 flex items-center justify-center w-6 h-6 rounded-full border border-amber-500/60 bg-amber-500/15 text-amber-400 hover:bg-amber-500/40 transition-all"
                       >
-                        <Plus className="h-2.5 w-2.5" />
+                        <Plus className="h-3.5 w-3.5" />
                       </button>
                     )}
 
@@ -1467,7 +1494,7 @@ export default function BookMindMap({ bookId, bookTitle, initialJson, onClose, r
                         title="Move this branch to another node"
                         className="shrink-0 opacity-0 group-hover:opacity-100 text-slate-600 hover:text-cyan-400 transition-all"
                       >
-                        <Link2 className="h-2.5 w-2.5" />
+                        <Link2 className="h-3.5 w-3.5" />
                       </button>
                     )}
 
@@ -1483,7 +1510,7 @@ export default function BookMindMap({ bookId, bookTitle, initialJson, onClose, r
                         }}
                         className="shrink-0 opacity-0 group-hover:opacity-100 text-slate-600 hover:text-slate-300 transition-all"
                       >
-                        <Pencil className="h-2.5 w-2.5" />
+                        <Pencil className="h-3.5 w-3.5" />
                       </button>
                     )}
 
@@ -1495,7 +1522,7 @@ export default function BookMindMap({ bookId, bookTitle, initialJson, onClose, r
                         onClick={e => { e.stopPropagation(); deleteNode(node.id) }}
                         className="shrink-0 opacity-0 group-hover:opacity-100 text-slate-700 hover:text-red-400 transition-all"
                       >
-                        <Trash2 className="h-2.5 w-2.5" />
+                        <Trash2 className="h-3.5 w-3.5" />
                       </button>
                     )}
                   </>
@@ -1504,7 +1531,7 @@ export default function BookMindMap({ bookId, bookTitle, initialJson, onClose, r
                 {/* Navigate-from-here handle (left edge) — always available, any mode */}
                 {!reparentId && !isEditing && (
                   <div
-                    className="absolute -left-3 top-1/2 -translate-y-1/2 z-10 w-6 h-6 flex items-center justify-center cursor-pointer"
+                    className="absolute -left-4 top-1/2 -translate-y-1/2 z-10 w-8 h-8 flex items-center justify-center cursor-pointer"
                     onMouseDown={e => e.stopPropagation()}
                     onClick={e => {
                       e.stopPropagation()
@@ -1513,12 +1540,12 @@ export default function BookMindMap({ bookId, bookTitle, initialJson, onClose, r
                     }}
                   >
                     <div className={cn(
-                      'w-3.5 h-3.5 rounded-full border flex items-center justify-center transition-all',
+                      'w-5 h-5 rounded-full border flex items-center justify-center transition-all',
                       isTraversalFocus
                         ? 'opacity-100 border-emerald-500/70 bg-emerald-500/25 text-emerald-400'
                         : 'opacity-0 group-hover:opacity-100 border-slate-600/50 bg-slate-800/70 text-slate-500 hover:border-emerald-500/60 hover:bg-emerald-500/15 hover:text-emerald-400'
                     )}>
-                      <Navigation className="h-2 w-2" />
+                      <Navigation className="h-3 w-3" />
                     </div>
                   </div>
                 )}
@@ -1526,15 +1553,15 @@ export default function BookMindMap({ bookId, bookTitle, initialJson, onClose, r
                 {/* Connect handle (right edge) — hidden in readonly or reparent mode */}
                 {!isReadOnly && !reparentId && (
                   <div
-                    className="absolute -right-3 top-1/2 -translate-y-1/2 z-10 w-6 h-6 flex items-center justify-center cursor-crosshair opacity-0 group-hover:opacity-100 transition-opacity"
+                    className="absolute -right-4 top-1/2 -translate-y-1/2 z-10 w-8 h-8 flex items-center justify-center cursor-crosshair opacity-0 group-hover:opacity-100 transition-opacity"
                     onMouseDown={e => startConn(e, node.id)}
                   >
                     <div className={cn(
-                      'w-3.5 h-3.5 rounded-full border flex items-center justify-center',
+                      'w-5 h-5 rounded-full border flex items-center justify-center',
                       'border-violet-500/60 bg-violet-600/20',
                       'hover:bg-violet-500 hover:border-violet-400 transition-colors'
                     )}>
-                      <div className="w-1.5 h-1.5 rounded-full bg-violet-400" />
+                      <div className="w-2 h-2 rounded-full bg-violet-400" />
                     </div>
                   </div>
                 )}
