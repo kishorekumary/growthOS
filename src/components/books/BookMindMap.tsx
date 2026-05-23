@@ -1357,8 +1357,7 @@ export default function BookMindMap({ bookId, bookTitle, initialJson, onClose, r
               <div
                 key={node.id}
                 className={cn(
-                  'absolute group flex items-center gap-2 rounded-lg border px-3.5 py-3',
-                  'transition-all duration-150',
+                  'absolute group rounded-lg border transition-all duration-150',
                   isBeingMoved
                     ? 'shadow-[0_0_20px_rgba(6,182,212,0.5)] animate-pulse z-20'
                     : isTraversalFocus
@@ -1368,8 +1367,8 @@ export default function BookMindMap({ bookId, bookTitle, initialJson, onClose, r
                         : isSearchMatch
                           ? 'shadow-[0_0_12px_rgba(251,191,36,0.3)] z-10'
                           : isValidTarget
-                            ? 'cursor-pointer hover:shadow-[0_0_18px_rgba(6,182,212,0.45)] hover:z-10'
-                            : 'hover:shadow-[0_0_16px_rgba(124,58,237,0.35)] hover:z-10',
+                            ? 'cursor-pointer hover:shadow-[0_0_18px_rgba(6,182,212,0.45)] hover:z-30'
+                            : 'hover:shadow-[0_0_16px_rgba(124,58,237,0.35)] hover:z-30',
                   !isReadOnly && !reparentId && !isRoot ? 'cursor-move' : '',
                   isReadOnly ? 'cursor-default' : '',
                 )}
@@ -1412,54 +1411,43 @@ export default function BookMindMap({ bookId, bookTitle, initialJson, onClose, r
                         : undefined
                 }
               >
-                {/* Tooltip — always show full label on hover or when traversal-focused */}
-                {!isEditing && (
-                  <div
-                    className={cn(
-                      'pointer-events-none absolute left-0 bottom-[calc(100%+5px)] z-20 max-w-[400px] rounded-lg border border-white/15 bg-slate-800/95 px-3 py-2 text-xs leading-relaxed shadow-xl backdrop-blur-sm whitespace-normal break-words',
-                      isTraversalFocus ? 'block' : 'hidden group-hover:block',
-                    )}
-                    style={{ color }}
-                  >
-                    <HighlightedLabel text={node.label} query={searchQuery} />
-                  </div>
-                )}
-
                 {/* "Drop here" indicator in reparent mode */}
                 {isValidTarget && (
-                  <div className="pointer-events-none absolute inset-0 rounded-lg border-2 border-cyan-400/50 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-                    <span className="text-[10px] text-cyan-400 font-semibold bg-slate-900/80 px-1.5 py-0.5 rounded">
+                  <div className="pointer-events-none absolute inset-0 rounded-lg border-2 border-cyan-400/50 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity z-10">
+                    <span className="text-[11px] text-cyan-400 font-semibold bg-slate-900/80 px-2 py-0.5 rounded">
                       Attach here
                     </span>
                   </div>
                 )}
 
-                {/* Label / inline input */}
-                {isEditing ? (
-                  <textarea
-                    autoFocus
-                    value={editLabel}
-                    rows={Math.max(1, Math.ceil(editLabel.length / Math.max(6, Math.floor((nw - 128) / 8))))}
-                    onChange={e => setEditLabel(e.target.value)}
-                    onKeyDown={e => {
-                      if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); commitEdit(node.id) }
-                      if (e.key === 'Escape') setEditingId(null)
-                    }}
-                    onBlur={() => commitEdit(node.id)}
-                    onMouseDown={e => e.stopPropagation()}
-                    className="flex-1 min-w-0 bg-transparent text-sm font-medium focus:outline-none resize-none leading-snug"
-                    style={{ color: isRoot ? '#c4b5fd' : color }}
-                  />
-                ) : (
-                  <span
-                    className="flex-1 min-w-0 text-sm font-medium leading-snug break-words"
-                    style={{ color: isBeingMoved ? '#67e8f9' : isTraversalFocus ? '#6ee7b7' : isSearchFocus ? '#fef3c7' : isRoot ? '#c4b5fd' : color }}
-                  >
-                    <HighlightedLabel text={node.label} query={searchQuery} />
-                  </span>
-                )}
+                {/* ── Pure text content — full node width ── */}
+                <div className="px-4 py-3">
+                  {isEditing ? (
+                    <textarea
+                      autoFocus
+                      value={editLabel}
+                      rows={Math.max(1, Math.ceil(editLabel.length / Math.max(6, Math.floor((nw - 32) / 8))))}
+                      onChange={e => setEditLabel(e.target.value)}
+                      onKeyDown={e => {
+                        if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); commitEdit(node.id) }
+                        if (e.key === 'Escape') setEditingId(null)
+                      }}
+                      onBlur={() => commitEdit(node.id)}
+                      onMouseDown={e => e.stopPropagation()}
+                      className="w-full bg-transparent text-sm font-medium focus:outline-none resize-none leading-snug"
+                      style={{ color: isRoot ? '#c4b5fd' : color }}
+                    />
+                  ) : (
+                    <span
+                      className="text-sm font-medium leading-snug break-words block"
+                      style={{ color: isBeingMoved ? '#67e8f9' : isTraversalFocus ? '#6ee7b7' : isSearchFocus ? '#fef3c7' : isRoot ? '#c4b5fd' : color }}
+                    >
+                      <HighlightedLabel text={node.label} query={searchQuery} />
+                    </span>
+                  )}
+                </div>
 
-                {/* Collapse/expand — available in any mode for nodes with children */}
+                {/* ── Expand/collapse — right side center, outside border ── */}
                 {hasChildren && !reparentId && !isEditing && (
                   <button
                     type="button"
@@ -1467,78 +1455,69 @@ export default function BookMindMap({ bookId, bookTitle, initialJson, onClose, r
                     onClick={e => { e.stopPropagation(); toggleCollapse(node.id) }}
                     title={collapsedNodes.has(node.id) ? 'Expand children' : 'Collapse children'}
                     className={cn(
-                      'shrink-0 flex items-center justify-center w-6 h-6 rounded-full border transition-all',
+                      'absolute -right-4 top-1/2 -translate-y-1/2 z-10',
+                      'flex items-center justify-center w-8 h-8 rounded-full border transition-all',
                       collapsedNodes.has(node.id)
-                        ? 'opacity-100 border-violet-500/60 bg-violet-500/20 text-violet-400 hover:bg-violet-500/35'
-                        : 'opacity-0 group-hover:opacity-100 border-slate-600/40 bg-slate-800/60 text-slate-500 hover:border-violet-500/50 hover:bg-violet-500/15 hover:text-violet-400'
+                        ? 'opacity-100 border-violet-500/70 bg-violet-500/25 text-violet-300 hover:bg-violet-500/45 shadow-[0_0_8px_rgba(124,58,237,0.4)]'
+                        : 'opacity-0 group-hover:opacity-100 border-slate-600/50 bg-slate-900/80 text-slate-400 hover:border-violet-500/60 hover:text-violet-300'
                     )}
                   >
                     {collapsedNodes.has(node.id)
-                      ? <ChevronRight className="h-3.5 w-3.5" />
-                      : <ChevronDown className="h-3.5 w-3.5" />}
+                      ? <ChevronRight className="h-4 w-4" />
+                      : <ChevronDown className="h-4 w-4" />}
                   </button>
                 )}
 
-                {/* Edit controls — hidden in readonly or reparent mode */}
+                {/* ── Action bar — floats below node on hover, edit mode ── */}
                 {!isReadOnly && !reparentId && !isEditing && (
-                  <>
-                    {/* Insert-between button — only for nodes that have children */}
-                    {hasChildren && (
-                      <button
-                        type="button"
-                        onMouseDown={e => e.stopPropagation()}
-                        onClick={e => { e.stopPropagation(); insertBetweenChildren(node) }}
-                        title="Insert a new level between this node and its children (⌘Z to undo)"
-                        className="shrink-0 opacity-0 group-hover:opacity-100 flex items-center justify-center w-6 h-6 rounded-full border border-amber-500/60 bg-amber-500/15 text-amber-400 hover:bg-amber-500/40 transition-all"
-                      >
-                        <Plus className="h-3.5 w-3.5" />
-                      </button>
-                    )}
-
-                    {/* Move-branch (reparent) button */}
+                  <div
+                    className="absolute left-0 top-[calc(100%+6px)] z-30 flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity"
+                    onMouseDown={e => e.stopPropagation()}
+                  >
                     {!isRoot && (
                       <button
                         type="button"
-                        onMouseDown={e => e.stopPropagation()}
-                        onClick={e => { e.stopPropagation(); startReparent(node.id) }}
-                        title="Move this branch to another node"
-                        className="shrink-0 opacity-0 group-hover:opacity-100 text-slate-600 hover:text-cyan-400 transition-all"
-                      >
-                        <Link2 className="h-3.5 w-3.5" />
-                      </button>
-                    )}
-
-                    {/* Edit label button */}
-                    {!isRoot && (
-                      <button
-                        type="button"
-                        onMouseDown={e => e.stopPropagation()}
-                        onClick={e => {
-                          e.stopPropagation()
-                          setEditingId(node.id)
-                          setEditLabel(node.label)
-                        }}
-                        className="shrink-0 opacity-0 group-hover:opacity-100 text-slate-600 hover:text-slate-300 transition-all"
+                        onClick={e => { e.stopPropagation(); setEditingId(node.id); setEditLabel(node.label) }}
+                        title="Edit label (double-click)"
+                        className="flex items-center justify-center w-7 h-7 rounded-md bg-slate-900/95 border border-white/12 text-slate-500 hover:text-slate-200 hover:border-white/25 transition-colors backdrop-blur-sm"
                       >
                         <Pencil className="h-3.5 w-3.5" />
                       </button>
                     )}
-
-                    {/* Delete button */}
                     {!isRoot && (
                       <button
                         type="button"
-                        onMouseDown={e => e.stopPropagation()}
                         onClick={e => { e.stopPropagation(); deleteNode(node.id) }}
-                        className="shrink-0 opacity-0 group-hover:opacity-100 text-slate-700 hover:text-red-400 transition-all"
+                        title="Delete node"
+                        className="flex items-center justify-center w-7 h-7 rounded-md bg-slate-900/95 border border-white/12 text-slate-500 hover:text-red-400 hover:border-red-500/30 transition-colors backdrop-blur-sm"
                       >
                         <Trash2 className="h-3.5 w-3.5" />
                       </button>
                     )}
-                  </>
+                    {!isRoot && (
+                      <button
+                        type="button"
+                        onClick={e => { e.stopPropagation(); startReparent(node.id) }}
+                        title="Move branch to another parent"
+                        className="flex items-center justify-center w-7 h-7 rounded-md bg-slate-900/95 border border-white/12 text-slate-500 hover:text-cyan-400 hover:border-cyan-500/30 transition-colors backdrop-blur-sm"
+                      >
+                        <Link2 className="h-3.5 w-3.5" />
+                      </button>
+                    )}
+                    {hasChildren && (
+                      <button
+                        type="button"
+                        onClick={e => { e.stopPropagation(); insertBetweenChildren(node) }}
+                        title="Insert a level between this node and its children"
+                        className="flex items-center justify-center w-7 h-7 rounded-md bg-slate-900/95 border border-amber-500/30 text-amber-600/70 hover:text-amber-400 hover:border-amber-500/60 transition-colors backdrop-blur-sm"
+                      >
+                        <Plus className="h-3.5 w-3.5" />
+                      </button>
+                    )}
+                  </div>
                 )}
 
-                {/* Navigate-from-here handle (left edge) — always available, any mode */}
+                {/* ── Navigation handle — left side center ── */}
                 {!reparentId && !isEditing && (
                   <div
                     className="absolute -left-4 top-1/2 -translate-y-1/2 z-10 w-8 h-8 flex items-center justify-center cursor-pointer"
@@ -1560,44 +1539,36 @@ export default function BookMindMap({ bookId, bookTitle, initialJson, onClose, r
                   </div>
                 )}
 
-                {/* Connect handle (right edge) — hidden in readonly or reparent mode */}
+                {/* ── Connect handle — right side, offset further out to clear expand button ── */}
                 {!isReadOnly && !reparentId && (
                   <div
-                    className="absolute -right-4 top-1/2 -translate-y-1/2 z-10 w-8 h-8 flex items-center justify-center cursor-crosshair opacity-0 group-hover:opacity-100 transition-opacity"
+                    className="absolute -right-11 top-1/2 -translate-y-1/2 z-10 w-8 h-8 flex items-center justify-center cursor-crosshair opacity-0 group-hover:opacity-100 transition-opacity"
                     onMouseDown={e => startConn(e, node.id)}
                   >
-                    <div className={cn(
-                      'w-5 h-5 rounded-full border flex items-center justify-center',
-                      'border-violet-500/60 bg-violet-600/20',
-                      'hover:bg-violet-500 hover:border-violet-400 transition-colors'
-                    )}>
+                    <div className="w-5 h-5 rounded-full border border-violet-500/60 bg-violet-600/20 hover:bg-violet-500 hover:border-violet-400 flex items-center justify-center transition-colors">
                       <div className="w-2 h-2 rounded-full bg-violet-400" />
                     </div>
                   </div>
                 )}
 
-                {/* Resize handles — edit mode only, not in reparent/editing */}
+                {/* ── Resize handles — edges only, edit mode ── */}
                 {!isReadOnly && !reparentId && !isEditing && (
                   <>
-                    {/* Right */}
                     <div
                       className="absolute top-1 bottom-1 -right-1 w-2 cursor-ew-resize opacity-0 group-hover:opacity-100 transition-opacity z-10 rounded-r"
                       style={{ background: 'linear-gradient(to right, transparent, rgba(124,58,237,0.35))' }}
                       onMouseDown={e => startResize(e, node, 'right')}
                     />
-                    {/* Left */}
                     <div
                       className="absolute top-1 bottom-1 -left-1 w-2 cursor-ew-resize opacity-0 group-hover:opacity-100 transition-opacity z-10 rounded-l"
                       style={{ background: 'linear-gradient(to left, transparent, rgba(124,58,237,0.35))' }}
                       onMouseDown={e => startResize(e, node, 'left')}
                     />
-                    {/* Bottom */}
                     <div
                       className="absolute left-1 right-1 -bottom-1 h-2 cursor-ns-resize opacity-0 group-hover:opacity-100 transition-opacity z-10 rounded-b"
                       style={{ background: 'linear-gradient(to bottom, transparent, rgba(124,58,237,0.35))' }}
                       onMouseDown={e => startResize(e, node, 'bottom')}
                     />
-                    {/* Top */}
                     <div
                       className="absolute left-1 right-1 -top-1 h-2 cursor-ns-resize opacity-0 group-hover:opacity-100 transition-opacity z-10 rounded-t"
                       style={{ background: 'linear-gradient(to top, transparent, rgba(124,58,237,0.35))' }}
