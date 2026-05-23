@@ -1357,7 +1357,7 @@ export default function BookMindMap({ bookId, bookTitle, initialJson, onClose, r
               <div
                 key={node.id}
                 className={cn(
-                  'absolute group rounded-lg border transition-all duration-150',
+                  'absolute group flex items-center justify-center rounded-lg border transition-all duration-150',
                   isBeingMoved
                     ? 'shadow-[0_0_20px_rgba(6,182,212,0.5)] animate-pulse z-20'
                     : isTraversalFocus
@@ -1420,13 +1420,13 @@ export default function BookMindMap({ bookId, bookTitle, initialJson, onClose, r
                   </div>
                 )}
 
-                {/* ── Pure text content — full node width ── */}
-                <div className="px-4 py-3">
+                {/* ── Text content — centered ── */}
+                <div className="px-5 py-3 w-full">
                   {isEditing ? (
                     <textarea
                       autoFocus
                       value={editLabel}
-                      rows={Math.max(1, Math.ceil(editLabel.length / Math.max(6, Math.floor((nw - 32) / 8))))}
+                      rows={Math.max(1, Math.ceil(editLabel.length / Math.max(6, Math.floor((nw - 40) / 8))))}
                       onChange={e => setEditLabel(e.target.value)}
                       onKeyDown={e => {
                         if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); commitEdit(node.id) }
@@ -1434,12 +1434,12 @@ export default function BookMindMap({ bookId, bookTitle, initialJson, onClose, r
                       }}
                       onBlur={() => commitEdit(node.id)}
                       onMouseDown={e => e.stopPropagation()}
-                      className="w-full bg-transparent text-sm font-medium focus:outline-none resize-none leading-snug"
+                      className="w-full bg-transparent text-sm font-medium focus:outline-none resize-none leading-snug text-center"
                       style={{ color: isRoot ? '#c4b5fd' : color }}
                     />
                   ) : (
                     <span
-                      className="text-sm font-medium leading-snug break-words block"
+                      className="text-sm font-medium leading-snug break-words text-center block w-full"
                       style={{ color: isBeingMoved ? '#67e8f9' : isTraversalFocus ? '#6ee7b7' : isSearchFocus ? '#fef3c7' : isRoot ? '#c4b5fd' : color }}
                     >
                       <HighlightedLabel text={node.label} query={searchQuery} />
