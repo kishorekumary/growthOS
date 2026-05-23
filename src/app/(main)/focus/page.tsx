@@ -2,6 +2,7 @@
 
 import dynamic from 'next/dynamic'
 import { Timer, Loader2 } from 'lucide-react'
+import QuickReset from '@/components/shared/QuickReset'
 
 const FocusTimer = dynamic(() => import('@/components/focus/FocusTimer'), {
   loading: () => (
@@ -25,6 +26,9 @@ export default function FocusPage() {
       </div>
 
       <FocusTimer />
+
+      {/* Quick Reset floating button — breathing / affirmations during a session */}
+      <QuickReset floatingOnly />
     </div>
   )
 }

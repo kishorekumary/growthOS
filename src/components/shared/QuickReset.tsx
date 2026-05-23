@@ -516,7 +516,7 @@ const MODES = [
 ]
 
 // ─── Main export ──────────────────────────────────────────────────
-export default function QuickReset() {
+export default function QuickReset({ floatingOnly = false }: { floatingOnly?: boolean }) {
   const [open, setOpen]   = useState(false)
   const [mode, setMode]   = useState<Mode>('menu')
   const [pinging, setPinging] = useState(true)
@@ -534,7 +534,7 @@ export default function QuickReset() {
     return (
       <>
         {/* ── Featured card with 3 direct-access mode buttons ── */}
-        <div className="rounded-2xl border border-white/10 bg-gradient-to-br from-slate-800/70 to-slate-900/90 p-4 shadow-lg">
+        {!floatingOnly && <div className="rounded-2xl border border-white/10 bg-gradient-to-br from-slate-800/70 to-slate-900/90 p-4 shadow-lg">
           <div className="flex items-center gap-3 mb-3.5">
             <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-blue-500/30 via-violet-500/20 to-emerald-500/20 border border-white/10">
               <Zap className="h-4 w-4 text-white" />
@@ -567,7 +567,7 @@ export default function QuickReset() {
               )
             })}
           </div>
-        </div>
+        </div>}
 
         {/* ── Floating action button — stays visible while scrolling ── */}
         <div className="fixed bottom-[4.75rem] right-4 z-40 sm:bottom-6 sm:right-6">
