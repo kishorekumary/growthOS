@@ -9,11 +9,20 @@ const NODE_H = 52
 const MIN_W  = 190
 const MAX_W  = 520
 const H_GAP  = 440
-const V_GAP  = 80
+const V_GAP  = 96
 const DEPTH_COLORS = ['#7c3aed', '#06b6d4', '#10b981', '#f59e0b', '#ef4444', '#3b82f6']
 
 function nodeWidth(label: string): number {
   return Math.max(MIN_W, Math.min(MAX_W, label.length * 8.5 + 100))
+}
+
+// Estimate rendered height for bezier midpoint calculations.
+// Node is flex-row: text area width ≈ nodeW minus padding (28px) minus icon zone (100px).
+function nodeHeight(label: string, nodeW: number): number {
+  const textW = Math.max(40, nodeW - 128)
+  const charsPerLine = Math.max(6, Math.floor(textW / 8))
+  const lines = Math.max(1, Math.ceil(label.length / charsPerLine))
+  return Math.max(NODE_H, lines * 22 + 24)
 }
 
 export interface MindNode {
@@ -27,7 +36,7 @@ export interface MindNode {
 }
 
 function getNodeW(node: MindNode): number { return node.w ?? nodeWidth(node.label) }
-function getNodeH(node: MindNode): number { return node.h ?? NODE_H }
+function getNodeH(node: MindNode): number { return node.h ?? nodeHeight(node.label, getNodeW(node)) }
 
 function uid() {
   return Math.random().toString(36).slice(2, 10)
@@ -1348,7 +1357,7 @@ export default function BookMindMap({ bookId, bookTitle, initialJson, onClose, r
               <div
                 key={node.id}
                 className={cn(
-                  'absolute group flex items-center gap-2 rounded-lg border px-3.5',
+                  'absolute group flex items-center gap-2 rounded-lg border px-3.5 py-3',
                   'transition-all duration-150',
                   isBeingMoved
                     ? 'shadow-[0_0_20px_rgba(6,182,212,0.5)] animate-pulse z-20'
@@ -1365,7 +1374,7 @@ export default function BookMindMap({ bookId, bookTitle, initialJson, onClose, r
                   isReadOnly ? 'cursor-default' : '',
                 )}
                 style={{
-                  left: node.x, top: node.y, width: nw, height: nh,
+                  left: node.x, top: node.y, width: nw, minHeight: nh,
                   borderColor: isBeingMoved
                     ? 'rgba(6,182,212,0.7)'
                     : isTraversalFocus
@@ -1427,22 +1436,23 @@ export default function BookMindMap({ bookId, bookTitle, initialJson, onClose, r
 
                 {/* Label / inline input */}
                 {isEditing ? (
-                  <input
+                  <textarea
                     autoFocus
                     value={editLabel}
+                    rows={Math.max(1, Math.ceil(editLabel.length / Math.max(6, Math.floor((nw - 128) / 8))))}
                     onChange={e => setEditLabel(e.target.value)}
                     onKeyDown={e => {
-                      if (e.key === 'Enter') commitEdit(node.id)
+                      if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); commitEdit(node.id) }
                       if (e.key === 'Escape') setEditingId(null)
                     }}
                     onBlur={() => commitEdit(node.id)}
                     onMouseDown={e => e.stopPropagation()}
-                    className="flex-1 min-w-0 bg-transparent text-sm font-medium focus:outline-none"
+                    className="flex-1 min-w-0 bg-transparent text-sm font-medium focus:outline-none resize-none leading-snug"
                     style={{ color: isRoot ? '#c4b5fd' : color }}
                   />
                 ) : (
                   <span
-                    className="flex-1 min-w-0 text-sm font-medium leading-snug truncate"
+                    className="flex-1 min-w-0 text-sm font-medium leading-snug break-words"
                     style={{ color: isBeingMoved ? '#67e8f9' : isTraversalFocus ? '#6ee7b7' : isSearchFocus ? '#fef3c7' : isRoot ? '#c4b5fd' : color }}
                   >
                     <HighlightedLabel text={node.label} query={searchQuery} />
