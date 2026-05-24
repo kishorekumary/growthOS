@@ -1,7 +1,11 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
-import { Pencil, Save, X, Plus, Trash2, Loader2, Sparkles, Heart, ScrollText, ChevronLeft, ChevronRight, Maximize2 } from 'lucide-react'
+import { useState, useEffect, useCallback, useRef } from 'react'
+import {
+  Pencil, Save, X, Plus, Trash2, Loader2, Sparkles, Heart,
+  ScrollText, ChevronLeft, ChevronRight, Maximize2, Target,
+} from 'lucide-react'
+import { differenceInDays, parseISO } from 'date-fns'
 import { createSupabaseBrowserClient } from '@/lib/supabase'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
@@ -12,7 +16,24 @@ interface Practice {
   gratitude: string[]
 }
 
-type Tab = 'pledge' | 'affirmations' | 'gratitude'
+type GoalCategory = 'fitness' | 'finance' | 'books' | 'general' | 'career'
+
+interface Goal {
+  id: string
+  title: string
+  category: GoalCategory
+  target_date: string | null
+}
+
+const CATEGORY_DOT: Record<GoalCategory, string> = {
+  fitness: 'bg-emerald-400',
+  finance: 'bg-sky-400',
+  books:   'bg-amber-400',
+  general: 'bg-violet-400',
+  career:  'bg-rose-400',
+}
+
+type Tab = 'pledge' | 'affirmations' | 'gratitude' | 'goals'
 
 const EMPTY: Practice = { pledge: '', affirmations: [], gratitude: [] }
 
@@ -20,16 +41,30 @@ const TABS: { id: Tab; label: string; icon: typeof ScrollText; accent: string; r
   { id: 'pledge',       label: 'Pledge',       icon: ScrollText, accent: 'text-amber-400',   ring: 'ring-amber-500'   },
   { id: 'affirmations', label: 'Affirmations',  icon: Sparkles,   accent: 'text-violet-400',  ring: 'ring-violet-500'  },
   { id: 'gratitude',    label: 'Gratitude',     icon: Heart,      accent: 'text-emerald-400', ring: 'ring-emerald-500' },
+  { id: 'goals',        label: 'Goals',         icon: Target,     accent: 'text-sky-400',     ring: 'ring-sky-500'     },
 ]
 
-// ─── List editor (used inside edit mode) ─────────────────────
+const TAB_ORDER: Tab[] = ['pledge', 'affirmations', 'gratitude', 'goals']
+
+// ─── Swipe helper ─────────────────────────────────────────────────
+
+function useSwipe(onSwipeLeft: () => void, onSwipeRight: () => void) {
+  const startX = useRef<number | null>(null)
+  return {
+    onTouchStart: (e: React.TouchEvent) => { startX.current = e.touches[0].clientX },
+    onTouchEnd:   (e: React.TouchEvent) => {
+      if (startX.current === null) return
+      const dx = e.changedTouches[0].clientX - startX.current
+      if (Math.abs(dx) > 40) dx < 0 ? onSwipeLeft() : onSwipeRight()
+      startX.current = null
+    },
+  }
+}
+
+// ─── List editor (used inside edit mode) ─────────────────────────
 
 function ListEditor({
-  items,
-  onChange,
-  placeholder,
-  accentClass,
-  ringClass,
+  items, onChange, placeholder, accentClass, ringClass,
 }: {
   items: string[]
   onChange: (items: string[]) => void
@@ -37,12 +72,8 @@ function ListEditor({
   accentClass: string
   ringClass: string
 }) {
-  function update(i: number, val: string) {
-    onChange(items.map((x, idx) => (idx === i ? val : x)))
-  }
-  function remove(i: number) {
-    onChange(items.filter((_, idx) => idx !== i))
-  }
+  function update(i: number, val: string) { onChange(items.map((x, idx) => idx === i ? val : x)) }
+  function remove(i: number)              { onChange(items.filter((_, idx) => idx !== i)) }
 
   return (
     <div className="space-y-2">
@@ -59,11 +90,7 @@ function ListEditor({
               ringClass,
             )}
           />
-          <button
-            type="button"
-            onClick={() => remove(i)}
-            className="text-slate-600 hover:text-red-400 transition-colors shrink-0"
-          >
+          <button type="button" onClick={() => remove(i)} className="text-slate-600 hover:text-red-400 transition-colors shrink-0">
             <Trash2 className="h-4 w-4" />
           </button>
         </div>
@@ -79,60 +106,102 @@ function ListEditor({
   )
 }
 
-// ─── Main component ───────────────────────────────────────────
+// ─── Goals list (read-only) ───────────────────────────────────────
 
-const TAB_ORDER: Tab[] = ['pledge', 'affirmations', 'gratitude']
+function GoalsList({ goals, loading }: { goals: Goal[]; loading: boolean }) {
+  if (loading) return <div className="flex justify-center py-6"><Loader2 className="h-4 w-4 animate-spin text-slate-500" /></div>
+
+  if (goals.length === 0) return (
+    <div className="text-center py-6 space-y-1">
+      <Target className="h-6 w-6 text-sky-400/30 mx-auto" />
+      <p className="text-xs text-slate-500">No active goals yet.</p>
+    </div>
+  )
+
+  return (
+    <div className="space-y-2">
+      {goals.map(goal => {
+        const days = goal.target_date ? differenceInDays(parseISO(goal.target_date), new Date()) : null
+        return (
+          <div key={goal.id} className="flex items-center gap-3 rounded-lg bg-white/5 px-3 py-2.5">
+            <span className={cn('h-2 w-2 shrink-0 rounded-full', CATEGORY_DOT[goal.category] ?? 'bg-slate-400')} />
+            <span className="flex-1 min-w-0 text-sm text-slate-200 truncate">{goal.title}</span>
+            {days !== null && (
+              <span className={cn(
+                'text-xs shrink-0 font-medium',
+                days < 0  ? 'text-red-400'   :
+                days === 0 ? 'text-amber-300' :
+                days <= 7  ? 'text-amber-400' :
+                days <= 30 ? 'text-slate-400' : 'text-slate-500',
+              )}>
+                {days < 0 ? 'Overdue' : days === 0 ? 'Today' : `${days}d`}
+              </span>
+            )}
+          </div>
+        )
+      })}
+    </div>
+  )
+}
+
+// ─── Main component ───────────────────────────────────────────────
 
 export default function DailyPractice() {
-  const [practice, setPractice] = useState<Practice | null>(null)
-  const [loading, setLoading]   = useState(true)
-  const [editing, setEditing]   = useState(false)
-  const [draft, setDraft]       = useState<Practice>(EMPTY)
-  const [saving, setSaving]     = useState(false)
-  const [activeTab, setActiveTab] = useState<Tab>('pledge')
+  const [practice, setPractice]     = useState<Practice | null>(null)
+  const [goals, setGoals]           = useState<Goal[]>([])
+  const [goalsLoading, setGoalsLoading] = useState(true)
+  const [loading, setLoading]       = useState(true)
+  const [editing, setEditing]       = useState(false)
+  const [draft, setDraft]           = useState<Practice>(EMPTY)
+  const [saving, setSaving]         = useState(false)
+  const [activeTab, setActiveTab]   = useState<Tab>('pledge')
   const [fullscreen, setFullscreen] = useState(false)
   const [fading, setFading]         = useState(false)
+  const swipedRef                   = useRef(false)
 
   const fetchPractice = useCallback(async () => {
     const supabase = createSupabaseBrowserClient()
     const { data: { session } } = await supabase.auth.getSession()
-    if (!session?.user) { setLoading(false); return }
-    const { data } = await supabase
-      .from('daily_practice')
-      .select('pledge, affirmations, gratitude')
-      .eq('user_id', session.user.id)
-      .maybeSingle()
-    if (data) {
+    if (!session?.user) { setLoading(false); setGoalsLoading(false); return }
+
+    const [practiceRes, goalsRes] = await Promise.all([
+      supabase.from('daily_practice')
+        .select('pledge, affirmations, gratitude')
+        .eq('user_id', session.user.id)
+        .maybeSingle(),
+      supabase.from('user_goals')
+        .select('id, title, category, target_date')
+        .eq('user_id', session.user.id)
+        .eq('is_completed', false)
+        .order('target_date', { ascending: true, nullsFirst: false }),
+    ])
+
+    if (practiceRes.data) {
       setPractice({
-        pledge:       data.pledge       ?? '',
-        affirmations: data.affirmations ?? [],
-        gratitude:    data.gratitude    ?? [],
+        pledge:       practiceRes.data.pledge       ?? '',
+        affirmations: practiceRes.data.affirmations ?? [],
+        gratitude:    practiceRes.data.gratitude    ?? [],
       })
     }
+    setGoals((goalsRes.data as Goal[]) ?? [])
     setLoading(false)
+    setGoalsLoading(false)
   }, [])
 
   useEffect(() => { fetchPractice() }, [fetchPractice])
 
-  function openEdit() {
-    setDraft(practice ?? EMPTY)
-    setEditing(true)
-  }
-
-  function cancelEdit() {
-    setEditing(false)
-  }
+  function openEdit() { setDraft(practice ?? EMPTY); setEditing(true) }
+  function cancelEdit() { setEditing(false) }
 
   function navigate(dir: 1 | -1) {
     setFading(true)
     setTimeout(() => {
-      setActiveTab(t => {
-        const i = TAB_ORDER.indexOf(t)
-        return TAB_ORDER[(i + dir + TAB_ORDER.length) % TAB_ORDER.length]
-      })
+      setActiveTab(t => TAB_ORDER[(TAB_ORDER.indexOf(t) + dir + TAB_ORDER.length) % TAB_ORDER.length])
       setFading(false)
     }, 200)
   }
+
+  const swipeHandlers = useSwipe(() => navigate(1), () => navigate(-1))
 
   async function save() {
     setSaving(true)
@@ -165,7 +234,7 @@ export default function DailyPractice() {
     )
   }
 
-  // ── Empty state ─────────────────────────────────────────────
+  // ── Empty state ─────────────────────────────────────────────────
   if (!hasContent && !editing) {
     return (
       <div className="rounded-2xl border border-dashed border-violet-500/30 bg-violet-500/5 p-7 text-center space-y-3">
@@ -186,12 +255,13 @@ export default function DailyPractice() {
   }
 
   const currentTab = TABS.find(t => t.id === activeTab)!
+  const TabIcon    = currentTab.icon
 
-  // ── Shared tab bar ──────────────────────────────────────────
+  // ── Shared tab bar ───────────────────────────────────────────────
   const tabBar = (
     <div className="flex gap-1 rounded-lg bg-white/5 p-1">
       {TABS.map(t => {
-        const Icon = t.icon
+        const Icon   = t.icon
         const active = activeTab === t.id
         return (
           <button
@@ -200,7 +270,7 @@ export default function DailyPractice() {
             onClick={() => setActiveTab(t.id)}
             className={cn(
               'flex flex-1 items-center justify-center gap-1.5 rounded-md py-1.5 text-xs font-medium transition-all',
-              active ? cn('bg-slate-800 shadow-sm', t.accent) : 'text-slate-500 hover:text-slate-300'
+              active ? cn('bg-slate-800 shadow-sm', t.accent) : 'text-slate-500 hover:text-slate-300',
             )}
           >
             <Icon className="h-3.5 w-3.5 shrink-0" />
@@ -211,11 +281,10 @@ export default function DailyPractice() {
     </div>
   )
 
-  // ── Edit mode ───────────────────────────────────────────────
+  // ── Edit mode ────────────────────────────────────────────────────
   if (editing) {
     return (
       <div className="rounded-2xl border border-white/10 bg-slate-900/60 p-5 space-y-4">
-        {/* Header */}
         <div className="flex items-center justify-between">
           <span className="text-sm font-semibold text-white">Edit Daily Practice</span>
           <button type="button" onClick={cancelEdit} className="text-slate-500 hover:text-white transition-colors">
@@ -225,7 +294,6 @@ export default function DailyPractice() {
 
         {tabBar}
 
-        {/* Tab content */}
         <div className="min-h-[120px]">
           {activeTab === 'pledge' && (
             <textarea
@@ -236,40 +304,30 @@ export default function DailyPractice() {
               className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2.5 text-sm text-white placeholder:text-slate-600 resize-none focus:outline-none focus:ring-1 focus:ring-amber-500"
             />
           )}
-
           {activeTab === 'affirmations' && (
-            <ListEditor
-              items={draft.affirmations}
+            <ListEditor items={draft.affirmations}
               onChange={items => setDraft(d => ({ ...d, affirmations: items }))}
               placeholder="I am confident and capable..."
-              accentClass="text-violet-400"
-              ringClass="focus:ring-violet-500"
-            />
+              accentClass="text-violet-400" ringClass="focus:ring-violet-500" />
           )}
-
           {activeTab === 'gratitude' && (
-            <ListEditor
-              items={draft.gratitude}
+            <ListEditor items={draft.gratitude}
               onChange={items => setDraft(d => ({ ...d, gratitude: items }))}
               placeholder="I am grateful for..."
-              accentClass="text-emerald-400"
-              ringClass="focus:ring-emerald-500"
-            />
+              accentClass="text-emerald-400" ringClass="focus:ring-emerald-500" />
+          )}
+          {activeTab === 'goals' && (
+            <p className="text-xs text-slate-500 pt-2">Goals are managed on the Goals page.</p>
           )}
         </div>
 
         <div className="flex gap-2 pt-1">
           <Button onClick={save} disabled={saving} className="bg-violet-600 hover:bg-violet-700 text-white flex-1">
-            {saving
-              ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Saving...</>
-              : <><Save className="mr-2 h-4 w-4" /> Save</>}
+            {saving ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Saving...</>
+                    : <><Save className="mr-2 h-4 w-4" /> Save</>}
           </Button>
-          <Button
-            variant="outline"
-            onClick={cancelEdit}
-            disabled={saving}
-            className="border-white/20 bg-white/5 text-slate-400 hover:text-white hover:bg-white/10"
-          >
+          <Button variant="outline" onClick={cancelEdit} disabled={saving}
+            className="border-white/20 bg-white/5 text-slate-400 hover:text-white hover:bg-white/10">
             Cancel
           </Button>
         </div>
@@ -277,9 +335,7 @@ export default function DailyPractice() {
     )
   }
 
-  // ── Full-screen overlay ─────────────────────────────────────
-  const TabIcon = currentTab.icon
-
+  // ── Full-screen overlay ──────────────────────────────────────────
   if (fullscreen) {
     return (
       <div
@@ -289,10 +345,8 @@ export default function DailyPractice() {
         <div className="w-full max-w-md rounded-2xl border border-white/10 bg-slate-900 shadow-2xl overflow-hidden">
           {/* Header */}
           <div className="flex items-center justify-between px-5 pt-5 pb-3">
-            <button
-              onClick={() => navigate(-1)}
-              className="p-2 rounded-full bg-white/5 hover:bg-white/10 text-slate-500 hover:text-white transition-colors"
-            >
+            <button onClick={() => navigate(-1)}
+              className="p-2 rounded-full bg-white/5 hover:bg-white/10 text-slate-500 hover:text-white transition-colors">
               <ChevronLeft className="h-5 w-5" />
             </button>
 
@@ -301,16 +355,10 @@ export default function DailyPractice() {
                 <TabIcon className="h-4 w-4" />
                 {currentTab.label}
               </div>
-              {/* Dot indicators */}
               <div className="flex gap-1.5 items-center mt-0.5">
                 {TAB_ORDER.map(t => (
-                  <button
-                    key={t}
-                    onClick={() => {
-                      if (t === activeTab) return
-                      setFading(true)
-                      setTimeout(() => { setActiveTab(t); setFading(false) }, 200)
-                    }}
+                  <button key={t}
+                    onClick={() => { if (t === activeTab) return; setFading(true); setTimeout(() => { setActiveTab(t); setFading(false) }, 200) }}
                     className={cn(
                       'h-1 rounded-full transition-all duration-300',
                       t === activeTab ? cn('w-4', currentTab.ring.replace('ring-', 'bg-')) : 'w-1 bg-white/20 hover:bg-white/40',
@@ -320,19 +368,20 @@ export default function DailyPractice() {
               </div>
             </div>
 
-            <button
-              onClick={() => setFullscreen(false)}
-              className="p-2 rounded-full bg-white/5 hover:bg-white/10 text-slate-500 hover:text-white transition-colors"
-            >
+            <button onClick={() => setFullscreen(false)}
+              className="p-2 rounded-full bg-white/5 hover:bg-white/10 text-slate-500 hover:text-white transition-colors">
               <X className="h-4 w-4" />
             </button>
           </div>
 
-          {/* Content */}
-          <div className={cn(
-            'px-6 py-4 min-h-[200px] max-h-[55vh] overflow-y-auto transition-opacity duration-[200ms]',
-            fading ? 'opacity-0' : 'opacity-100',
-          )}>
+          {/* Swipeable content */}
+          <div
+            {...swipeHandlers}
+            className={cn(
+              'px-6 py-4 min-h-[200px] max-h-[55vh] overflow-y-auto transition-opacity duration-[200ms]',
+              fading ? 'opacity-0' : 'opacity-100',
+            )}
+          >
             {activeTab === 'pledge' && (
               practice!.pledge
                 ? <blockquote className="text-lg font-light text-amber-100/90 leading-relaxed italic text-center whitespace-pre-wrap">
@@ -340,7 +389,6 @@ export default function DailyPractice() {
                   </blockquote>
                 : <p className="text-slate-500 text-sm text-center pt-6">No pledge set yet.</p>
             )}
-
             {activeTab === 'affirmations' && (
               practice!.affirmations.length > 0
                 ? <ul className="space-y-3">
@@ -355,7 +403,6 @@ export default function DailyPractice() {
                   </ul>
                 : <p className="text-slate-500 text-sm text-center pt-6">No affirmations set yet.</p>
             )}
-
             {activeTab === 'gratitude' && (
               practice!.gratitude.length > 0
                 ? <ul className="space-y-3">
@@ -368,21 +415,20 @@ export default function DailyPractice() {
                   </ul>
                 : <p className="text-slate-500 text-sm text-center pt-6">No gratitude entries set yet.</p>
             )}
+            {activeTab === 'goals' && (
+              <GoalsList goals={goals} loading={goalsLoading} />
+            )}
           </div>
 
           {/* Footer */}
           <div className="flex items-center justify-between px-5 pb-5 pt-3 border-t border-white/5">
-            <button
-              onClick={() => navigate(1)}
-              className="p-2 rounded-full bg-white/5 hover:bg-white/10 text-slate-500 hover:text-white transition-colors"
-            >
+            <button onClick={() => navigate(1)}
+              className="p-2 rounded-full bg-white/5 hover:bg-white/10 text-slate-500 hover:text-white transition-colors">
               <ChevronRight className="h-5 w-5" />
             </button>
-            <button
-              type="button"
-              onClick={() => { setFullscreen(false); openEdit() }}
-              className="flex items-center gap-1.5 text-xs text-slate-500 hover:text-white transition-colors"
-            >
+            <p className="text-[10px] text-slate-600">Swipe left / right to switch tabs</p>
+            <button type="button" onClick={() => { setFullscreen(false); openEdit() }}
+              className="flex items-center gap-1.5 text-xs text-slate-500 hover:text-white transition-colors">
               <Pencil className="h-3 w-3" /> Edit
             </button>
           </div>
@@ -391,32 +437,35 @@ export default function DailyPractice() {
     )
   }
 
-  // ── Read mode ───────────────────────────────────────────────
+  // ── Read mode ────────────────────────────────────────────────────
   return (
-    <button
-      type="button"
-      onClick={() => setFullscreen(true)}
-      className="w-full text-left rounded-2xl border border-white/10 bg-white/3 p-5 space-y-4 hover:border-white/20 transition-colors group"
-    >
+    <div className="rounded-2xl border border-white/10 bg-white/3 p-5 space-y-4 hover:border-white/20 transition-colors group">
       {/* Header */}
       <div className="flex items-center justify-between">
-        <span className="text-sm font-semibold text-white">Daily Practice</span>
-        <div className="flex items-center gap-2">
+        <button
+          type="button"
+          onClick={() => setFullscreen(true)}
+          className="text-sm font-semibold text-white hover:text-slate-300 transition-colors flex items-center gap-1.5"
+        >
+          Daily Practice
           <Maximize2 className="h-3.5 w-3.5 text-slate-600 group-hover:text-slate-400 transition-colors" />
-          <button
-            type="button"
-            onClick={e => { e.stopPropagation(); openEdit() }}
-            className="flex items-center gap-1.5 text-xs text-slate-500 hover:text-white transition-colors"
-          >
-            <Pencil className="h-3 w-3" /> Edit
-          </button>
-        </div>
+        </button>
+        <button
+          type="button"
+          onClick={openEdit}
+          className="flex items-center gap-1.5 text-xs text-slate-500 hover:text-white transition-colors"
+        >
+          <Pencil className="h-3 w-3" /> Edit
+        </button>
       </div>
 
       {tabBar}
 
-      {/* Tab content */}
-      <div className="min-h-[80px]">
+      {/* Swipeable content */}
+      <div
+        {...swipeHandlers}
+        className="min-h-[80px]"
+      >
         {activeTab === 'pledge' && (
           practice!.pledge
             ? <blockquote className="text-sm text-amber-100/90 leading-relaxed italic border-l-2 border-amber-500/40 pl-4 whitespace-pre-wrap">
@@ -424,7 +473,6 @@ export default function DailyPractice() {
               </blockquote>
             : <p className="text-xs text-slate-600 pt-1">No pledge set — click Edit to add one.</p>
         )}
-
         {activeTab === 'affirmations' && (
           practice!.affirmations.length > 0
             ? <ul className="space-y-2.5">
@@ -439,7 +487,6 @@ export default function DailyPractice() {
               </ul>
             : <p className="text-xs text-slate-600 pt-1">No affirmations set — click Edit to add some.</p>
         )}
-
         {activeTab === 'gratitude' && (
           practice!.gratitude.length > 0
             ? <ul className="space-y-2.5">
@@ -452,15 +499,19 @@ export default function DailyPractice() {
               </ul>
             : <p className="text-xs text-slate-600 pt-1">No gratitude entries — click Edit to add some.</p>
         )}
+        {activeTab === 'goals' && (
+          <GoalsList goals={goals} loading={goalsLoading} />
+        )}
       </div>
 
-      {/* Subtle tab label */}
+      {/* Subtle hint */}
       <p className={cn('text-[11px] flex items-center gap-1', currentTab.accent, 'opacity-50')}>
         <TabIcon className="h-3 w-3" />
         {activeTab === 'pledge'       && 'Your personal commitment'}
         {activeTab === 'affirmations' && `${practice!.affirmations.length} affirmation${practice!.affirmations.length !== 1 ? 's' : ''}`}
         {activeTab === 'gratitude'    && `${practice!.gratitude.length} gratitude entr${practice!.gratitude.length !== 1 ? 'ies' : 'y'}`}
+        {activeTab === 'goals'        && `${goals.length} active goal${goals.length !== 1 ? 's' : ''}`}
       </p>
-    </button>
+    </div>
   )
 }

@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useRef, useCallback } from 'react'
+import { useState, useEffect, useRef, useCallback, type TouchEvent } from 'react'
 import { Wind, Sparkles, Brain, X, ChevronLeft, ChevronRight, Loader2, RefreshCw, Zap, Target, CheckSquare, Circle } from 'lucide-react'
 import { differenceInDays, isBefore, parseISO, startOfDay } from 'date-fns'
 import { createSupabaseBrowserClient } from '@/lib/supabase'
@@ -128,6 +128,7 @@ function AffirmationsFlash() {
   const [index, setIndex]   = useState(0)
   const [loading, setLoading] = useState(true)
   const [fading, setFading]   = useState(false)
+  const touchStartX = useRef<number | null>(null)
 
   useEffect(() => {
     async function load() {
@@ -172,8 +173,18 @@ function AffirmationsFlash() {
     )
   }
 
+  function onTouchStart(e: TouchEvent<HTMLDivElement>) {
+    touchStartX.current = e.touches[0].clientX
+  }
+  function onTouchEnd(e: TouchEvent<HTMLDivElement>) {
+    if (touchStartX.current === null) return
+    const dx = e.changedTouches[0].clientX - touchStartX.current
+    if (Math.abs(dx) > 40) dx < 0 ? go(1) : go(-1)
+    touchStartX.current = null
+  }
+
   return (
-    <div className="flex flex-col items-center gap-6 py-4">
+    <div className="flex flex-col items-center gap-6 py-4" onTouchStart={onTouchStart} onTouchEnd={onTouchEnd}>
       <p className="text-[11px] text-violet-400/60 uppercase tracking-widest">
         {index + 1} of {affirmations.length}
       </p>
