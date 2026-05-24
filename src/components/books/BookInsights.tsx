@@ -192,7 +192,7 @@ export default function BookInsights({
             className={cn(
               'flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-all',
               tab === 'quotes'
-                ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30'
+                ? 'bg-white/10 text-white border border-white/15'
                 : 'text-slate-400 hover:text-white'
             )}
           >
@@ -227,8 +227,8 @@ export default function BookInsights({
             className={cn(
               'flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium border transition-all',
               isReadOnly
-                ? 'bg-amber-500/15 border-amber-500/40 text-amber-300 hover:bg-amber-500/25'
-                : 'bg-white/5 border-white/10 text-slate-300 hover:bg-white/10'
+                ? 'bg-white/8 border-white/15 text-slate-200 hover:bg-white/12'
+                : 'bg-white/5 border-white/10 text-slate-400 hover:bg-white/10 hover:text-slate-200'
             )}
           >
             {isReadOnly ? <Eye className="h-3 w-3" /> : <EyeOff className="h-3 w-3" />}
@@ -242,8 +242,8 @@ export default function BookInsights({
               className={cn(
                 'flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium transition-all',
                 savedFlash
-                  ? 'bg-emerald-600 text-white'
-                  : 'bg-indigo-700 hover:bg-indigo-600 text-white disabled:opacity-50'
+                  ? 'bg-emerald-600/80 text-white'
+                  : 'bg-white/8 border border-white/15 text-white hover:bg-white/12 disabled:opacity-40'
               )}
             >
               {saving ? <Loader2 className="h-3 w-3 animate-spin" />
@@ -285,7 +285,7 @@ export default function BookInsights({
                   key={q.id}
                   className={cn(
                     'group rounded-xl border border-white/8 bg-white/3 px-5 py-4 transition-all',
-                    editingId === q.id ? 'border-amber-500/30 bg-amber-500/5' : 'hover:border-white/12 hover:bg-white/5'
+                    editingId === q.id ? 'border-white/20 bg-white/5' : 'hover:border-white/12 hover:bg-white/5'
                   )}
                 >
                   {editingId === q.id ? (
@@ -307,7 +307,7 @@ export default function BookInsights({
                         className="w-full bg-transparent text-xs text-slate-500 placeholder:text-slate-700 focus:outline-none border-t border-white/8 pt-2"
                       />
                       <div className="flex gap-2 pt-1">
-                        <button onClick={commitQuote} className="flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium bg-amber-500/20 border border-amber-500/30 text-amber-300 hover:bg-amber-500/30 transition-colors">
+                        <button onClick={commitQuote} className="flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium bg-white/8 border border-white/15 text-slate-200 hover:bg-white/15 transition-colors">
                           <Check className="h-3 w-3" /> Save
                         </button>
                         <button onClick={cancelEdit} className="rounded-md px-3 py-1.5 text-xs text-slate-500 hover:text-white transition-colors">
@@ -341,7 +341,7 @@ export default function BookInsights({
 
               {/* Inline new-quote form */}
               {activeQuoteEdit && isNewItem && (
-                <div className="rounded-xl border border-amber-500/30 bg-amber-500/5 px-5 py-4 space-y-3">
+                <div className="rounded-xl border border-white/10 bg-white/3 px-5 py-4 space-y-3">
                   <textarea
                     autoFocus
                     ref={textareaRef}
@@ -497,7 +497,7 @@ export default function BookInsights({
               <button onClick={() => { setShowCloseConfirm(false); onClose() }} className="flex-1 rounded-lg border border-white/10 py-2 text-sm text-slate-300 hover:bg-white/5 transition-colors">
                 Discard
               </button>
-              <button onClick={async () => { await save(); setShowCloseConfirm(false); onClose() }} className="flex-1 rounded-lg bg-violet-600 hover:bg-violet-700 py-2 text-sm text-white transition-colors">
+              <button onClick={async () => { await save(); setShowCloseConfirm(false); onClose() }} className="flex-1 rounded-lg bg-white/10 border border-white/20 py-2 text-sm text-white hover:bg-white/15 transition-colors">
                 Save & Close
               </button>
             </div>
