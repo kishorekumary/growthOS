@@ -1,9 +1,9 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import {
   Plus, X, Utensils, Dumbbell, CheckSquare, CreditCard,
-  Loader2, Check,
+  Loader2, Check, Camera, Image as ImageIcon, Zap, Sparkles, AlertCircle, CheckCircle2,
 } from 'lucide-react'
 import { createSupabaseBrowserClient } from '@/lib/supabase'
 import { cn } from '@/lib/utils'
@@ -46,6 +46,31 @@ function computeStreak(current: number, lastDoneAt: string | null, freq: 'daily'
   return 1
 }
 
+// ─── Image resize (prevents 413 on large phone photos) ───────────
+
+async function resizeImage(dataUrl: string, maxPx = 1024, quality = 0.82): Promise<{ base64: string; mediaType: string }> {
+  return new Promise((resolve, reject) => {
+    const img = new Image()
+    img.onerror = reject
+    img.onload = () => {
+      const scale  = Math.min(1, maxPx / Math.max(img.width, img.height))
+      const canvas = document.createElement('canvas')
+      canvas.width  = Math.round(img.width  * scale)
+      canvas.height = Math.round(img.height * scale)
+      canvas.getContext('2d')!.drawImage(img, 0, 0, canvas.width, canvas.height)
+      const out = canvas.toDataURL('image/jpeg', quality)
+      resolve({ base64: out.split(',')[1], mediaType: 'image/jpeg' })
+    }
+    img.src = dataUrl
+  })
+}
+
+interface NutritionEstimate {
+  food_name: string; calories: number
+  protein_g: number; carbs_g: number; fiber_g: number; fat_g: number
+  notes: string
+}
+
 // ─── Meal Panel ───────────────────────────────────────────────────
 
 const MEAL_TYPES: { value: MealType; icon: string; label: string }[] = [
@@ -56,14 +81,77 @@ const MEAL_TYPES: { value: MealType; icon: string; label: string }[] = [
 ]
 
 function MealPanel({ onDone }: { onDone: () => void }) {
-  const [mealType, setMealType] = useState<MealType>(() => {
+  const cameraRef = useRef<HTMLInputElement>(null)
+  const fileRef   = useRef<HTMLInputElement>(null)
+
+  const [mealType, setMealType]       = useState<MealType>(() => {
     const h = new Date().getHours()
     return h < 10 ? 'breakfast' : h < 14 ? 'lunch' : h < 20 ? 'dinner' : 'snack'
   })
-  const [foodName, setFoodName] = useState('')
-  const [calories, setCalories] = useState('')
-  const [saving, setSaving]     = useState(false)
-  const [saved, setSaved]       = useState(false)
+  const [preview, setPreview]         = useState<string | null>(null)
+  const [analyzing, setAnalyzing]     = useState(false)
+  const [analyzeErr, setAnalyzeErr]   = useState<string | null>(null)
+  const [aiReady, setAiReady]         = useState(false)
+  const [autofilling, setAutofilling] = useState(false)
+  const [autofillErr, setAutofillErr] = useState<string | null>(null)
+  const [foodName, setFoodName]       = useState('')
+  const [calories, setCalories]       = useState('')
+  const [macros, setMacros]           = useState({ protein_g: 0, carbs_g: 0, fiber_g: 0, fat_g: 0 })
+  const [saving, setSaving]           = useState(false)
+  const [saved, setSaved]             = useState(false)
+
+  function handleFile(file: File) {
+    const reader = new FileReader()
+    reader.onload = e => {
+      setPreview(e.target?.result as string)
+      setAiReady(false); setAnalyzeErr(null)
+    }
+    reader.readAsDataURL(file)
+  }
+
+  function fillFromEstimate(r: NutritionEstimate) {
+    setFoodName(r.food_name)
+    setCalories(String(r.calories))
+    setMacros({ protein_g: r.protein_g, carbs_g: r.carbs_g, fiber_g: r.fiber_g, fat_g: r.fat_g })
+    setAiReady(true)
+  }
+
+  async function analyze() {
+    if (!preview) return
+    setAnalyzing(true); setAnalyzeErr(null)
+    try {
+      const { base64, mediaType } = await resizeImage(preview)
+      const res  = await fetch('/api/nutrition/analyze', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ imageBase64: base64, mediaType }),
+      })
+      const text = await res.text()
+      let data: NutritionEstimate
+      try { data = JSON.parse(text) } catch { throw new Error(res.ok ? 'Unexpected response' : `Server error ${res.status}`) }
+      if (!res.ok) throw new Error((data as unknown as { error: string }).error ?? 'Analysis failed')
+      fillFromEstimate(data)
+    } catch (e) {
+      setAnalyzeErr(e instanceof Error ? e.message : 'Analysis failed')
+    } finally { setAnalyzing(false) }
+  }
+
+  async function autofill() {
+    if (!foodName.trim() || autofilling) return
+    setAutofilling(true); setAutofillErr(null)
+    try {
+      const res  = await fetch('/api/nutrition/autofill', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ foodName: foodName.trim() }),
+      })
+      const text = await res.text()
+      let data: NutritionEstimate
+      try { data = JSON.parse(text) } catch { throw new Error(res.ok ? 'Unexpected response' : `Server error ${res.status}`) }
+      if (!res.ok) throw new Error((data as unknown as { error: string }).error ?? 'Autofill failed')
+      fillFromEstimate(data)
+    } catch (e) {
+      setAutofillErr(e instanceof Error ? e.message : 'Autofill failed')
+    } finally { setAutofilling(false) }
+  }
 
   async function handleSave() {
     if (!foodName.trim() || !calories) return
@@ -77,7 +165,7 @@ function MealPanel({ onDone }: { onDone: () => void }) {
       meal_type: mealType,
       food_name: foodName.trim(),
       calories:  Math.round(Number(calories)),
-      protein_g: 0, carbs_g: 0, fiber_g: 0, fat_g: 0,
+      ...macros,
     })
     setSaving(false); setSaved(true)
     setTimeout(onDone, 900)
@@ -94,6 +182,7 @@ function MealPanel({ onDone }: { onDone: () => void }) {
 
   return (
     <div className="space-y-3.5">
+      {/* Meal type */}
       <div className="grid grid-cols-4 gap-1.5">
         {MEAL_TYPES.map(t => (
           <button key={t.value} type="button" onClick={() => setMealType(t.value)}
@@ -108,14 +197,89 @@ function MealPanel({ onDone }: { onDone: () => void }) {
           </button>
         ))}
       </div>
-      <input
-        autoFocus
-        placeholder="What did you eat?"
-        value={foodName}
-        onChange={e => setFoodName(e.target.value)}
-        onKeyDown={e => { if (e.key === 'Enter') handleSave() }}
-        className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2.5 text-sm text-white placeholder:text-slate-600 focus:outline-none focus:border-amber-500"
-      />
+
+      {/* Photo zone */}
+      {preview ? (
+        <div className="relative rounded-xl overflow-hidden h-36 cursor-pointer group" onClick={() => fileRef.current?.click()}>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src={preview} alt="food" className="w-full h-full object-cover" />
+          <div className="absolute inset-0 flex items-center justify-center bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity">
+            <span className="text-xs text-white font-medium">Tap to replace</span>
+          </div>
+        </div>
+      ) : (
+        <div className="grid grid-cols-2 gap-2">
+          <button type="button" onClick={() => cameraRef.current?.click()}
+            className="flex flex-col items-center gap-2 rounded-xl border-2 border-dashed border-white/10 hover:border-amber-500/40 py-4 text-slate-500 hover:text-slate-300 transition-all">
+            <Camera className="h-6 w-6" />
+            <span className="text-xs font-medium">Take Photo</span>
+          </button>
+          <button type="button" onClick={() => fileRef.current?.click()}
+            className="flex flex-col items-center gap-2 rounded-xl border-2 border-dashed border-white/10 hover:border-amber-500/40 py-4 text-slate-500 hover:text-slate-300 transition-all">
+            <ImageIcon className="h-6 w-6" />
+            <span className="text-xs font-medium">Upload Photo</span>
+          </button>
+        </div>
+      )}
+
+      {/* Hidden file inputs */}
+      <input ref={cameraRef} type="file" accept="image/*" capture="environment" className="hidden"
+        onChange={e => { if (e.target.files?.[0]) { handleFile(e.target.files[0]); e.target.value = '' } }} />
+      <input ref={fileRef} type="file" accept="image/*" className="hidden"
+        onChange={e => { if (e.target.files?.[0]) { handleFile(e.target.files[0]); e.target.value = '' } }} />
+
+      {/* Analyze button */}
+      {preview && !aiReady && (
+        <button onClick={analyze} disabled={analyzing}
+          className="w-full flex items-center justify-center gap-2 rounded-xl border border-amber-500/30 bg-amber-500/10 hover:bg-amber-500/20 disabled:opacity-60 px-4 py-2.5 text-sm font-medium text-amber-300 transition-all">
+          {analyzing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Zap className="h-4 w-4" />}
+          {analyzing ? 'Analysing…' : 'Analyse with AI'}
+        </button>
+      )}
+
+      {analyzeErr && (
+        <div className="flex items-start gap-2 rounded-lg border border-red-500/20 bg-red-500/10 px-3 py-2 text-xs text-red-400">
+          <AlertCircle className="h-3.5 w-3.5 shrink-0 mt-0.5" />{analyzeErr}
+        </div>
+      )}
+
+      {aiReady && (
+        <div className="flex items-center gap-2 rounded-lg border border-emerald-500/20 bg-emerald-500/10 px-3 py-2 text-xs text-emerald-400">
+          <CheckCircle2 className="h-3.5 w-3.5 shrink-0" /> AI estimate ready — adjust if needed
+        </div>
+      )}
+
+      {/* Food name + autofill */}
+      <div className="flex gap-2">
+        <input
+          autoFocus
+          placeholder="What did you eat?"
+          value={foodName}
+          onChange={e => { setFoodName(e.target.value); setAutofillErr(null) }}
+          onKeyDown={e => { if (e.key === 'Enter' && foodName.trim().length >= 3) autofill() }}
+          className="flex-1 rounded-lg border border-white/10 bg-white/5 px-3 py-2.5 text-sm text-white placeholder:text-slate-600 focus:outline-none focus:border-amber-500"
+        />
+        <button type="button" onClick={autofill} disabled={autofilling || !foodName.trim()}
+          title="Auto-fill macros with AI"
+          className={cn(
+            'shrink-0 flex items-center gap-1 rounded-lg border px-3 py-2.5 text-xs font-medium transition-all',
+            autofilling
+              ? 'border-amber-500/30 bg-amber-500/10 text-amber-400'
+              : foodName.trim()
+                ? 'border-amber-500/40 bg-amber-500/10 text-amber-300 hover:bg-amber-500/20'
+                : 'border-white/10 bg-white/5 text-slate-600 cursor-not-allowed',
+          )}>
+          {autofilling ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Sparkles className="h-3.5 w-3.5" />}
+        </button>
+      </div>
+
+      {autofillErr && (
+        <p className="text-[11px] text-red-400 flex items-center gap-1">
+          <AlertCircle className="h-3 w-3 shrink-0" />{autofillErr}
+        </p>
+      )}
+
+      {/* Calories */}
       <input
         type="number" min={0}
         placeholder="Calories (kcal)"
@@ -124,6 +288,7 @@ function MealPanel({ onDone }: { onDone: () => void }) {
         onKeyDown={e => { if (e.key === 'Enter') handleSave() }}
         className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2.5 text-sm text-white placeholder:text-slate-600 focus:outline-none focus:border-amber-500"
       />
+
       <button
         onClick={handleSave}
         disabled={saving || !foodName.trim() || !calories}
