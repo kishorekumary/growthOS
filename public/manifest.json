@@ -1,0 +1,55 @@
+{
+  "name": "Zenith — Peak Performance",
+  "short_name": "Zenith",
+  "description": "Your AI-powered operating system for peak performance — habits, goals, fitness, and finance in one place.",
+  "start_url": "/dashboard",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "background_color": "#07071a",
+  "theme_color": "#07071a",
+  "categories": ["health", "productivity", "lifestyle"],
+  "icons": [
+    {
+      "src": "/icon-96.png",
+      "sizes": "96x96",
+      "type": "image/png"
+    },
+    {
+      "src": "/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icon-maskable.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Quick Log",
+      "short_name": "Log",
+      "description": "Log a meal, workout, habit or finance entry",
+      "url": "/dashboard",
+      "icons": [{ "src": "/icon-96.png", "sizes": "96x96" }]
+    },
+    {
+      "name": "Focus Timer",
+      "short_name": "Focus",
+      "description": "Start a focus session",
+      "url": "/focus",
+      "icons": [{ "src": "/icon-96.png", "sizes": "96x96" }]
+    }
+  ],
+  "screenshots": [],
+  "prefer_related_applications": false
+}
