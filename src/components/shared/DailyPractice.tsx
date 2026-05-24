@@ -9,6 +9,7 @@ import { differenceInDays, parseISO } from 'date-fns'
 import { createSupabaseBrowserClient } from '@/lib/supabase'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
+import RichTextEditor from './RichTextEditor'
 
 interface Practice {
   pledge: string
@@ -296,12 +297,10 @@ export default function DailyPractice() {
 
         <div className="min-h-[120px]">
           {activeTab === 'pledge' && (
-            <textarea
+            <RichTextEditor
               value={draft.pledge}
-              onChange={e => setDraft(d => ({ ...d, pledge: e.target.value }))}
+              onChange={html => setDraft(d => ({ ...d, pledge: html }))}
               placeholder="Write your identity — who you are and who you're becoming..."
-              rows={4}
-              className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2.5 text-sm text-white placeholder:text-slate-600 resize-none focus:outline-none focus:ring-1 focus:ring-amber-500"
             />
           )}
           {activeTab === 'affirmations' && (
@@ -384,9 +383,7 @@ export default function DailyPractice() {
           >
             {activeTab === 'pledge' && (
               practice!.pledge
-                ? <blockquote className="text-lg font-light text-amber-100/90 leading-relaxed italic text-center whitespace-pre-wrap">
-                    {practice!.pledge}
-                  </blockquote>
+                ? <div className="rich-display text-amber-100" dangerouslySetInnerHTML={{ __html: practice!.pledge }} />
                 : <p className="text-slate-500 text-sm text-center pt-6">No identity set yet.</p>
             )}
             {activeTab === 'affirmations' && (
@@ -397,7 +394,7 @@ export default function DailyPractice() {
                         <span className="mt-0.5 h-5 w-5 shrink-0 rounded-full bg-violet-500/30 flex items-center justify-center">
                           <span className="text-[10px] font-bold text-violet-300">{i + 1}</span>
                         </span>
-                        <span className="text-base text-white leading-relaxed">{a}</span>
+                        <span className="text-lg font-medium text-white leading-relaxed">{a}</span>
                       </li>
                     ))}
                   </ul>
@@ -408,8 +405,8 @@ export default function DailyPractice() {
                 ? <ul className="space-y-3">
                     {practice!.gratitude.map((g, i) => (
                       <li key={i} className="flex items-start gap-3">
-                        <Heart className="h-4 w-4 shrink-0 mt-0.5 text-emerald-400/60" />
-                        <span className="text-base text-slate-200 leading-relaxed">{g}</span>
+                        <Heart className="h-4 w-4 shrink-0 mt-0.5 text-emerald-400" />
+                        <span className="text-lg font-medium text-emerald-100 leading-relaxed">{g}</span>
                       </li>
                     ))}
                   </ul>
@@ -468,9 +465,7 @@ export default function DailyPractice() {
       >
         {activeTab === 'pledge' && (
           practice!.pledge
-            ? <blockquote className="text-sm text-amber-100/90 leading-relaxed italic border-l-2 border-amber-500/40 pl-4 whitespace-pre-wrap">
-                {practice!.pledge}
-              </blockquote>
+            ? <div className="rich-display text-amber-100 border-l-2 border-amber-400/60 pl-4 text-sm" dangerouslySetInnerHTML={{ __html: practice!.pledge }} />
             : <p className="text-xs text-slate-600 pt-1">No identity set — click Edit to add one.</p>
         )}
         {activeTab === 'affirmations' && (
@@ -481,7 +476,7 @@ export default function DailyPractice() {
                     <span className="mt-0.5 h-4 w-4 shrink-0 rounded-full bg-violet-500/30 flex items-center justify-center">
                       <span className="text-[9px] font-bold text-violet-300">{i + 1}</span>
                     </span>
-                    <span className="text-sm text-white leading-relaxed">{a}</span>
+                    <span className="text-sm font-medium text-white leading-relaxed">{a}</span>
                   </li>
                 ))}
               </ul>
@@ -492,8 +487,8 @@ export default function DailyPractice() {
             ? <ul className="space-y-2.5">
                 {practice!.gratitude.map((g, i) => (
                   <li key={i} className="flex items-start gap-2.5">
-                    <Heart className="h-3.5 w-3.5 shrink-0 mt-0.5 text-emerald-400/60" />
-                    <span className="text-sm text-slate-200 leading-relaxed">{g}</span>
+                    <Heart className="h-3.5 w-3.5 shrink-0 mt-0.5 text-emerald-400" />
+                    <span className="text-sm font-medium text-emerald-100 leading-relaxed">{g}</span>
                   </li>
                 ))}
               </ul>

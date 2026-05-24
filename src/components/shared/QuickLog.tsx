@@ -7,6 +7,7 @@ import {
 } from 'lucide-react'
 import { createSupabaseBrowserClient } from '@/lib/supabase'
 import { cn } from '@/lib/utils'
+import RichTextEditor from './RichTextEditor'
 
 type Panel = 'meal' | 'workout' | 'habit' | 'finance' | 'journal'
 type MealType    = 'breakfast' | 'lunch' | 'dinner' | 'snack'
@@ -715,13 +716,10 @@ function JournalPanel({ onDone }: { onDone: () => void }) {
       />
 
       {/* Content */}
-      <textarea
-        autoFocus
-        placeholder="What's on your mind?"
+      <RichTextEditor
         value={content}
-        onChange={e => setContent(e.target.value)}
-        rows={5}
-        className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2.5 text-sm text-white placeholder:text-slate-600 resize-none focus:outline-none focus:border-rose-500"
+        onChange={setContent}
+        placeholder="What's on your mind?"
       />
 
       <button

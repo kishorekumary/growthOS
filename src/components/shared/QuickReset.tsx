@@ -193,7 +193,7 @@ function AffirmationsFlash() {
         'min-h-[100px] flex items-center justify-center px-4 transition-opacity duration-[250ms]',
         fading ? 'opacity-0' : 'opacity-100',
       )}>
-        <blockquote className="text-center text-xl font-light text-white leading-relaxed italic">
+        <blockquote className="text-center text-2xl font-semibold text-white leading-relaxed italic drop-shadow-[0_0_20px_rgba(167,139,250,0.4)]">
           &ldquo;{affirmations[index]}&rdquo;
         </blockquote>
       </div>

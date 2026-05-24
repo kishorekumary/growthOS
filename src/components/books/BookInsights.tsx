@@ -4,6 +4,7 @@ import { useState, useRef } from 'react'
 import { X, Plus, Trash2, Check, Loader2, Pencil, Quote, Scroll, EyeOff, Eye } from 'lucide-react'
 import { createSupabaseBrowserClient } from '@/lib/supabase'
 import { cn } from '@/lib/utils'
+import RichTextEditor from '@/components/shared/RichTextEditor'
 
 // ── Data types ────────────────────────────────────────────────
 
@@ -206,7 +207,7 @@ export default function BookInsights({
             className={cn(
               'flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-all',
               tab === 'stories'
-                ? 'bg-violet-500/20 text-violet-300 border border-violet-500/30'
+                ? 'bg-white/10 text-white border border-white/15'
                 : 'text-slate-400 hover:text-white'
             )}
           >
@@ -242,7 +243,7 @@ export default function BookInsights({
                 'flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium transition-all',
                 savedFlash
                   ? 'bg-emerald-600 text-white'
-                  : 'bg-violet-600 hover:bg-violet-700 text-white disabled:opacity-50'
+                  : 'bg-indigo-700 hover:bg-indigo-600 text-white disabled:opacity-50'
               )}
             >
               {saving ? <Loader2 className="h-3 w-3 animate-spin" />
@@ -318,7 +319,7 @@ export default function BookInsights({
                     <div className="flex gap-3">
                       <Quote className="h-4 w-4 text-amber-500/60 shrink-0 mt-0.5" />
                       <div className="flex-1 min-w-0">
-                        <p className="text-sm text-amber-100/90 leading-relaxed italic whitespace-pre-wrap">{q.text}</p>
+                        <p className="text-base font-medium text-amber-200 leading-relaxed italic whitespace-pre-wrap">{q.text}</p>
                         {q.source && (
                           <p className="mt-1.5 text-xs text-slate-600">— {q.source}</p>
                         )}
@@ -396,7 +397,7 @@ export default function BookInsights({
                   key={s.id}
                   className={cn(
                     'group rounded-xl border border-white/8 bg-white/3 px-5 py-4 transition-all',
-                    editingId === s.id ? 'border-violet-500/30 bg-violet-500/5' : 'hover:border-white/12 hover:bg-white/5'
+                    editingId === s.id ? 'border-white/20 bg-white/5' : 'hover:border-white/12 hover:bg-white/5'
                   )}
                 >
                   {editingId === s.id ? (
@@ -409,16 +410,14 @@ export default function BookInsights({
                         placeholder="Story title…"
                         className="w-full bg-transparent text-sm font-semibold text-white placeholder:text-slate-600 focus:outline-none"
                       />
-                      <textarea
+                      <RichTextEditor
                         value={editStory.text}
-                        onChange={e => setEditStory(prev => ({ ...prev, text: e.target.value }))}
-                        onKeyDown={e => { if (e.key === 'Escape') cancelEdit() }}
+                        onChange={html => setEditStory(prev => ({ ...prev, text: html }))}
                         placeholder="Describe the story or anecdote…"
-                        rows={5}
-                        className="w-full bg-transparent text-sm text-slate-300 placeholder:text-slate-600 focus:outline-none resize-none leading-relaxed border-t border-white/8 pt-3"
+                        className="border-t border-white/8 rounded-none border-x-0 border-b-0 bg-transparent"
                       />
                       <div className="flex gap-2 pt-1">
-                        <button onClick={commitStory} className="flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium bg-violet-500/20 border border-violet-500/30 text-violet-300 hover:bg-violet-500/30 transition-colors">
+                        <button onClick={commitStory} className="flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium bg-white/8 border border-white/15 text-slate-200 hover:bg-white/15 transition-colors">
                           <Check className="h-3 w-3" /> Save
                         </button>
                         <button onClick={cancelEdit} className="rounded-md px-3 py-1.5 text-xs text-slate-500 hover:text-white transition-colors">
@@ -428,11 +427,10 @@ export default function BookInsights({
                     </div>
                   ) : (
                     <div className="flex gap-3">
-                      <Scroll className="h-4 w-4 text-violet-500/60 shrink-0 mt-0.5" />
+                      <Scroll className="h-4 w-4 text-slate-500 shrink-0 mt-0.5" />
                       <div className="flex-1 min-w-0">
                         <p className="text-sm font-semibold text-white mb-1.5">{s.title}</p>
-                        <p className="text-sm text-slate-400 leading-relaxed whitespace-pre-wrap break-words">{s.text}</p>
-                      </div>
+                        <div className="rich-display text-sm text-slate-100" dangerouslySetInnerHTML={{ __html: s.text }} /></div>
                       {!isReadOnly && (
                         <div className="flex items-start gap-1 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
                           <button onClick={() => startEditStory(s)} className="p-1 rounded text-slate-600 hover:text-slate-300 transition-colors">
@@ -450,7 +448,7 @@ export default function BookInsights({
 
               {/* Inline new-story form */}
               {activeStoryEdit && isNewItem && (
-                <div className="rounded-xl border border-violet-500/30 bg-violet-500/5 px-5 py-4 space-y-3">
+                <div className="rounded-xl border border-white/10 bg-white/3 px-5 py-4 space-y-3">
                   <input
                     autoFocus
                     value={editStory.title}
@@ -459,16 +457,14 @@ export default function BookInsights({
                     placeholder="Story title…"
                     className="w-full bg-transparent text-sm font-semibold text-white placeholder:text-slate-600 focus:outline-none"
                   />
-                  <textarea
+                  <RichTextEditor
                     value={editStory.text}
-                    onChange={e => setEditStory(prev => ({ ...prev, text: e.target.value }))}
-                    onKeyDown={e => { if (e.key === 'Escape') cancelEdit() }}
+                    onChange={html => setEditStory(prev => ({ ...prev, text: html }))}
                     placeholder="Describe the story or anecdote…"
-                    rows={5}
-                    className="w-full bg-transparent text-sm text-slate-300 placeholder:text-slate-600 focus:outline-none resize-none leading-relaxed border-t border-white/8 pt-3"
+                    className="border-t border-white/8 rounded-none border-x-0 border-b-0 bg-transparent"
                   />
                   <div className="flex gap-2 pt-1">
-                    <button onClick={commitStory} className="flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium bg-violet-500/20 border border-violet-500/30 text-violet-300 hover:bg-violet-500/30 transition-colors">
+                    <button onClick={commitStory} className="flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium bg-white/8 border border-white/15 text-slate-200 hover:bg-white/15 transition-colors">
                       <Check className="h-3 w-3" /> Add
                     </button>
                     <button onClick={cancelEdit} className="rounded-md px-3 py-1.5 text-xs text-slate-500 hover:text-white transition-colors">
