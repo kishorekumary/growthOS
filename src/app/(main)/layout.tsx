@@ -9,6 +9,7 @@ import ZenithIcon from '@/components/layout/ZenithIcon'
 import { TimerProvider } from '@/contexts/TimerContext'
 import FloatingTimer from '@/components/focus/FloatingTimer'
 import QuickLog from '@/components/shared/QuickLog'
+import QuickReset from '@/components/shared/QuickReset'
 
 export default async function MainLayout({ children }: { children: React.ReactNode }) {
   const supabase = createSupabaseServerClient()
@@ -48,6 +49,7 @@ export default async function MainLayout({ children }: { children: React.ReactNo
       <BottomNav />
       <FloatingTimer />
       <QuickLog />
+      <QuickReset floatingOnly />
       <ServiceWorkerRegister />
       <div className="fixed bottom-1.5 right-2 text-[9px] text-slate-800 font-mono select-none pointer-events-none z-50 hidden md:block">
         {process.env.NEXT_PUBLIC_GIT_BRANCH}/{process.env.NEXT_PUBLIC_GIT_COMMIT}

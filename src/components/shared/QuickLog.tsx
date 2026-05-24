@@ -2,13 +2,13 @@
 
 import { useState, useEffect, useRef } from 'react'
 import {
-  Plus, X, Utensils, Dumbbell, CheckSquare, CreditCard,
+  Plus, X, Utensils, Dumbbell, CheckSquare, CreditCard, BookOpen,
   Loader2, Check, Camera, Image as ImageIcon, Zap, Sparkles, AlertCircle, CheckCircle2,
 } from 'lucide-react'
 import { createSupabaseBrowserClient } from '@/lib/supabase'
 import { cn } from '@/lib/utils'
 
-type Panel = 'meal' | 'workout' | 'habit' | 'finance'
+type Panel = 'meal' | 'workout' | 'habit' | 'finance' | 'journal'
 type MealType    = 'breakfast' | 'lunch' | 'dinner' | 'snack'
 type WorkoutType = 'cardio' | 'strength' | 'yoga' | 'sports' | 'rest'
 type TxnType     = 'expense' | 'income' | 'savings'
@@ -645,6 +645,97 @@ function FinancePanel({ onDone }: { onDone: () => void }) {
   )
 }
 
+// ─── Journal Panel ────────────────────────────────────────────────
+
+const MOOD_META = [
+  { label: 'Rough', emoji: '😔' },
+  { label: 'Low',   emoji: '😕' },
+  { label: 'Okay',  emoji: '😐' },
+  { label: 'Good',  emoji: '🙂' },
+  { label: 'Great', emoji: '😊' },
+] as const
+
+function JournalPanel({ onDone }: { onDone: () => void }) {
+  const [title, setTitle]   = useState('')
+  const [content, setContent] = useState('')
+  const [mood, setMood]     = useState<number | null>(null)
+  const [saving, setSaving] = useState(false)
+  const [saved, setSaved]   = useState(false)
+
+  async function handleSave() {
+    if (!content.trim()) return
+    setSaving(true)
+    const supabase = createSupabaseBrowserClient()
+    await supabase.from('journal_entries').insert({
+      title:      title.trim() || null,
+      content:    content.trim(),
+      mood,
+      entry_date: todayStr(),
+    })
+    setSaving(false); setSaved(true)
+    setTimeout(onDone, 900)
+  }
+
+  if (saved) return (
+    <div className="flex flex-col items-center gap-3 py-8">
+      <div className="flex h-12 w-12 items-center justify-center rounded-full bg-rose-500/20 border border-rose-500/30">
+        <Check className="h-6 w-6 text-rose-400" />
+      </div>
+      <p className="text-sm text-slate-300">Entry saved!</p>
+    </div>
+  )
+
+  return (
+    <div className="space-y-3.5">
+      {/* Mood picker */}
+      <div className="flex gap-1.5 justify-between">
+        {MOOD_META.map((m, i) => {
+          const val = i + 1
+          return (
+            <button key={val} type="button" onClick={() => setMood(mood === val ? null : val)}
+              className={cn(
+                'flex-1 flex flex-col items-center gap-1 rounded-lg border py-2 text-xs font-medium transition-all',
+                mood === val
+                  ? 'border-rose-500 bg-rose-500/20 text-white'
+                  : 'border-white/10 bg-white/5 text-slate-400 hover:border-white/20',
+              )}>
+              <span className="text-lg">{m.emoji}</span>
+              <span className="text-[10px]">{m.label}</span>
+            </button>
+          )
+        })}
+      </div>
+
+      {/* Title */}
+      <input
+        placeholder="Title (optional)"
+        value={title}
+        onChange={e => setTitle(e.target.value)}
+        className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2.5 text-sm text-white placeholder:text-slate-600 focus:outline-none focus:border-rose-500"
+      />
+
+      {/* Content */}
+      <textarea
+        autoFocus
+        placeholder="What's on your mind?"
+        value={content}
+        onChange={e => setContent(e.target.value)}
+        rows={5}
+        className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2.5 text-sm text-white placeholder:text-slate-600 resize-none focus:outline-none focus:border-rose-500"
+      />
+
+      <button
+        onClick={handleSave}
+        disabled={saving || !content.trim()}
+        className="w-full flex items-center justify-center gap-2 rounded-xl bg-rose-600 hover:bg-rose-700 disabled:opacity-50 disabled:cursor-not-allowed px-4 py-3 text-sm font-semibold text-white transition-all"
+      >
+        {saving && <Loader2 className="h-4 w-4 animate-spin" />}
+        Save Entry
+      </button>
+    </div>
+  )
+}
+
 // ─── Tab config ───────────────────────────────────────────────────
 
 const TABS: {
@@ -670,6 +761,11 @@ const TABS: {
     id: 'finance', label: 'Finance', Icon: CreditCard,
     activeClass:   'border-violet-500 bg-violet-500/20 text-white',
     inactiveClass: 'border-violet-500/20 bg-violet-500/8 text-violet-400/80 hover:opacity-100',
+  },
+  {
+    id: 'journal', label: 'Journal', Icon: BookOpen,
+    activeClass:   'border-rose-500 bg-rose-500/20 text-white',
+    inactiveClass: 'border-rose-500/20 bg-rose-500/8 text-rose-400/80 hover:opacity-100',
   },
 ]
 
@@ -723,10 +819,10 @@ export default function QuickLog() {
               {TABS.map(({ id, label, Icon, activeClass, inactiveClass }) => (
                 <button key={id} type="button" onClick={() => setPanel(id)}
                   className={cn(
-                    'flex-1 flex flex-col items-center gap-1 rounded-xl border py-2.5 text-xs font-medium transition-all',
+                    'flex-1 flex flex-col items-center gap-1 rounded-xl border py-2.5 text-[10px] font-medium transition-all',
                     panel === id ? activeClass : inactiveClass,
                   )}>
-                  <Icon className="h-4 w-4" />
+                  <Icon className="h-3.5 w-3.5" />
                   {label}
                 </button>
               ))}
@@ -738,6 +834,7 @@ export default function QuickLog() {
               {panel === 'workout' && <WorkoutPanel onDone={handleDone} />}
               {panel === 'habit'   && <HabitPanel />}
               {panel === 'finance' && <FinancePanel onDone={handleDone} />}
+              {panel === 'journal' && <JournalPanel onDone={handleDone} />}
             </div>
 
           </div>
