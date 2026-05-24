@@ -5,9 +5,33 @@ import StarterKit from '@tiptap/starter-kit'
 import Highlight from '@tiptap/extension-highlight'
 import Underline from '@tiptap/extension-underline'
 import Placeholder from '@tiptap/extension-placeholder'
+import { TextStyle } from '@tiptap/extension-text-style'
+import { Extension } from '@tiptap/core'
 import { useEffect } from 'react'
 import { Bold, Italic, Underline as UnderlineIcon, Highlighter } from 'lucide-react'
 import { cn } from '@/lib/utils'
+
+// ── Inline font-size mark ─────────────────────────────────────────
+// Applies only to selected text (not the whole block).
+const FontSize = Extension.create({
+  name: 'fontSize',
+  addOptions() { return { types: ['textStyle'] } },
+  addGlobalAttributes() {
+    return [{
+      types: ['textStyle'],
+      attributes: {
+        fontSize: {
+          default: null,
+          parseHTML: (el: HTMLElement) => el.style.fontSize || null,
+          renderHTML: (attrs: Record<string, string | null>) =>
+            attrs.fontSize ? { style: `font-size:${attrs.fontSize}` } : {},
+        },
+      },
+    }]
+  },
+})
+
+// ── Helpers ───────────────────────────────────────────────────────
 
 function toHtml(val: string): string {
   if (!val) return ''
@@ -21,15 +45,23 @@ interface Props {
   className?: string
 }
 
-const TB = 'h-7 w-7 flex items-center justify-center rounded text-xs font-bold transition-colors'
-const ON = 'bg-white/20 text-white'
+const TB  = 'h-7 px-1.5 flex items-center justify-center rounded text-xs font-bold transition-colors'
+const ON  = 'bg-white/20 text-white'
 const OFF = 'text-slate-400 hover:bg-white/10 hover:text-white'
+
+const SIZES = [
+  { label: 'H1', size: '1.5em' },
+  { label: 'H2', size: '1.2em' },
+  { label: 'H3', size: '1.05em' },
+] as const
 
 export default function RichTextEditor({ value, onChange, placeholder, className }: Props) {
   const editor = useEditor({
     immediatelyRender: false,
     extensions: [
-      StarterKit.configure({ heading: { levels: [1, 2, 3] } }),
+      StarterKit.configure({ heading: false }),
+      TextStyle,
+      FontSize,
       Highlight,
       Underline,
       Placeholder.configure({ placeholder: placeholder ?? 'Start writing…' }),
@@ -54,18 +86,26 @@ export default function RichTextEditor({ value, onChange, placeholder, className
 
   const btn = (active: boolean) => cn(TB, active ? ON : OFF)
 
+  function toggleSize(size: string) {
+    if (!editor) return
+    const active = editor.isActive('textStyle', { fontSize: size })
+    if (active) {
+      editor.chain().focus().setMark('textStyle', { fontSize: null }).run()
+    } else {
+      editor.chain().focus().setMark('textStyle', { fontSize: size }).run()
+    }
+  }
+
   return (
     <div className={cn('rounded-lg border border-white/10 bg-white/5 overflow-hidden', className)}>
       <div className="flex items-center gap-0.5 px-2 py-1.5 border-b border-white/8 bg-white/3 flex-wrap">
-        <button type="button" title="Heading 1"
-          onClick={() => editor.chain().focus().toggleHeading({ level: 1 }).run()}
-          className={btn(editor.isActive('heading', { level: 1 }))}>H1</button>
-        <button type="button" title="Heading 2"
-          onClick={() => editor.chain().focus().toggleHeading({ level: 2 }).run()}
-          className={btn(editor.isActive('heading', { level: 2 }))}>H2</button>
-        <button type="button" title="Heading 3"
-          onClick={() => editor.chain().focus().toggleHeading({ level: 3 }).run()}
-          className={btn(editor.isActive('heading', { level: 3 }))}>H3</button>
+        {SIZES.map(({ label, size }) => (
+          <button key={label} type="button" title={`${label} — applies to selected text`}
+            onClick={() => toggleSize(size)}
+            className={btn(editor.isActive('textStyle', { fontSize: size }))}>
+            {label}
+          </button>
+        ))}
 
         <span className="w-px h-4 bg-white/10 mx-1 shrink-0" />
 
