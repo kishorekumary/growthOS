@@ -38,7 +38,7 @@ type Tab = 'pledge' | 'affirmations' | 'gratitude' | 'goals'
 const EMPTY: Practice = { pledge: '', affirmations: [], gratitude: [] }
 
 const TABS: { id: Tab; label: string; icon: typeof ScrollText; accent: string; ring: string }[] = [
-  { id: 'pledge',       label: 'Pledge',       icon: ScrollText, accent: 'text-amber-400',   ring: 'ring-amber-500'   },
+  { id: 'pledge',       label: 'My Identity',  icon: ScrollText, accent: 'text-amber-400',   ring: 'ring-amber-500'   },
   { id: 'affirmations', label: 'Affirmations',  icon: Sparkles,   accent: 'text-violet-400',  ring: 'ring-violet-500'  },
   { id: 'gratitude',    label: 'Gratitude',     icon: Heart,      accent: 'text-emerald-400', ring: 'ring-emerald-500' },
   { id: 'goals',        label: 'Goals',         icon: Target,     accent: 'text-sky-400',     ring: 'ring-sky-500'     },
@@ -299,7 +299,7 @@ export default function DailyPractice() {
             <textarea
               value={draft.pledge}
               onChange={e => setDraft(d => ({ ...d, pledge: e.target.value }))}
-              placeholder="Write your personal pledge — your commitment to yourself..."
+              placeholder="Write your identity — who you are and who you're becoming..."
               rows={4}
               className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2.5 text-sm text-white placeholder:text-slate-600 resize-none focus:outline-none focus:ring-1 focus:ring-amber-500"
             />
@@ -387,7 +387,7 @@ export default function DailyPractice() {
                 ? <blockquote className="text-lg font-light text-amber-100/90 leading-relaxed italic text-center whitespace-pre-wrap">
                     {practice!.pledge}
                   </blockquote>
-                : <p className="text-slate-500 text-sm text-center pt-6">No pledge set yet.</p>
+                : <p className="text-slate-500 text-sm text-center pt-6">No identity set yet.</p>
             )}
             {activeTab === 'affirmations' && (
               practice!.affirmations.length > 0
@@ -471,7 +471,7 @@ export default function DailyPractice() {
             ? <blockquote className="text-sm text-amber-100/90 leading-relaxed italic border-l-2 border-amber-500/40 pl-4 whitespace-pre-wrap">
                 {practice!.pledge}
               </blockquote>
-            : <p className="text-xs text-slate-600 pt-1">No pledge set — click Edit to add one.</p>
+            : <p className="text-xs text-slate-600 pt-1">No identity set — click Edit to add one.</p>
         )}
         {activeTab === 'affirmations' && (
           practice!.affirmations.length > 0
@@ -507,7 +507,7 @@ export default function DailyPractice() {
       {/* Subtle hint */}
       <p className={cn('text-[11px] flex items-center gap-1', currentTab.accent, 'opacity-50')}>
         <TabIcon className="h-3 w-3" />
-        {activeTab === 'pledge'       && 'Your personal commitment'}
+        {activeTab === 'pledge'       && 'Who you are and who you\'re becoming'}
         {activeTab === 'affirmations' && `${practice!.affirmations.length} affirmation${practice!.affirmations.length !== 1 ? 's' : ''}`}
         {activeTab === 'gratitude'    && `${practice!.gratitude.length} gratitude entr${practice!.gratitude.length !== 1 ? 'ies' : 'y'}`}
         {activeTab === 'goals'        && `${goals.length} active goal${goals.length !== 1 ? 's' : ''}`}
