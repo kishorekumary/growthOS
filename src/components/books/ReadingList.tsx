@@ -191,6 +191,9 @@ function AddBookModal({ onAdd }: { onAdd: () => void }) {
 function BookDetailDialog({ book, onUpdate, onClose }: { book: Book; onUpdate: () => void; onClose: () => void }) {
   const [aiData, setAiData]       = useState<AiData | null>(parseAi(book.ai_summary))
   const [loadingAi, setLoadingAi] = useState(false)
+  const [title, setTitle]         = useState(book.book_title)
+  const [author, setAuthor]       = useState(book.author ?? '')
+  const [genre, setGenre]         = useState(book.genre ?? '')
   const [status, setStatus]       = useState<Status>(book.status)
   const [rating, setRating]       = useState<number | null>(book.rating)
   const [saving, setSaving]       = useState(false)
@@ -213,10 +216,14 @@ function BookDetailDialog({ book, onUpdate, onClose }: { book: Book; onUpdate: (
   }
 
   async function saveChanges() {
+    if (!title.trim()) return
     setSaving(true)
     const supabase = createSupabaseBrowserClient()
     await supabase.from('reading_log')
       .update({
+        book_title:  title.trim(),
+        author:      author.trim() || null,
+        genre:       genre || null,
         status,
         rating:      status === 'completed' ? rating : null,
         started_at:  status === 'reading' && book.status === 'want_to_read'
@@ -234,18 +241,52 @@ function BookDetailDialog({ book, onUpdate, onClose }: { book: Book; onUpdate: (
   return (
     <DialogContent className="max-h-[85vh] overflow-y-auto">
       <DialogHeader>
-        <DialogTitle className="pr-6">{book.book_title}</DialogTitle>
-        <div className="flex items-center gap-2 flex-wrap">
-          {book.author && <p className="text-sm text-slate-400">{book.author}</p>}
-          {book.genre && (
-            <span className="text-xs bg-violet-500/20 text-violet-300 px-2 py-0.5 rounded-full">
-              {book.genre}
-            </span>
-          )}
-        </div>
+        <DialogTitle className="pr-6">Edit Book</DialogTitle>
       </DialogHeader>
 
       <div className="space-y-5">
+        {/* Title / Author / Genre */}
+        <div className="space-y-3 rounded-xl border border-white/10 bg-white/3 p-4">
+          <div className="space-y-1.5">
+            <Label className="text-slate-400 text-xs">Title *</Label>
+            <Input
+              value={title}
+              onChange={e => setTitle(e.target.value)}
+              placeholder="Book title"
+              className="border-white/15 bg-white/5 text-white placeholder:text-slate-600 focus-visible:ring-white/30"
+            />
+          </div>
+          <div className="space-y-1.5">
+            <Label className="text-slate-400 text-xs">Author</Label>
+            <Input
+              value={author}
+              onChange={e => setAuthor(e.target.value)}
+              placeholder="e.g. James Clear"
+              className="border-white/15 bg-white/5 text-white placeholder:text-slate-600 focus-visible:ring-white/30"
+            />
+          </div>
+          <div className="space-y-1.5">
+            <Label className="text-slate-400 text-xs">Genre</Label>
+            <div className="flex flex-wrap gap-1.5">
+              {GENRES.map(g => (
+                <button
+                  key={g}
+                  type="button"
+                  onClick={() => setGenre(genre === g ? '' : g)}
+                  className={cn(
+                    'rounded-full px-3 py-1 text-xs font-medium border transition-all',
+                    genre === g
+                      ? 'border-white/30 bg-white/15 text-white'
+                      : 'border-white/10 bg-white/5 text-slate-400 hover:border-white/20 hover:text-slate-200'
+                  )}
+                >
+                  {g}
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+
         {/* AI Summary */}
         <div className="rounded-xl border border-violet-500/20 bg-violet-500/5 p-4 space-y-3">
           <p className="text-xs font-semibold text-violet-400 flex items-center gap-1.5">
@@ -319,9 +360,9 @@ function BookDetailDialog({ book, onUpdate, onClose }: { book: Book; onUpdate: (
         )}
 
         <Button
-          className="w-full bg-violet-600 hover:bg-violet-700 text-white"
+          className="w-full bg-white/10 hover:bg-white/15 border border-white/15 text-white"
           onClick={saveChanges}
-          disabled={saving}
+          disabled={saving || !title.trim()}
         >
           {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
           Save Changes
