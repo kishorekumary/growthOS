@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useRef } from 'react'
-import { X, Plus, Trash2, Check, Loader2, Pencil, Quote, Scroll, EyeOff, Eye } from 'lucide-react'
+import { X, Plus, Trash2, Check, Loader2, Pencil, Quote, Scroll, EyeOff, Eye, ClipboardList } from 'lucide-react'
 import { createSupabaseBrowserClient } from '@/lib/supabase'
 import { cn } from '@/lib/utils'
 import RichTextEditor from '@/components/shared/RichTextEditor'
@@ -72,6 +72,8 @@ export default function BookInsights({
   const [saveError, setSaveError]   = useState<string | null>(null)
   const [isDirty, setIsDirty]       = useState(false)
   const [showCloseConfirm, setShowCloseConfirm] = useState(false)
+  const [bulkMode, setBulkMode]     = useState(false)
+  const [bulkText, setBulkText]     = useState('')
 
   const textareaRef = useRef<HTMLTextAreaElement>(null)
 
@@ -166,6 +168,27 @@ export default function BookInsights({
   }
 
   function cancelEdit() { setEditingId(null) }
+
+  function commitBulk() {
+    // Split on blank lines; each block = one quote.
+    // Optional last line starting with — or - becomes the source.
+    const blocks = bulkText.split(/\n{2,}/).map(b => b.trim()).filter(Boolean)
+    if (blocks.length === 0) { setBulkMode(false); return }
+    const parsed: QuoteEntry[] = blocks.map(block => {
+      const lines = block.split('\n').map(l => l.trim()).filter(Boolean)
+      const lastLine = lines[lines.length - 1]
+      const isSource = lines.length > 1 && /^[—–-]/.test(lastLine)
+      return {
+        id:     uid(),
+        text:   isSource ? lines.slice(0, -1).join('\n') : lines.join('\n'),
+        source: isSource ? lastLine.replace(/^[—–-]\s*/, '') : '',
+      }
+    })
+    setQuotes(prev => [...prev, ...parsed])
+    setIsDirty(true)
+    setBulkText('')
+    setBulkMode(false)
+  }
 
   // ── Render ────────────────────────────────────────────────────
 
@@ -272,15 +295,50 @@ export default function BookInsights({
           {/* ── QUOTES TAB ── */}
           {tab === 'quotes' && (
             <>
-              {quotes.length === 0 && !activeQuoteEdit && (
-                <div className="flex flex-col items-center justify-center py-16 text-center">
-                  <Quote className="h-10 w-10 text-slate-700 mb-3" />
-                  <p className="text-sm text-slate-500">No quotes yet.</p>
-                  {!isReadOnly && <p className="text-xs text-slate-600 mt-1">Click &ldquo;Add Quote&rdquo; to capture an important line.</p>}
+              {/* ── Bulk paste mode ── */}
+              {bulkMode && (
+                <div className="flex flex-col gap-3">
+                  <div className="flex items-center justify-between">
+                    <p className="text-xs text-slate-400">
+                      Paste all your quotes here. Separate each quote with a <strong className="text-white">blank line</strong>.<br />
+                      Optionally add <code className="text-amber-300">— Source</code> as the last line of a quote block.
+                    </p>
+                    <button onClick={() => { setBulkMode(false); setBulkText('') }}
+                      className="shrink-0 ml-4 text-slate-500 hover:text-white transition-colors">
+                      <X className="h-4 w-4" />
+                    </button>
+                  </div>
+                  <textarea
+                    autoFocus
+                    value={bulkText}
+                    onChange={e => setBulkText(e.target.value)}
+                    placeholder={`The only way to do great work is to love what you do.\n— Steve Jobs\n\nIn the middle of every difficulty lies opportunity.\n\nIt always seems impossible until it's done.\n— Nelson Mandela`}
+                    className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-white placeholder:text-slate-700 resize-none focus:outline-none focus:border-white/20 leading-relaxed font-mono"
+                    style={{ minHeight: 'calc(100vh - 280px)' }}
+                  />
+                  <div className="flex gap-2">
+                    <button onClick={commitBulk}
+                      disabled={!bulkText.trim()}
+                      className="flex items-center gap-1.5 rounded-lg px-4 py-2 text-sm font-medium bg-white/8 border border-white/15 text-white hover:bg-white/12 disabled:opacity-40 transition-colors">
+                      <Check className="h-4 w-4" /> Add {bulkText.trim() ? bulkText.split(/\n{2,}/).filter(b => b.trim()).length : 0} quote{bulkText.split(/\n{2,}/).filter(b => b.trim()).length !== 1 ? 's' : ''}
+                    </button>
+                    <button onClick={() => { setBulkMode(false); setBulkText('') }}
+                      className="rounded-lg px-4 py-2 text-sm text-slate-500 hover:text-white transition-colors">
+                      Cancel
+                    </button>
+                  </div>
                 </div>
               )}
 
-              {quotes.map(q => (
+              {!bulkMode && quotes.length === 0 && !activeQuoteEdit && (
+                <div className="flex flex-col items-center justify-center py-16 text-center">
+                  <Quote className="h-10 w-10 text-slate-700 mb-3" />
+                  <p className="text-sm text-slate-500">No quotes yet.</p>
+                  {!isReadOnly && <p className="text-xs text-slate-600 mt-1">Paste all at once or add one by one below.</p>}
+                </div>
+              )}
+
+              {!bulkMode && quotes.map(q => (
                 <div
                   key={q.id}
                   className={cn(
@@ -340,7 +398,7 @@ export default function BookInsights({
               ))}
 
               {/* Inline new-quote form */}
-              {activeQuoteEdit && isNewItem && (
+              {!bulkMode && activeQuoteEdit && isNewItem && (
                 <div className="rounded-xl border border-white/10 bg-white/3 px-5 py-4 space-y-3">
                   <textarea
                     autoFocus
@@ -360,7 +418,7 @@ export default function BookInsights({
                     className="w-full bg-transparent text-xs text-slate-500 placeholder:text-slate-700 focus:outline-none border-t border-white/8 pt-2"
                   />
                   <div className="flex gap-2 pt-1">
-                    <button onClick={commitQuote} className="flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium bg-amber-500/20 border border-amber-500/30 text-amber-300 hover:bg-amber-500/30 transition-colors">
+                    <button onClick={commitQuote} className="flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium bg-white/8 border border-white/15 text-slate-200 hover:bg-white/15 transition-colors">
                       <Check className="h-3 w-3" /> Add
                     </button>
                     <button onClick={cancelEdit} className="rounded-md px-3 py-1.5 text-xs text-slate-500 hover:text-white transition-colors">
@@ -370,13 +428,21 @@ export default function BookInsights({
                 </div>
               )}
 
-              {!isReadOnly && !activeQuoteEdit && (
-                <button
-                  onClick={startAddQuote}
-                  className="w-full flex items-center justify-center gap-2 rounded-xl border border-dashed border-white/10 py-3.5 text-sm text-slate-600 hover:text-slate-300 hover:border-white/20 transition-all"
-                >
-                  <Plus className="h-4 w-4" /> Add Quote
-                </button>
+              {!isReadOnly && !activeQuoteEdit && !bulkMode && (
+                <div className="flex gap-2">
+                  <button
+                    onClick={startAddQuote}
+                    className="flex-1 flex items-center justify-center gap-2 rounded-xl border border-dashed border-white/10 py-3.5 text-sm text-slate-600 hover:text-slate-300 hover:border-white/20 transition-all"
+                  >
+                    <Plus className="h-4 w-4" /> Add one
+                  </button>
+                  <button
+                    onClick={() => { cancelEdit(); setBulkText(''); setBulkMode(true) }}
+                    className="flex-1 flex items-center justify-center gap-2 rounded-xl border border-dashed border-amber-500/20 py-3.5 text-sm text-amber-600/70 hover:text-amber-400 hover:border-amber-500/40 transition-all"
+                  >
+                    <ClipboardList className="h-4 w-4" /> Paste all
+                  </button>
+                </div>
               )}
             </>
           )}
