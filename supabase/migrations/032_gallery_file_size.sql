@@ -1,0 +1,2 @@
+ALTER TABLE public.user_gallery
+  ADD COLUMN IF NOT EXISTS file_size BIGINT NOT NULL DEFAULT 0;

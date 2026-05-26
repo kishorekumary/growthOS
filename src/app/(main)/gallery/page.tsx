@@ -9,7 +9,7 @@ export default async function GalleryPage() {
 
   const { data } = await supabase
     .from('user_gallery')
-    .select('id, storage_path, url, caption, tags, mime_type, created_at')
+    .select('id, storage_path, url, caption, tags, mime_type, file_size, created_at')
     .eq('user_id', user.id)
     .order('created_at', { ascending: false })
 
@@ -20,6 +20,7 @@ export default async function GalleryPage() {
     caption:      r.caption ?? null,
     tags:         r.tags ?? [],
     mime_type:    r.mime_type ?? null,
+    file_size:    r.file_size ?? 0,
     created_at:   r.created_at,
   }))
 

@@ -3,8 +3,8 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
 import {
   Upload, X, Trash2, ZoomIn, ChevronLeft, ChevronRight,
-  Loader2, ImageIcon, Pencil, Check, Plus, Tag,
-  FileText, ExternalLink, FolderOpen,
+  Loader2, Pencil, Check, Plus, Tag,
+  FileText, ExternalLink, FolderOpen, Music, Video,
 } from 'lucide-react'
 import { createSupabaseBrowserClient } from '@/lib/supabase'
 import { cn } from '@/lib/utils'
@@ -17,21 +17,34 @@ export interface GalleryItem {
   caption: string | null
   tags: string[] | null
   mime_type: string | null
+  file_size: number
   created_at: string
 }
 
-// Accepted MIME types — images and PDF documents
 function isAccepted(type: string) {
-  return type.startsWith('image/') || type === 'application/pdf'
+  return (
+    type.startsWith('image/') ||
+    type.startsWith('audio/') ||
+    type.startsWith('video/') ||
+    type === 'application/pdf'
+  )
 }
 
-function fileKind(item: GalleryItem): 'image' | 'pdf' {
+const MAX_UPLOAD_BYTES = (Number(process.env.NEXT_PUBLIC_GALLERY_MAX_UPLOAD_MB) || 200) * 1024 * 1024
+
+type FileKind = 'image' | 'pdf' | 'audio' | 'video'
+
+function fileKind(item: GalleryItem): FileKind {
   if (item.mime_type) {
-    if (item.mime_type === 'application/pdf') return 'pdf'
-    if (item.mime_type.startsWith('image/')) return 'image'
+    if (item.mime_type === 'application/pdf')    return 'pdf'
+    if (item.mime_type.startsWith('image/'))     return 'image'
+    if (item.mime_type.startsWith('audio/'))     return 'audio'
+    if (item.mime_type.startsWith('video/'))     return 'video'
   }
-  // Fallback for existing items without mime_type: check extension
-  if (item.storage_path.toLowerCase().endsWith('.pdf')) return 'pdf'
+  const p = item.storage_path.toLowerCase()
+  if (p.endsWith('.pdf'))                        return 'pdf'
+  if (/\.(mp4|webm|mov|avi|mkv|ogv)$/.test(p)) return 'video'
+  if (/\.(mp3|wav|ogg|aac|flac|m4a)$/.test(p)) return 'audio'
   return 'image'
 }
 
@@ -88,6 +101,19 @@ export default function Gallery({ initialItems, userId }: { initialItems: Galler
   const uploadFiles = useCallback(async (files: File[]) => {
     const valid = files.filter(f => isAccepted(f.type))
     if (!valid.length) return
+
+    const currentItems = items  // snapshot from closure
+    const usedBytes  = currentItems.reduce((sum, i) => sum + i.file_size, 0)
+    const newBytes   = valid.reduce((sum, f) => sum + f.size, 0)
+
+    if (usedBytes + newBytes > MAX_UPLOAD_BYTES) {
+      const limitMB     = Math.round(MAX_UPLOAD_BYTES / (1024 * 1024))
+      const usedMB      = (usedBytes / (1024 * 1024)).toFixed(1)
+      const remainingMB = ((MAX_UPLOAD_BYTES - usedBytes) / (1024 * 1024)).toFixed(1)
+      setError(`Gallery quota exceeded. Limit: ${limitMB} MB · Used: ${usedMB} MB · Available: ${remainingMB} MB`)
+      return
+    }
+
     setUploading(true)
     setError(null)
     setUploadNames(valid.map(f => f.name || 'file'))
@@ -103,7 +129,7 @@ export default function Gallery({ initialItems, userId }: { initialItems: Galler
 
       const { data: { publicUrl } } = supabase.storage.from('gallery').getPublicUrl(path)
 
-      // For non-image files pre-fill caption with the original filename
+      // Pre-fill caption with filename for non-image files
       const autoCaption = !file.type.startsWith('image/') ? file.name : null
 
       const { data: row, error: dbErr } = await supabase
@@ -115,6 +141,7 @@ export default function Gallery({ initialItems, userId }: { initialItems: Galler
           caption: autoCaption,
           tags: [],
           mime_type: file.type || null,
+          file_size: file.size,
         })
         .select()
         .single()
@@ -124,7 +151,7 @@ export default function Gallery({ initialItems, userId }: { initialItems: Galler
     setItems(prev => [...newItems.reverse(), ...prev])
     setUploading(false)
     setUploadNames([])
-  }, [userId])
+  }, [userId, items])
 
   function onFileChange(e: React.ChangeEvent<HTMLInputElement>) {
     const files = Array.from(e.target.files ?? [])
@@ -184,7 +211,7 @@ export default function Gallery({ initialItems, userId }: { initialItems: Galler
         <div>
           <h1 className="text-xl font-bold text-white">Gallery</h1>
           <p className="text-sm text-slate-500 mt-0.5">
-            {items.length} file{items.length !== 1 ? 's' : ''} · drag-drop, click, or ⌘V to paste a screenshot
+            {items.length} file{items.length !== 1 ? 's' : ''} · {(items.reduce((s, i) => s + i.file_size, 0) / (1024 * 1024)).toFixed(1)} / {Math.round(MAX_UPLOAD_BYTES / (1024 * 1024))} MB · drag-drop, click, or ⌘V to paste
           </p>
         </div>
         <button
@@ -198,7 +225,7 @@ export default function Gallery({ initialItems, userId }: { initialItems: Galler
         <input
           ref={fileRef}
           type="file"
-          accept="image/*,application/pdf"
+          accept="image/*,audio/*,video/*,application/pdf"
           multiple
           className="hidden"
           onChange={onFileChange}
@@ -222,7 +249,7 @@ export default function Gallery({ initialItems, userId }: { initialItems: Galler
         <p className="text-sm text-slate-500 text-center px-4">
           {dragging
             ? 'Drop files here'
-            : 'Drag & drop images or PDFs · click to browse · paste a screenshot with ⌘V / Ctrl+V'}
+            : 'Drag & drop images, audio, video, or PDFs · click to browse · paste a screenshot with ⌘V / Ctrl+V'}
         </p>
       </div>
 
@@ -278,7 +305,7 @@ export default function Gallery({ initialItems, userId }: { initialItems: Galler
         <div className="py-20 text-center">
           <FolderOpen className="h-12 w-12 text-slate-700 mx-auto mb-3" />
           <p className="text-slate-400 text-sm">
-            {filterTag ? `No files tagged #${filterTag}` : 'No files yet — upload images or PDFs to get started'}
+            {filterTag ? `No files tagged #${filterTag}` : 'No files yet — upload images, audio, video, or PDFs to get started'}
           </p>
         </div>
       ) : (
@@ -294,15 +321,7 @@ export default function Gallery({ initialItems, userId }: { initialItems: Galler
                   onClick={() => setLightbox(idx)}
                   className="block w-full focus:outline-none"
                 >
-                  {kind === 'pdf' ? (
-                    /* PDF card thumbnail */
-                    <div className="flex flex-col items-center justify-center gap-2 py-8 px-3 min-h-[100px]">
-                      <FileText className="h-10 w-10 text-red-400 shrink-0" />
-                      <p className="text-xs text-slate-400 text-center leading-snug line-clamp-2 break-all">
-                        {item.caption ?? 'PDF Document'}
-                      </p>
-                    </div>
-                  ) : (
+                  {kind === 'image' ? (
                     /* eslint-disable-next-line @next/next/no-img-element */
                     <img
                       src={item.url}
@@ -310,7 +329,38 @@ export default function Gallery({ initialItems, userId }: { initialItems: Galler
                       className="w-full h-auto object-cover transition-transform duration-300 group-hover:scale-[1.02]"
                       loading="lazy"
                     />
-                  )}
+                  ) : kind === 'video' ? (
+                    /* Video card thumbnail */
+                    <div className="relative flex items-center justify-center min-h-[110px] bg-slate-900/60">
+                      <video
+                        src={item.url}
+                        className="w-full max-h-[160px] object-cover"
+                        preload="metadata"
+                        muted
+                      />
+                      <div className="absolute inset-0 flex items-center justify-center">
+                        <div className="flex h-10 w-10 items-center justify-center rounded-full bg-black/60 backdrop-blur-sm">
+                          <Video className="h-5 w-5 text-white" />
+                        </div>
+                      </div>
+                    </div>
+                  ) : kind === 'audio' ? (
+                    /* Audio card thumbnail */
+                    <div className="flex flex-col items-center justify-center gap-2 py-8 px-3 min-h-[100px]">
+                      <Music className="h-10 w-10 text-violet-400 shrink-0" />
+                      <p className="text-xs text-slate-400 text-center leading-snug line-clamp-2 break-all">
+                        {item.caption ?? 'Audio file'}
+                      </p>
+                    </div>
+                  ) : kind === 'pdf' ? (
+                    /* PDF card thumbnail */
+                    <div className="flex flex-col items-center justify-center gap-2 py-8 px-3 min-h-[100px]">
+                      <FileText className="h-10 w-10 text-red-400 shrink-0" />
+                      <p className="text-xs text-slate-400 text-center leading-snug line-clamp-2 break-all">
+                        {item.caption ?? 'PDF Document'}
+                      </p>
+                    </div>
+                  ) : null}
                 </button>
 
                 {/* Hover tint */}
@@ -321,7 +371,7 @@ export default function Gallery({ initialItems, userId }: { initialItems: Galler
                   <button
                     onClick={() => setLightbox(idx)}
                     className="flex h-7 w-7 items-center justify-center rounded-lg bg-black/60 backdrop-blur-sm text-white hover:bg-black/80 transition-colors"
-                    title={kind === 'pdf' ? 'Preview' : 'View full size'}
+                    title={kind === 'image' ? 'View full size' : 'Preview'}
                   >
                     <ZoomIn className="h-3.5 w-3.5" />
                   </button>
@@ -334,8 +384,8 @@ export default function Gallery({ initialItems, userId }: { initialItems: Galler
                   </button>
                 </div>
 
-                {/* Caption / tags footer */}
-                {(kind === 'image' && (item.caption || (item.tags ?? []).length > 0)) && (
+                {/* Caption / tags footer — images show both; non-image media shows tags only */}
+                {kind === 'image' && (item.caption || (item.tags ?? []).length > 0) && (
                   <div className="px-2.5 py-2 space-y-1">
                     {item.caption && (
                       <p className="text-xs text-slate-300 leading-snug line-clamp-2">{item.caption}</p>
@@ -351,8 +401,7 @@ export default function Gallery({ initialItems, userId }: { initialItems: Galler
                     )}
                   </div>
                 )}
-                {/* For PDFs always show tags if any */}
-                {kind === 'pdf' && (item.tags ?? []).length > 0 && (
+                {kind !== 'image' && (item.tags ?? []).length > 0 && (
                   <div className="px-2.5 pb-2 flex flex-wrap gap-1">
                     {item.tags!.map(tag => (
                       <span key={tag} className="text-[10px] rounded-full bg-violet-500/15 border border-violet-500/20 text-violet-400 px-1.5 py-0.5">
@@ -385,7 +434,26 @@ export default function Gallery({ initialItems, userId }: { initialItems: Galler
 
           {/* Content */}
           <div className="flex flex-col items-center gap-4 w-full max-w-4xl px-14 max-h-[95vh]">
-            {fileKind(lightboxItem) === 'pdf' ? (
+            {fileKind(lightboxItem) === 'video' ? (
+              /* Video viewer */
+              <video
+                src={lightboxItem.url}
+                controls
+                autoPlay
+                className="max-h-[65vh] w-auto max-w-full rounded-xl shadow-2xl bg-black"
+              />
+            ) : fileKind(lightboxItem) === 'audio' ? (
+              /* Audio viewer */
+              <div className="flex flex-col items-center gap-4 w-full max-w-md">
+                <div className="flex h-24 w-24 items-center justify-center rounded-full bg-violet-500/20 border border-violet-500/30">
+                  <Music className="h-10 w-10 text-violet-400" />
+                </div>
+                <p className="text-sm text-slate-300 text-center leading-snug">
+                  {lightboxItem.caption ?? 'Audio file'}
+                </p>
+                <audio src={lightboxItem.url} controls autoPlay className="w-full" />
+              </div>
+            ) : fileKind(lightboxItem) === 'pdf' ? (
               /* PDF viewer */
               <div className="w-full flex flex-col gap-3">
                 <iframe
