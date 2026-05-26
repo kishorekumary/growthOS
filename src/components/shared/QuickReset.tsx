@@ -1,13 +1,13 @@
 'use client'
 
 import { useState, useEffect, useRef, useCallback, type TouchEvent } from 'react'
-import { Wind, Sparkles, Brain, X, ChevronLeft, ChevronRight, Loader2, RefreshCw, Zap, Target, CheckSquare, Circle } from 'lucide-react'
+import { Wind, Sparkles, Brain, X, ChevronLeft, ChevronRight, Loader2, RefreshCw, Zap, Target, CheckSquare, Circle, ScrollText } from 'lucide-react'
 import { differenceInDays, isBefore, parseISO, startOfDay } from 'date-fns'
 import { createSupabaseBrowserClient } from '@/lib/supabase'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 
-type Mode = 'menu' | 'breathing' | 'affirmations' | 'ai' | 'goals' | 'tasks'
+type Mode = 'menu' | 'breathing' | 'affirmations' | 'ai' | 'goals' | 'tasks' | 'identity'
 
 // ─── Box breathing phases ─────────────────────────────────────────
 const PHASES = [
@@ -472,6 +472,52 @@ function TasksView() {
   )
 }
 
+// ─── My Identity view ─────────────────────────────────────────────
+function IdentityView() {
+  const [pledge, setPledge] = useState<string | null>(null)
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    async function load() {
+      const supabase = createSupabaseBrowserClient()
+      const { data: { session } } = await supabase.auth.getSession()
+      if (!session?.user) { setLoading(false); return }
+      const { data } = await supabase
+        .from('daily_practice')
+        .select('pledge')
+        .eq('user_id', session.user.id)
+        .maybeSingle()
+      setPledge(data?.pledge ?? null)
+      setLoading(false)
+    }
+    load()
+  }, [])
+
+  if (loading) {
+    return <div className="flex justify-center py-14"><Loader2 className="h-5 w-5 animate-spin text-slate-500" /></div>
+  }
+
+  if (!pledge) {
+    return (
+      <div className="text-center py-10 space-y-3">
+        <ScrollText className="h-8 w-8 text-amber-400/40 mx-auto" />
+        <p className="text-slate-400 text-sm">No identity statement yet.</p>
+        <p className="text-slate-500 text-xs">Write yours in Daily Practice on the dashboard.</p>
+      </div>
+    )
+  }
+
+  return (
+    <div className="flex flex-col gap-4 py-2">
+      <p className="text-[11px] text-amber-400/60 uppercase tracking-widest text-center">Who you are &amp; who you&rsquo;re becoming</p>
+      <div
+        className="rounded-xl border-l-2 border-amber-500/40 bg-amber-500/5 px-4 py-4 text-sm text-slate-200 leading-relaxed max-h-[55vh] overflow-y-auto prose prose-invert prose-sm prose-p:my-1 prose-ul:my-1 prose-li:my-0"
+        dangerouslySetInnerHTML={{ __html: pledge }}
+      />
+    </div>
+  )
+}
+
 // ─── Mode config ──────────────────────────────────────────────────
 const MODES = [
   {
@@ -523,6 +569,16 @@ const MODES = [
     bg:     'bg-sky-500/8',
     hover:  'hover:bg-sky-500/15',
     desc:   'Pending tasks — tap to complete',
+  },
+  {
+    id:     'identity'     as Mode,
+    label:  'My Identity',
+    icon:   ScrollText,
+    accent: 'text-amber-400',
+    border: 'border-amber-500/20',
+    bg:     'bg-amber-500/8',
+    hover:  'hover:bg-amber-500/15',
+    desc:   'Who you are & who you\'re becoming',
   },
 ]
 
@@ -656,6 +712,7 @@ export default function QuickReset({ floatingOnly = false }: { floatingOnly?: bo
         {mode === 'ai'           && <AIResetMessage />}
         {mode === 'goals'        && <GoalsView />}
         {mode === 'tasks'        && <TasksView />}
+        {mode === 'identity'     && <IdentityView />}
       </div>
     </div>
   )
