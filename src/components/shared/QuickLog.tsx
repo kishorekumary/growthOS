@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect, useRef } from 'react'
+import { useRouter } from 'next/navigation'
 import {
   Plus, X, Utensils, Dumbbell, CheckSquare, CreditCard, BookOpen,
   Loader2, Check, Camera, Image as ImageIcon, Zap, Sparkles, AlertCircle, CheckCircle2,
@@ -738,40 +739,46 @@ function JournalPanel({ onDone }: { onDone: () => void }) {
 
 const TABS: {
   id: Panel; label: string; Icon: React.ElementType
-  activeClass: string; inactiveClass: string
+  activeClass: string; inactiveClass: string; route: string
 }[] = [
+  {
+    id: 'habit', label: 'Habits', Icon: CheckSquare,
+    activeClass:   'border-emerald-500 bg-emerald-500/20 text-white',
+    inactiveClass: 'border-emerald-500/20 bg-emerald-500/8 text-emerald-400/80 hover:opacity-100',
+    route: '/personality/habits',
+  },
   {
     id: 'meal', label: 'Meal', Icon: Utensils,
     activeClass:   'border-amber-500 bg-amber-500/20 text-white',
     inactiveClass: 'border-amber-500/20 bg-amber-500/8 text-amber-400/80 hover:opacity-100',
+    route: '/fitness',
   },
   {
     id: 'workout', label: 'Workout', Icon: Dumbbell,
     activeClass:   'border-sky-500 bg-sky-500/20 text-white',
     inactiveClass: 'border-sky-500/20 bg-sky-500/8 text-sky-400/80 hover:opacity-100',
-  },
-  {
-    id: 'habit', label: 'Habits', Icon: CheckSquare,
-    activeClass:   'border-emerald-500 bg-emerald-500/20 text-white',
-    inactiveClass: 'border-emerald-500/20 bg-emerald-500/8 text-emerald-400/80 hover:opacity-100',
+    route: '/fitness',
   },
   {
     id: 'finance', label: 'Finance', Icon: CreditCard,
     activeClass:   'border-violet-500 bg-violet-500/20 text-white',
     inactiveClass: 'border-violet-500/20 bg-violet-500/8 text-violet-400/80 hover:opacity-100',
+    route: '/finance',
   },
   {
     id: 'journal', label: 'Journal', Icon: BookOpen,
     activeClass:   'border-rose-500 bg-rose-500/20 text-white',
     inactiveClass: 'border-rose-500/20 bg-rose-500/8 text-rose-400/80 hover:opacity-100',
+    route: '/personality/journal',
   },
 ]
 
 // ─── Main export ──────────────────────────────────────────────────
 
 export default function QuickLog() {
+  const router = useRouter()
   const [open, setOpen]       = useState(false)
-  const [panel, setPanel]     = useState<Panel>('meal')
+  const [panel, setPanel]     = useState<Panel>('habit')
   const [pinging, setPinging] = useState(true)
 
   useEffect(() => {
@@ -812,14 +819,20 @@ export default function QuickLog() {
               </button>
             </div>
 
-            {/* Tab strip */}
+            {/* Tab strip — single click switches tab, double click navigates to full section */}
             <div className="flex gap-1.5 px-5 py-3 shrink-0">
-              {TABS.map(({ id, label, Icon, activeClass, inactiveClass }) => (
-                <button key={id} type="button" onClick={() => setPanel(id)}
+              {TABS.map(({ id, label, Icon, activeClass, inactiveClass, route }) => (
+                <button
+                  key={id}
+                  type="button"
+                  onClick={() => setPanel(id)}
+                  onDoubleClick={() => { close(); router.push(route) }}
+                  title={`Double-click to open ${label}`}
                   className={cn(
                     'flex-1 flex flex-col items-center gap-1 rounded-xl border py-2.5 text-[10px] font-medium transition-all',
                     panel === id ? activeClass : inactiveClass,
-                  )}>
+                  )}
+                >
                   <Icon className="h-3.5 w-3.5" />
                   {label}
                 </button>
