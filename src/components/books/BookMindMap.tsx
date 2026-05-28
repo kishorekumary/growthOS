@@ -33,6 +33,8 @@ export interface MindNode {
   y: number
   w?: number
   h?: number
+  summary?: string
+  summaryKeyPoints?: string[]
 }
 
 function getNodeW(node: MindNode): number { return node.w ?? nodeWidth(node.label) }
@@ -300,6 +302,14 @@ export default function BookMindMap({ bookId, bookTitle, initialJson, onClose, r
 
   async function openSummary(node: MindNode) {
     setSummaryNode(node)
+
+    // Use cached summary if already generated
+    if (node.summary) {
+      setSummaryContent({ summary: node.summary, keyPoints: node.summaryKeyPoints ?? [] })
+      setSummaryLoading(false)
+      return
+    }
+
     setSummaryContent(null)
     setSummaryLoading(true)
     try {
@@ -308,8 +318,25 @@ export default function BookMindMap({ bookId, bookTitle, initialJson, onClose, r
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ topic: node.label, bookTitle }),
       })
-      const data = await res.json()
+      const data: { summary: string; keyPoints: string[] } = await res.json()
       setSummaryContent(data)
+
+      // Persist summary onto the node and auto-save to DB
+      const updatedNodes = nodesRef.current.map(n =>
+        n.id === node.id
+          ? { ...n, summary: data.summary, summaryKeyPoints: data.keyPoints }
+          : n
+      )
+      setNodes(updatedNodes)
+      setSummaryNode(prev => prev?.id === node.id
+        ? { ...prev, summary: data.summary, summaryKeyPoints: data.keyPoints }
+        : prev
+      )
+      const supabase = createSupabaseBrowserClient()
+      await supabase
+        .from('reading_log')
+        .update({ key_lessons: JSON.stringify(updatedNodes), updated_at: new Date().toISOString() })
+        .eq('id', bookId)
     } catch {
       setSummaryContent({ summary: 'Failed to load summary. Please try again.', keyPoints: [] })
     } finally {
