@@ -513,27 +513,38 @@ export default function BookMindMap({ bookId, bookTitle, initialJson, onClose, r
         // → first child (or expand if collapsed) · ← jump to parent
         if (e.key === 'ArrowRight') {
           e.preventDefault()
-          const idx = traversalIdxRef.current ?? 0
-          const cur = dfsOrderRef.current[idx]
-          const isCollapsedWithChildren =
-            cur &&
-            collapsedNodesRef.current.has(cur.id) &&
-            nodesRef.current.some(n => n.parentId === cur.id)
-          if (isCollapsedWithChildren) {
-            // Expand the node and jump to its first child (pre-order: idx+1 after expansion)
-            setCollapsedNodes(prev => { const s = new Set(prev); s.delete(cur.id); return s })
-            setTraversalIdx(idx + 1)
-          } else {
+          if (e.altKey) {
+            // ⌥→ step forward one node in DFS order (no expand)
             setTraversalIdx(i => Math.min(dfsLengthRef.current - 1, (i ?? 0) + 1))
+          } else {
+            const idx = traversalIdxRef.current ?? 0
+            const cur = dfsOrderRef.current[idx]
+            const isCollapsedWithChildren =
+              cur &&
+              collapsedNodesRef.current.has(cur.id) &&
+              nodesRef.current.some(n => n.parentId === cur.id)
+            if (isCollapsedWithChildren) {
+              // Expand the node and jump to its first child (pre-order: idx+1 after expansion)
+              setCollapsedNodes(prev => { const s = new Set(prev); s.delete(cur.id); return s })
+              setTraversalIdx(idx + 1)
+            } else {
+              setTraversalIdx(i => Math.min(dfsLengthRef.current - 1, (i ?? 0) + 1))
+            }
           }
           return
         }
         if (e.key === 'ArrowLeft') {
           e.preventDefault()
-          const cur = dfsOrderRef.current[traversalIdxRef.current]
-          if (cur?.parentId) {
-            const parentIdx = dfsOrderRef.current.findIndex(n => n.id === cur.parentId)
-            if (parentIdx !== -1) setTraversalIdx(parentIdx)
+          if (e.altKey) {
+            // ⌥← step backward one node in DFS order
+            setTraversalIdx(i => Math.max(0, (i ?? 0) - 1))
+          } else {
+            // ← jump to parent
+            const cur = dfsOrderRef.current[traversalIdxRef.current]
+            if (cur?.parentId) {
+              const parentIdx = dfsOrderRef.current.findIndex(n => n.id === cur.parentId)
+              if (parentIdx !== -1) setTraversalIdx(parentIdx)
+            }
           }
           return
         }
