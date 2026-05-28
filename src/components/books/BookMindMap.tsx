@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useRef, useEffect, useCallback, useMemo } from 'react'
-import { X, Trash2, GitBranch, Loader2, Check, Pencil, Upload, Plus, Undo2, Link2, Eye, EyeOff, Search, ChevronLeft, ChevronRight, ChevronDown, Download, MoreHorizontal, Save, Navigation, ChevronsDown } from 'lucide-react'
+import { X, Trash2, GitBranch, Loader2, Check, Pencil, Upload, Plus, Undo2, Link2, Eye, EyeOff, Search, ChevronLeft, ChevronRight, ChevronDown, Download, MoreHorizontal, Save, Navigation, ChevronsDown, Sparkles } from 'lucide-react'
 import { createSupabaseBrowserClient } from '@/lib/supabase'
 import { cn } from '@/lib/utils'
 
@@ -293,6 +293,29 @@ export default function BookMindMap({ bookId, bookTitle, initialJson, onClose, r
   })
 
   const [copySuccess, setCopySuccess] = useState(false)
+
+  const [summaryNode, setSummaryNode] = useState<MindNode | null>(null)
+  const [summaryContent, setSummaryContent] = useState<{ summary: string; keyPoints: string[] } | null>(null)
+  const [summaryLoading, setSummaryLoading] = useState(false)
+
+  async function openSummary(node: MindNode) {
+    setSummaryNode(node)
+    setSummaryContent(null)
+    setSummaryLoading(true)
+    try {
+      const res = await fetch('/api/ai/mindmap-node-summary', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ topic: node.label, bookTitle }),
+      })
+      const data = await res.json()
+      setSummaryContent(data)
+    } catch {
+      setSummaryContent({ summary: 'Failed to load summary. Please try again.', keyPoints: [] })
+    } finally {
+      setSummaryLoading(false)
+    }
+  }
 
   function handleClose() {
     if (isDirty && !isReadOnly) { setShowCloseConfirm(true); return }
@@ -1529,6 +1552,16 @@ export default function BookMindMap({ bookId, bookTitle, initialJson, onClose, r
                         <Plus className="h-3.5 w-3.5" />
                       </button>
                     )}
+                    {!isRoot && (
+                      <button
+                        type="button"
+                        onClick={e => { e.stopPropagation(); openSummary(node) }}
+                        title="AI summary of this topic"
+                        className="flex items-center justify-center w-7 h-7 rounded-md bg-slate-900/95 border border-violet-500/30 text-violet-600/70 hover:text-violet-400 hover:border-violet-500/60 transition-colors backdrop-blur-sm"
+                      >
+                        <Sparkles className="h-3.5 w-3.5" />
+                      </button>
+                    )}
                   </div>
                 )}
 
@@ -1682,6 +1715,50 @@ export default function BookMindMap({ bookId, bookTitle, initialJson, onClose, r
           </>
         )}
       </div>
+
+      {/* Node summary panel */}
+      {summaryNode && (
+        <div className="fixed inset-0 z-[55] flex pointer-events-none">
+          <div className="pointer-events-auto fixed inset-0" onClick={() => setSummaryNode(null)} />
+          <div className="pointer-events-auto relative ml-auto w-80 h-full bg-[#0d0d1a] border-l border-white/[0.08] flex flex-col shadow-2xl">
+            <div className="flex items-center gap-3 px-4 py-3 border-b border-white/[0.08] shrink-0">
+              <Sparkles className="h-3.5 w-3.5 text-violet-400 shrink-0" />
+              <span className="text-sm font-semibold text-white truncate flex-1">{summaryNode.label}</span>
+              <button
+                onClick={() => setSummaryNode(null)}
+                className="text-slate-500 hover:text-white transition-colors shrink-0"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+            <div className="flex-1 overflow-y-auto px-4 py-4 space-y-4">
+              {summaryLoading ? (
+                <div className="flex items-center gap-2 text-slate-400 pt-2">
+                  <Loader2 className="h-4 w-4 animate-spin shrink-0" />
+                  <span className="text-sm">Generating summary…</span>
+                </div>
+              ) : summaryContent ? (
+                <>
+                  <p className="text-sm text-slate-300 leading-relaxed">{summaryContent.summary}</p>
+                  {summaryContent.keyPoints.length > 0 && (
+                    <div>
+                      <p className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider mb-2">Key Points</p>
+                      <ul className="space-y-2">
+                        {summaryContent.keyPoints.map((point, i) => (
+                          <li key={i} className="flex items-start gap-2 text-sm text-slate-300">
+                            <span className="mt-[6px] h-1.5 w-1.5 rounded-full bg-violet-400 shrink-0" />
+                            {point}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                </>
+              ) : null}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Unsaved changes confirm dialog */}
       {showCloseConfirm && (
