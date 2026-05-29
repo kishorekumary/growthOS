@@ -5,13 +5,15 @@ import Link from 'next/link'
 import {
   Users, Globe, Flame, BookOpen, Dumbbell, Target,
   CheckSquare, Plus, Trash2, Loader2, Shield, ShieldOff,
-  ChevronRight, Search,
+  ChevronRight, Search, ShieldCheck,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
+type Role = 'user' | 'admin' | 'superadmin'
+
 interface UserRow {
   id: string; email: string; full_name: string; avatar_url: string | null
-  is_admin: boolean; joined: string
+  is_admin: boolean; is_superadmin: boolean; joined: string
   habitCount: number; topStreak: number; weekDone: number; weekTotal: number
   booksReading: number; booksCompleted: number; workoutsWeek: number
   activeGoals: number; openTodos: number
@@ -31,10 +33,12 @@ export default function AdminDashboard({
   users: initialUsers,
   globalHabits: initialGlobalHabits,
   meId,
+  isSuperadmin,
 }: {
   users: UserRow[]
   globalHabits: GlobalHabit[]
   meId: string
+  isSuperadmin: boolean
 }) {
   const [tab, setTab]                 = useState<'users' | 'global'>('users')
   const [search, setSearch]           = useState('')
@@ -50,14 +54,23 @@ export default function AdminDashboard({
     u.email.toLowerCase().includes(search.toLowerCase())
   )
 
-  async function toggleAdmin(u: UserRow) {
+  function currentRole(u: UserRow): Role {
+    if (u.is_superadmin) return 'superadmin'
+    if (u.is_admin)      return 'admin'
+    return 'user'
+  }
+
+  async function setRole(u: UserRow, role: Role) {
     setTogglingId(u.id)
     const res = await fetch('/api/admin/set-role', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ userId: u.id, is_admin: !u.is_admin }),
+      body: JSON.stringify({ userId: u.id, role }),
     })
-    if (res.ok) setUsers(prev => prev.map(x => x.id === u.id ? { ...x, is_admin: !u.is_admin } : x))
+    if (res.ok) setUsers(prev => prev.map(x => x.id === u.id
+      ? { ...x, is_admin: role === 'admin' || role === 'superadmin', is_superadmin: role === 'superadmin' }
+      : x
+    ))
     setTogglingId(null)
   }
 
@@ -181,7 +194,8 @@ export default function AdminDashboard({
                           <div className="min-w-0">
                             <div className="flex items-center gap-1.5">
                               <span className="text-white font-medium truncate">{u.full_name || '—'}</span>
-                              {u.is_admin && <Shield className="h-3 w-3 text-violet-400 shrink-0" />}
+                              {u.is_superadmin && <ShieldCheck className="h-3 w-3 text-amber-400 shrink-0" />}
+                              {u.is_admin && !u.is_superadmin && <Shield className="h-3 w-3 text-violet-400 shrink-0" />}
                             </div>
                             <span className="text-slate-500 text-xs truncate block">{u.email}</span>
                           </div>
@@ -218,25 +232,22 @@ export default function AdminDashboard({
                       </td>
                       <td className="px-4 py-3">
                         <div className="flex items-center justify-end gap-2">
-                          {/* Can't demote yourself */}
+                          {/* Role selector — hidden for self */}
                           {u.id !== meId && (
-                            <button
-                              onClick={() => toggleAdmin(u)}
-                              disabled={togglingId === u.id}
-                              title={u.is_admin ? 'Revoke admin' : 'Make admin'}
-                              className={cn(
-                                'flex items-center justify-center w-7 h-7 rounded-md border transition-colors',
-                                u.is_admin
-                                  ? 'border-violet-500/40 text-violet-400 hover:bg-violet-500/10'
-                                  : 'border-white/10 text-slate-500 hover:text-violet-400 hover:border-violet-500/30',
-                              )}
-                            >
-                              {togglingId === u.id
-                                ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                                : u.is_admin
-                                  ? <ShieldOff className="h-3.5 w-3.5" />
-                                  : <Shield className="h-3.5 w-3.5" />}
-                            </button>
+                            togglingId === u.id
+                              ? <Loader2 className="h-3.5 w-3.5 animate-spin text-slate-500" />
+                              : (
+                                <select
+                                  value={currentRole(u)}
+                                  onChange={e => setRole(u, e.target.value as Role)}
+                                  disabled={!isSuperadmin && currentRole(u) === 'superadmin'}
+                                  className="text-xs rounded-md bg-white/[0.04] border border-white/[0.10] text-slate-300 px-2 py-1 focus:outline-none focus:border-indigo-500/50 disabled:opacity-40"
+                                >
+                                  <option value="user">User</option>
+                                  <option value="admin">Admin</option>
+                                  {isSuperadmin && <option value="superadmin">Superadmin</option>}
+                                </select>
+                              )
                           )}
                           <Link
                             href={`/admin/users/${u.id}`}

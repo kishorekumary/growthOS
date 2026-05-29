@@ -15,7 +15,7 @@ export default async function AdminPage() {
 
   const [
     { data: { users: authUsers } },
-    { data: profiles },
+    { data: profiles }, // includes is_superadmin
     { data: habits },
     { data: logs },
     { data: books },
@@ -25,7 +25,7 @@ export default async function AdminPage() {
     { data: globalHabits },
   ] = await Promise.all([
     adminClient.auth.admin.listUsers({ perPage: 1000 }),
-    adminClient.from('user_profiles').select('id, full_name, avatar_url, is_admin, created_at'),
+    adminClient.from('user_profiles').select('id, full_name, avatar_url, is_admin, is_superadmin, created_at'),
     adminClient.from('personality_habits').select('id, user_id, is_global, streak_count').eq('is_global', false),
     adminClient.from('habit_logs').select('user_id, status').gte('log_date', getWeekStart()),
     adminClient.from('reading_log').select('user_id, status'),
@@ -72,8 +72,9 @@ export default async function AdminPage() {
     if (!t.completed) openTodos[t.user_id] = (openTodos[t.user_id] ?? 0) + 1
   }
 
-  // Get current admin's own user id
+  // Get current admin's own user id + role
   const { data: { user: me } } = await supabase.auth.getUser()
+  const { data: meProfile } = await supabase.from('user_profiles').select('is_superadmin').eq('id', me?.id ?? '').single()
 
   const profileMap = Object.fromEntries((profiles ?? []).map(p => [p.id, p]))
 
@@ -83,6 +84,7 @@ export default async function AdminPage() {
     full_name:      profileMap[u.id]?.full_name ?? '',
     avatar_url:     profileMap[u.id]?.avatar_url ?? null,
     is_admin:       profileMap[u.id]?.is_admin ?? false,
+    is_superadmin:  profileMap[u.id]?.is_superadmin ?? false,
     joined:         u.created_at,
     habitCount:     habitCounts[u.id]  ?? 0,
     topStreak:      maxStreaks[u.id]   ?? 0,
@@ -100,6 +102,7 @@ export default async function AdminPage() {
       users={users}
       globalHabits={globalHabits ?? []}
       meId={me?.id ?? ''}
+      isSuperadmin={meProfile?.is_superadmin ?? false}
     />
   )
 }
