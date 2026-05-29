@@ -197,6 +197,18 @@ export default function FocusTimer() {
 
   useEffect(() => { fetchSeqs() }, [fetchSeqs])
 
+  // Move the completed sequence to the bottom of the list
+  useEffect(() => {
+    if (!done || !runSeq) return
+    setSequences(prev => {
+      const match = prev.find(s => s.id === runSeq.id)
+      if (!match) return prev
+      const next = [...prev.filter(s => s.id !== runSeq.id), match]
+      saveOrder(next)
+      return next
+    })
+  }, [done, runSeq])
+
   // Keyboard pause/resume: MediaPlayPause, Space, or P while timer is running
   useEffect(() => {
     if (!runSeq || done) return
