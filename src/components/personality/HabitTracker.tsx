@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import {
   Flame, Plus, Trash2, Check, Loader2, AlertCircle,
-  RefreshCw, RotateCcw, XCircle, Trophy, Pencil, Crown,
+  RefreshCw, RotateCcw, XCircle, Trophy, Pencil, Crown, Globe,
 } from 'lucide-react'
 import { createSupabaseBrowserClient } from '@/lib/supabase'
 import { Button } from '@/components/ui/button'
@@ -27,6 +27,7 @@ interface Habit {
   longest_streak: number
   last_done_at: string | null
   is_keystone: boolean
+  is_global: boolean
 }
 
 interface HabitLog {
@@ -354,8 +355,9 @@ export default function HabitTracker() {
     const [habitsRes, logsRes] = await Promise.all([
       supabase
         .from('personality_habits')
-        .select('id, habit_name, category, frequency, streak_count, longest_streak, last_done_at, is_keystone')
-        .eq('user_id', session.user.id)
+        .select('id, habit_name, category, frequency, streak_count, longest_streak, last_done_at, is_keystone, is_global')
+        .or(`user_id.eq.${session.user.id},is_global.eq.true`)
+        .order('is_global', { ascending: true })
         .order('created_at', { ascending: true }),
       supabase
         .from('habit_logs')
@@ -417,17 +419,19 @@ export default function HabitTracker() {
     ])
 
     const supabase = createSupabaseBrowserClient()
+    const logPromise = supabase.from('habit_logs').upsert(
+      { user_id: userId, habit_id: habit.id, log_date: today, status: 'done' },
+      { onConflict: 'habit_id,user_id,log_date' }
+    )
     const [, logsRes] = await Promise.all([
-      supabase.from('personality_habits').update({
+      // Global habits track no per-user streak on the habit row itself
+      habit.is_global ? Promise.resolve({ error: null }) : supabase.from('personality_habits').update({
         streak_count:   newStreak,
         longest_streak: Math.max(newStreak, habit.longest_streak),
         last_done_at:   now,
         updated_at:     now,
       }).eq('id', habit.id),
-      supabase.from('habit_logs').upsert(
-        { user_id: userId, habit_id: habit.id, log_date: today, status: 'done' },
-        { onConflict: 'habit_id,log_date' }
-      ),
+      logPromise,
     ])
 
     // If habit_logs table missing, mark as unavailable so fallback kicks in
@@ -449,7 +453,7 @@ export default function HabitTracker() {
     const supabase = createSupabaseBrowserClient()
     const { error } = await supabase.from('habit_logs').upsert(
       { user_id: userId, habit_id: habit.id, log_date: today, status: 'missed' },
-      { onConflict: 'habit_id,log_date' }
+      { onConflict: 'habit_id,user_id,log_date' }
     )
     if (error) setLogsUnavail(true)
     setMarkingId(null)
@@ -470,15 +474,18 @@ export default function HabitTracker() {
         ? { ...h, streak_count: newStreak, last_done_at: null }
         : h
       ))
-      await Promise.all([
-        supabase.from('habit_logs').delete().eq('habit_id', habit.id).eq('log_date', today),
-        supabase.from('personality_habits').update({
-          streak_count: newStreak, last_done_at: null, updated_at: new Date().toISOString(),
-        }).eq('id', habit.id),
-      ])
+      const deleteLog = supabase.from('habit_logs').delete()
+        .eq('habit_id', habit.id).eq('user_id', userId!).eq('log_date', today)
+      const updateHabit = habit.is_global
+        ? Promise.resolve()
+        : supabase.from('personality_habits').update({
+            streak_count: newStreak, last_done_at: null, updated_at: new Date().toISOString(),
+          }).eq('id', habit.id)
+      await Promise.all([deleteLog, updateHabit])
     } else {
       writeTodayMissed(readTodayMissed().filter(id => id !== habit.id))
-      await supabase.from('habit_logs').delete().eq('habit_id', habit.id).eq('log_date', today)
+      await supabase.from('habit_logs').delete()
+        .eq('habit_id', habit.id).eq('user_id', userId!).eq('log_date', today)
     }
 
     setMarkingId(null)
@@ -660,7 +667,8 @@ export default function HabitTracker() {
               {/* Info */}
               <div className="flex-1 min-w-0 space-y-0.5">
                 <div className="flex items-center gap-1.5">
-                  {habit.is_keystone && (
+                  {habit.is_global && <Globe className="h-3 w-3 shrink-0 text-emerald-400" title="Global habit" />}
+                  {habit.is_keystone && !habit.is_global && (
                     <Crown className="h-3.5 w-3.5 shrink-0 text-amber-400" />
                   )}
                   <p className={cn(
@@ -673,7 +681,12 @@ export default function HabitTracker() {
                   </p>
                 </div>
                 <div className="flex items-center gap-1.5 flex-wrap">
-                  {habit.is_keystone && (
+                  {habit.is_global && (
+                    <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-emerald-500/15 text-emerald-400 font-medium">
+                      Global
+                    </span>
+                  )}
+                  {habit.is_keystone && !habit.is_global && (
                     <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-amber-500/20 text-amber-300 font-medium tracking-wide uppercase">
                       Keystone
                     </span>
@@ -685,8 +698,8 @@ export default function HabitTracker() {
                 </div>
               </div>
 
-              {/* Streak */}
-              {habit.streak_count > 0 && (
+              {/* Streak — not shown for global (no per-user streak tracked on habit row) */}
+              {habit.streak_count > 0 && !habit.is_global && (
                 <div className="flex items-center gap-1 shrink-0">
                   <span className="text-orange-400">🔥</span>
                   <span className="text-sm font-semibold text-orange-300">
@@ -696,45 +709,51 @@ export default function HabitTracker() {
                 </div>
               )}
 
-              {/* Crown toggle */}
-              <button
-                onClick={() => canMarkKeystone && toggleKeystone(habit)}
-                disabled={!!keystoneId || !canMarkKeystone}
-                aria-label={habit.is_keystone ? 'Remove keystone' : 'Mark as keystone'}
-                title={
-                  habit.is_keystone ? 'Remove keystone'
-                  : canMarkKeystone ? 'Mark as keystone (2× score weight)'
-                  : 'Maximum 2 keystone habits'
-                }
-                className={cn(
-                  'shrink-0 transition-all opacity-0 group-hover:opacity-100',
-                  habit.is_keystone
-                    ? 'text-amber-400 opacity-100 hover:text-amber-300'
-                    : canMarkKeystone
-                      ? 'text-slate-600 hover:text-amber-400'
-                      : 'text-slate-800 cursor-not-allowed',
-                )}
-              >
-                {keystoneId === habit.id
-                  ? <Loader2 className="h-4 w-4 animate-spin" />
-                  : <Crown className="h-4 w-4" />}
-              </button>
+              {/* Crown toggle — hidden for global habits */}
+              {!habit.is_global && (
+                <button
+                  onClick={() => canMarkKeystone && toggleKeystone(habit)}
+                  disabled={!!keystoneId || !canMarkKeystone}
+                  aria-label={habit.is_keystone ? 'Remove keystone' : 'Mark as keystone'}
+                  title={
+                    habit.is_keystone ? 'Remove keystone'
+                    : canMarkKeystone ? 'Mark as keystone (2× score weight)'
+                    : 'Maximum 2 keystone habits'
+                  }
+                  className={cn(
+                    'shrink-0 transition-all opacity-0 group-hover:opacity-100',
+                    habit.is_keystone
+                      ? 'text-amber-400 opacity-100 hover:text-amber-300'
+                      : canMarkKeystone
+                        ? 'text-slate-600 hover:text-amber-400'
+                        : 'text-slate-800 cursor-not-allowed',
+                  )}
+                >
+                  {keystoneId === habit.id
+                    ? <Loader2 className="h-4 w-4 animate-spin" />
+                    : <Crown className="h-4 w-4" />}
+                </button>
+              )}
 
-              {/* Edit / Delete */}
-              <button
-                onClick={() => setEditTarget(habit)}
-                aria-label="Edit habit"
-                className="shrink-0 text-slate-700 opacity-0 group-hover:opacity-100 hover:text-violet-400 transition-all"
-              >
-                <Pencil className="h-4 w-4" />
-              </button>
-              <button
-                onClick={() => deleteHabit(habit.id)}
-                aria-label="Delete habit"
-                className="ml-1 shrink-0 text-slate-700 opacity-0 group-hover:opacity-100 hover:text-red-400 transition-all"
-              >
-                <Trash2 className="h-4 w-4" />
-              </button>
+              {/* Edit / Delete — hidden for global habits */}
+              {!habit.is_global && (
+                <>
+                  <button
+                    onClick={() => setEditTarget(habit)}
+                    aria-label="Edit habit"
+                    className="shrink-0 text-slate-700 opacity-0 group-hover:opacity-100 hover:text-violet-400 transition-all"
+                  >
+                    <Pencil className="h-4 w-4" />
+                  </button>
+                  <button
+                    onClick={() => deleteHabit(habit.id)}
+                    aria-label="Delete habit"
+                    className="ml-1 shrink-0 text-slate-700 opacity-0 group-hover:opacity-100 hover:text-red-400 transition-all"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </button>
+                </>
+              )}
             </div>
           )
         })}

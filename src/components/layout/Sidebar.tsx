@@ -5,7 +5,7 @@ import { usePathname, useRouter } from 'next/navigation'
 import {
   LayoutDashboard, Brain, Dumbbell, Wallet, BookOpen,
   Target, CheckSquare, Timer, Newspaper, CalendarCheck,
-  Flame, NotebookPen, Images, Settings, LogOut,
+  Flame, NotebookPen, Images, Settings, LogOut, ShieldCheck,
 } from 'lucide-react'
 import { createSupabaseBrowserClient } from '@/lib/supabase'
 import { cn } from '@/lib/utils'
@@ -31,9 +31,10 @@ interface SidebarProps {
   userName: string
   userEmail: string
   avatarUrl: string | null
+  isAdmin?: boolean
 }
 
-export default function Sidebar({ userName, userEmail, avatarUrl }: SidebarProps) {
+export default function Sidebar({ userName, userEmail, avatarUrl, isAdmin = false }: SidebarProps) {
   const pathname = usePathname()
   const router   = useRouter()
 
@@ -89,6 +90,23 @@ export default function Sidebar({ userName, userEmail, avatarUrl }: SidebarProps
 
       {/* Bottom */}
       <div className="border-t border-white/[0.06] p-3 space-y-0.5 shrink-0">
+        {isAdmin && (
+          <Link
+            href="/admin"
+            className={cn(
+              'group flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-all duration-150',
+              pathname === '/admin' || pathname.startsWith('/admin/')
+                ? 'bg-violet-500/[0.15] text-white'
+                : 'text-slate-500 hover:bg-white/[0.05] hover:text-slate-200',
+            )}
+          >
+            <ShieldCheck className={cn(
+              'h-4 w-4 shrink-0',
+              pathname.startsWith('/admin') ? 'text-violet-400' : 'text-slate-600 group-hover:text-violet-400',
+            )} />
+            Admin
+          </Link>
+        )}
         <Link
           href="/settings"
           className={cn(

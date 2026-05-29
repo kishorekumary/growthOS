@@ -19,7 +19,7 @@ export default async function MainLayout({ children }: { children: React.ReactNo
 
   const { data: profile } = await supabase
     .from('user_profiles')
-    .select('full_name, avatar_url')
+    .select('full_name, avatar_url, is_admin')
     .eq('id', user.id)
     .single()
 
@@ -30,6 +30,7 @@ export default async function MainLayout({ children }: { children: React.ReactNo
         userName={profile?.full_name ?? user.email ?? 'User'}
         userEmail={user.email ?? ''}
         avatarUrl={profile?.avatar_url ?? null}
+        isAdmin={profile?.is_admin ?? false}
       />
 
       {/* Mobile top bar */}
