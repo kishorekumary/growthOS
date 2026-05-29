@@ -667,7 +667,7 @@ export default function HabitTracker() {
               {/* Info */}
               <div className="flex-1 min-w-0 space-y-0.5">
                 <div className="flex items-center gap-1.5">
-                  {habit.is_global && <Globe className="h-3 w-3 shrink-0 text-emerald-400" title="Global habit" />}
+                  {habit.is_global && <Globe className="h-3 w-3 shrink-0 text-emerald-400" />}
                   {habit.is_keystone && !habit.is_global && (
                     <Crown className="h-3.5 w-3.5 shrink-0 text-amber-400" />
                   )}
