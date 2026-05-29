@@ -1,6 +1,7 @@
 import { createSupabaseAdminClient } from '@/lib/supabase-admin'
 import { createSupabaseServerClient } from '@/lib/supabase-server'
 import AdminDashboard from './AdminDashboard'
+import type { GlobalGalleryItem } from './AdminDashboard'
 
 function getWeekStart(): string {
   const d = new Date()
@@ -23,6 +24,7 @@ export default async function AdminPage() {
     { data: goals },
     { data: todos },
     { data: globalHabits },
+    { data: globalGallery },
   ] = await Promise.all([
     adminClient.auth.admin.listUsers({ perPage: 1000 }),
     adminClient.from('user_profiles').select('id, full_name, avatar_url, is_admin, is_superadmin, created_at'),
@@ -33,6 +35,7 @@ export default async function AdminPage() {
     adminClient.from('user_goals').select('user_id, status'),
     adminClient.from('user_todos').select('user_id, completed'),
     adminClient.from('personality_habits').select('id, habit_name, category, frequency, created_at').eq('is_global', true).order('created_at', { ascending: false }),
+    adminClient.from('user_gallery').select('id, url, caption, mime_type, storage_path, created_at').eq('is_global', true).order('created_at', { ascending: false }),
   ])
 
   // Build per-user stats maps
@@ -97,10 +100,20 @@ export default async function AdminPage() {
     openTodos:      openTodos[u.id]     ?? 0,
   }))
 
+  const galleryItems: GlobalGalleryItem[] = (globalGallery ?? []).map(r => ({
+    id:           r.id,
+    url:          r.url,
+    caption:      r.caption ?? null,
+    mime_type:    r.mime_type ?? null,
+    storage_path: r.storage_path,
+    created_at:   r.created_at,
+  }))
+
   return (
     <AdminDashboard
       users={users}
       globalHabits={globalHabits ?? []}
+      globalGallery={galleryItems}
       meId={me?.id ?? ''}
       isSuperadmin={meProfile?.is_superadmin ?? false}
     />

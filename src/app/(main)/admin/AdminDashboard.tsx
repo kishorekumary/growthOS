@@ -5,7 +5,7 @@ import Link from 'next/link'
 import {
   Users, Globe, Flame, BookOpen, Dumbbell, Target,
   CheckSquare, Plus, Trash2, Loader2, Shield, ShieldOff,
-  ChevronRight, Search, ShieldCheck,
+  ChevronRight, Search, ShieldCheck, Image, FileText, Music, Video, X,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
@@ -23,6 +23,11 @@ interface GlobalHabit {
   id: string; habit_name: string; category: string; frequency: string; created_at: string
 }
 
+export interface GlobalGalleryItem {
+  id: string; url: string; caption: string | null; mime_type: string | null
+  storage_path: string; created_at: string
+}
+
 const CATEGORY_COLOR: Record<string, string> = {
   mindset:      'text-violet-300 bg-violet-500/15',
   social:       'text-sky-300 bg-sky-500/15',
@@ -32,20 +37,24 @@ const CATEGORY_COLOR: Record<string, string> = {
 export default function AdminDashboard({
   users: initialUsers,
   globalHabits: initialGlobalHabits,
+  globalGallery: initialGlobalGallery,
   meId,
   isSuperadmin,
 }: {
   users: UserRow[]
   globalHabits: GlobalHabit[]
+  globalGallery: GlobalGalleryItem[]
   meId: string
   isSuperadmin: boolean
 }) {
-  const [tab, setTab]                 = useState<'users' | 'global'>('users')
+  const [tab, setTab]                 = useState<'users' | 'global' | 'gallery'>('users')
   const [search, setSearch]           = useState('')
   const [users, setUsers]             = useState(initialUsers)
   const [globalHabits, setGlobalHabits] = useState(initialGlobalHabits)
+  const [globalGallery, setGlobalGallery] = useState(initialGlobalGallery)
   const [togglingId, setTogglingId]   = useState<string | null>(null)
   const [deletingId, setDeletingId]   = useState<string | null>(null)
+  const [removingGalleryId, setRemovingGalleryId] = useState<string | null>(null)
   const [addingHabit, setAddingHabit] = useState(false)
   const [newHabit, setNewHabit]       = useState({ habit_name: '', category: 'mindset', frequency: 'daily' })
 
@@ -95,6 +104,27 @@ export default function AdminDashboard({
     setAddingHabit(false)
   }
 
+  async function removeFromGlobalGallery(id: string) {
+    setRemovingGalleryId(id)
+    await fetch(`/api/admin/global-gallery?id=${id}&global=false`, { method: 'PATCH' })
+    setGlobalGallery(prev => prev.filter(i => i.id !== id))
+    setRemovingGalleryId(null)
+  }
+
+  function galleryKind(item: GlobalGalleryItem) {
+    if (item.mime_type) {
+      if (item.mime_type.startsWith('image/'))  return 'image'
+      if (item.mime_type.startsWith('video/'))  return 'video'
+      if (item.mime_type.startsWith('audio/'))  return 'audio'
+      if (item.mime_type === 'application/pdf') return 'pdf'
+    }
+    const p = item.storage_path.toLowerCase()
+    if (/\.(mp4|webm|mov)$/.test(p))  return 'video'
+    if (/\.(mp3|wav|ogg|aac)$/.test(p)) return 'audio'
+    if (p.endsWith('.pdf'))             return 'pdf'
+    return 'image'
+  }
+
   const totalUsers   = users.length
   const adminCount   = users.filter(u => u.is_admin).length
   const totalGlobal  = globalHabits.length
@@ -109,12 +139,13 @@ export default function AdminDashboard({
       </div>
 
       {/* Stats row */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
         {[
-          { label: 'Total Users',     value: totalUsers,   icon: Users,  color: 'text-indigo-400' },
-          { label: 'Admins',          value: adminCount,   icon: Shield, color: 'text-violet-400' },
-          { label: 'Active This Week', value: activeThisWk, icon: Flame,  color: 'text-orange-400' },
-          { label: 'Global Habits',   value: totalGlobal,  icon: Globe,  color: 'text-emerald-400' },
+          { label: 'Total Users',      value: totalUsers,            icon: Users,  color: 'text-indigo-400' },
+          { label: 'Admins',           value: adminCount,            icon: Shield, color: 'text-violet-400' },
+          { label: 'Active This Week', value: activeThisWk,          icon: Flame,  color: 'text-orange-400' },
+          { label: 'Global Habits',    value: totalGlobal,           icon: Globe,  color: 'text-emerald-400' },
+          { label: 'Global Gallery',   value: globalGallery.length,  icon: Image,  color: 'text-sky-400' },
         ].map(({ label, value, icon: Icon, color }) => (
           <div key={label} className="rounded-xl border border-white/[0.06] bg-white/[0.03] p-4 flex items-center gap-3">
             <div className={cn('p-2 rounded-lg bg-white/[0.05]', color)}>
@@ -130,18 +161,22 @@ export default function AdminDashboard({
 
       {/* Tabs */}
       <div className="flex gap-1 border-b border-white/[0.06]">
-        {(['users', 'global'] as const).map(t => (
+        {([
+          { key: 'users',   label: `Users (${totalUsers})` },
+          { key: 'global',  label: `Global Habits (${totalGlobal})` },
+          { key: 'gallery', label: `Global Gallery (${globalGallery.length})` },
+        ] as const).map(({ key, label }) => (
           <button
-            key={t}
-            onClick={() => setTab(t)}
+            key={key}
+            onClick={() => setTab(key)}
             className={cn(
               'px-4 py-2 text-sm font-medium transition-colors border-b-2 -mb-px',
-              tab === t
+              tab === key
                 ? 'border-indigo-500 text-white'
                 : 'border-transparent text-slate-500 hover:text-slate-300',
             )}
           >
-            {t === 'users' ? `Users (${totalUsers})` : `Global Habits (${totalGlobal})`}
+            {label}
           </button>
         ))}
       </div>
@@ -268,6 +303,85 @@ export default function AdminDashboard({
               </tbody>
             </table>
           </div>
+        </div>
+      )}
+
+      {/* Global Gallery tab */}
+      {tab === 'gallery' && (
+        <div className="space-y-4">
+          <div className="flex items-start justify-between gap-4">
+            <p className="text-sm text-slate-400">
+              Files marked global appear in every user&apos;s gallery as read-only. Upload files from your{' '}
+              <a href="/gallery" className="text-sky-400 hover:text-sky-300 underline underline-offset-2">Gallery page</a>
+              {' '}and open them in the lightbox to toggle global status.
+            </p>
+          </div>
+
+          {globalGallery.length === 0 ? (
+            <div className="rounded-xl border border-white/[0.06] p-12 text-center">
+              <Globe className="h-10 w-10 text-slate-700 mx-auto mb-3" />
+              <p className="text-sm text-slate-500">No global gallery files yet.</p>
+              <p className="text-xs text-slate-600 mt-1">
+                Go to your Gallery, open any file, and click &ldquo;Make global&rdquo;.
+              </p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
+              {globalGallery.map(item => {
+                const kind = galleryKind(item)
+                return (
+                  <div
+                    key={item.id}
+                    className="group relative rounded-xl overflow-hidden border border-sky-500/30 bg-white/5"
+                  >
+                    {/* Thumbnail */}
+                    {kind === 'image' ? (
+                      /* eslint-disable-next-line @next/next/no-img-element */
+                      <img
+                        src={item.url}
+                        alt={item.caption ?? ''}
+                        className="w-full h-32 object-cover"
+                      />
+                    ) : (
+                      <div className="flex flex-col items-center justify-center h-32 gap-2">
+                        {kind === 'video'  && <Video    className="h-8 w-8 text-slate-500" />}
+                        {kind === 'audio'  && <Music    className="h-8 w-8 text-violet-400" />}
+                        {kind === 'pdf'    && <FileText className="h-8 w-8 text-red-400" />}
+                        <p className="text-[10px] text-slate-500 text-center px-2 line-clamp-2">
+                          {item.caption ?? item.storage_path.split('/').pop()}
+                        </p>
+                      </div>
+                    )}
+
+                    {/* Global badge */}
+                    <div className="absolute top-1.5 left-1.5 flex items-center gap-0.5 rounded-full bg-sky-500/20 border border-sky-500/40 px-1.5 py-0.5">
+                      <Globe className="h-2.5 w-2.5 text-sky-400" />
+                      <span className="text-[9px] font-medium text-sky-400">Global</span>
+                    </div>
+
+                    {/* Remove button */}
+                    <button
+                      onClick={() => removeFromGlobalGallery(item.id)}
+                      disabled={removingGalleryId === item.id}
+                      title="Remove from global gallery"
+                      className="absolute top-1.5 right-1.5 flex h-6 w-6 items-center justify-center rounded-full bg-black/60 text-slate-400 opacity-0 group-hover:opacity-100 hover:text-red-400 hover:bg-black/80 transition-all"
+                    >
+                      {removingGalleryId === item.id
+                        ? <Loader2 className="h-3 w-3 animate-spin" />
+                        : <X className="h-3 w-3" />}
+                    </button>
+
+                    {/* Caption footer */}
+                    {item.caption && (
+                      <div className="px-2 py-1.5 border-t border-white/5">
+                        <p className="text-[10px] text-slate-400 line-clamp-1">{item.caption}</p>
+                      </div>
+                    )}
+                  </div>
+                )
+              })}
+            </div>
+          )}
         </div>
       )}
 
