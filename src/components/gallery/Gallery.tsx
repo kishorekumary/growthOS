@@ -4,7 +4,7 @@ import { useState, useRef, useEffect, useCallback } from 'react'
 import {
   Upload, X, Trash2, ZoomIn, ChevronLeft, ChevronRight,
   Loader2, Pencil, Check, Plus, Tag,
-  FileText, ExternalLink, FolderOpen, Music, Video,
+  FileText, ExternalLink, FolderOpen, Music, Video, Globe,
 } from 'lucide-react'
 import { createSupabaseBrowserClient } from '@/lib/supabase'
 import { cn } from '@/lib/utils'
@@ -12,12 +12,14 @@ import { format } from 'date-fns'
 
 export interface GalleryItem {
   id: string
+  user_id: string
   storage_path: string
   url: string
   caption: string | null
   tags: string[] | null
   mime_type: string | null
   file_size: number
+  is_global: boolean
   created_at: string
 }
 
@@ -48,7 +50,7 @@ function fileKind(item: GalleryItem): FileKind {
   return 'image'
 }
 
-export default function Gallery({ initialItems, userId }: { initialItems: GalleryItem[]; userId: string }) {
+export default function Gallery({ initialItems, userId, isAdmin = false }: { initialItems: GalleryItem[]; userId: string; isAdmin?: boolean }) {
   const [items, setItems]           = useState<GalleryItem[]>(initialItems)
   const [uploading, setUploading]   = useState(false)
   const [uploadNames, setUploadNames] = useState<string[]>([])
@@ -56,6 +58,7 @@ export default function Gallery({ initialItems, userId }: { initialItems: Galler
   const [filterTag, setFilterTag]   = useState<string | null>(null)
   const [error, setError]           = useState<string | null>(null)
   const [dragging, setDragging]     = useState(false)
+  const [togglingGlobalId, setTogglingGlobalId] = useState<string | null>(null)
 
   const [editCaptionId, setEditCaptionId] = useState<string | null>(null)
   const [captionDraft, setCaptionDraft]   = useState('')
@@ -201,6 +204,17 @@ export default function Gallery({ initialItems, userId }: { initialItems: Galler
     setItems(prev => prev.map(i => i.id === id ? { ...i, tags: newTags } : i))
   }
 
+  async function toggleGlobal(item: GalleryItem) {
+    if (togglingGlobalId) return
+    setTogglingGlobalId(item.id)
+    const next = !item.is_global
+    const res = await fetch(`/api/admin/global-gallery?id=${item.id}&global=${next}`, { method: 'PATCH' })
+    if (res.ok) {
+      setItems(prev => prev.map(i => i.id === item.id ? { ...i, is_global: next } : i))
+    }
+    setTogglingGlobalId(null)
+  }
+
   const lightboxItem = lightbox !== null ? filtered[lightbox] : null
 
   return (
@@ -211,7 +225,11 @@ export default function Gallery({ initialItems, userId }: { initialItems: Galler
         <div>
           <h1 className="text-xl font-bold text-white">Gallery</h1>
           <p className="text-sm text-slate-500 mt-0.5">
-            {items.length} file{items.length !== 1 ? 's' : ''} · {(items.reduce((s, i) => s + i.file_size, 0) / (1024 * 1024)).toFixed(1)} / {Math.round(MAX_UPLOAD_BYTES / (1024 * 1024))} MB · drag-drop, click, or ⌘V to paste
+            {items.filter(i => !i.is_global).length} file{items.filter(i => !i.is_global).length !== 1 ? 's' : ''}
+            {items.some(i => i.is_global) && (
+              <span> · <Globe className="inline h-3 w-3 text-sky-400 mb-0.5" /> {items.filter(i => i.is_global).length} global</span>
+            )}
+            {' '}· {(items.filter(i => !i.is_global).reduce((s, i) => s + i.file_size, 0) / (1024 * 1024)).toFixed(1)} / {Math.round(MAX_UPLOAD_BYTES / (1024 * 1024))} MB · drag-drop, click, or ⌘V to paste
           </p>
         </div>
         <button
@@ -315,7 +333,10 @@ export default function Gallery({ initialItems, userId }: { initialItems: Galler
             return (
               <div
                 key={item.id}
-                className="group relative mb-3 break-inside-avoid rounded-xl overflow-hidden border border-white/10 bg-white/5"
+                className={cn(
+                  'group relative mb-3 break-inside-avoid rounded-xl overflow-hidden border bg-white/5',
+                  item.is_global ? 'border-sky-500/30' : 'border-white/10',
+                )}
               >
                 <button
                   onClick={() => setLightbox(idx)}
@@ -366,6 +387,14 @@ export default function Gallery({ initialItems, userId }: { initialItems: Galler
                 {/* Hover tint */}
                 <div className="absolute inset-0 bg-black/0 group-hover:bg-black/25 transition-all pointer-events-none rounded-xl" />
 
+                {/* Global badge — top-left */}
+                {item.is_global && (
+                  <div className="absolute top-2 left-2 z-10 flex h-6 items-center gap-1 rounded-full bg-sky-500/20 border border-sky-500/40 px-2">
+                    <Globe className="h-3 w-3 text-sky-400" />
+                    <span className="text-[10px] font-medium text-sky-400">Global</span>
+                  </div>
+                )}
+
                 {/* Top-right actions */}
                 <div className="absolute top-2 right-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                   <button
@@ -375,13 +404,15 @@ export default function Gallery({ initialItems, userId }: { initialItems: Galler
                   >
                     <ZoomIn className="h-3.5 w-3.5" />
                   </button>
-                  <button
-                    onClick={() => deleteItem(item)}
-                    className="flex h-7 w-7 items-center justify-center rounded-lg bg-red-600/70 backdrop-blur-sm text-white hover:bg-red-600/90 transition-colors"
-                    title="Delete"
-                  >
-                    <Trash2 className="h-3.5 w-3.5" />
-                  </button>
+                  {item.user_id === userId && (
+                    <button
+                      onClick={() => deleteItem(item)}
+                      className="flex h-7 w-7 items-center justify-center rounded-lg bg-red-600/70 backdrop-blur-sm text-white hover:bg-red-600/90 transition-colors"
+                      title="Delete"
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </button>
+                  )}
                 </div>
 
                 {/* Caption / tags footer — images show both; non-image media shows tags only */}
@@ -485,37 +516,41 @@ export default function Gallery({ initialItems, userId }: { initialItems: Galler
             {/* Metadata panel */}
             <div className="w-full max-w-xl space-y-3 px-2">
               {/* Caption */}
-              {editCaptionId === lightboxItem.id ? (
-                <div className="flex items-center gap-2">
-                  <input
-                    autoFocus
-                    value={captionDraft}
-                    onChange={e => setCaptionDraft(e.target.value)}
-                    onKeyDown={e => {
-                      if (e.key === 'Enter') saveCaption(lightboxItem.id)
-                      if (e.key === 'Escape') setEditCaptionId(null)
-                    }}
-                    placeholder="Add a caption…"
-                    className="flex-1 rounded-lg border border-white/15 bg-white/5 px-3 py-1.5 text-sm text-white placeholder:text-slate-600 focus:outline-none focus:border-violet-500"
-                  />
-                  <button onClick={() => saveCaption(lightboxItem.id)} className="text-emerald-400 hover:text-emerald-300 transition-colors">
-                    <Check className="h-4 w-4" />
+              {lightboxItem.user_id === userId ? (
+                editCaptionId === lightboxItem.id ? (
+                  <div className="flex items-center gap-2">
+                    <input
+                      autoFocus
+                      value={captionDraft}
+                      onChange={e => setCaptionDraft(e.target.value)}
+                      onKeyDown={e => {
+                        if (e.key === 'Enter') saveCaption(lightboxItem.id)
+                        if (e.key === 'Escape') setEditCaptionId(null)
+                      }}
+                      placeholder="Add a caption…"
+                      className="flex-1 rounded-lg border border-white/15 bg-white/5 px-3 py-1.5 text-sm text-white placeholder:text-slate-600 focus:outline-none focus:border-violet-500"
+                    />
+                    <button onClick={() => saveCaption(lightboxItem.id)} className="text-emerald-400 hover:text-emerald-300 transition-colors">
+                      <Check className="h-4 w-4" />
+                    </button>
+                    <button onClick={() => setEditCaptionId(null)} className="text-slate-500 hover:text-white transition-colors">
+                      <X className="h-4 w-4" />
+                    </button>
+                  </div>
+                ) : (
+                  <button
+                    onClick={() => { setEditCaptionId(lightboxItem.id); setCaptionDraft(lightboxItem.caption ?? '') }}
+                    className="flex items-center gap-2 text-sm text-slate-300 hover:text-white transition-colors group w-full text-left"
+                  >
+                    <Pencil className="h-3.5 w-3.5 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity" />
+                    {lightboxItem.caption
+                      ? <span>{lightboxItem.caption}</span>
+                      : <span className="text-slate-600 italic">Add a caption…</span>}
                   </button>
-                  <button onClick={() => setEditCaptionId(null)} className="text-slate-500 hover:text-white transition-colors">
-                    <X className="h-4 w-4" />
-                  </button>
-                </div>
-              ) : (
-                <button
-                  onClick={() => { setEditCaptionId(lightboxItem.id); setCaptionDraft(lightboxItem.caption ?? '') }}
-                  className="flex items-center gap-2 text-sm text-slate-300 hover:text-white transition-colors group w-full text-left"
-                >
-                  <Pencil className="h-3.5 w-3.5 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity" />
-                  {lightboxItem.caption
-                    ? <span>{lightboxItem.caption}</span>
-                    : <span className="text-slate-600 italic">Add a caption…</span>}
-                </button>
-              )}
+                )
+              ) : lightboxItem.caption ? (
+                <p className="text-sm text-slate-300">{lightboxItem.caption}</p>
+              ) : null}
 
               {/* Tags */}
               <div className="flex flex-wrap items-center gap-2">
@@ -523,41 +558,45 @@ export default function Gallery({ initialItems, userId }: { initialItems: Galler
                 {(lightboxItem.tags ?? []).map(tag => (
                   <span key={tag} className="flex items-center gap-1 text-[11px] rounded-full bg-violet-500/15 border border-violet-500/25 text-violet-400 px-2 py-0.5">
                     #{tag}
-                    <button
-                      onClick={() => removeTag(lightboxItem.id, tag)}
-                      className="hover:text-red-400 transition-colors ml-0.5"
-                    >
-                      <X className="h-3 w-3" />
-                    </button>
+                    {lightboxItem.user_id === userId && (
+                      <button
+                        onClick={() => removeTag(lightboxItem.id, tag)}
+                        className="hover:text-red-400 transition-colors ml-0.5"
+                      >
+                        <X className="h-3 w-3" />
+                      </button>
+                    )}
                   </span>
                 ))}
-                {addTagId === lightboxItem.id ? (
-                  <div className="flex items-center gap-1">
-                    <input
-                      autoFocus
-                      value={tagDraft}
-                      onChange={e => setTagDraft(e.target.value)}
-                      onKeyDown={e => {
-                        if (e.key === 'Enter') addTag(lightboxItem.id)
-                        if (e.key === 'Escape') setAddTagId(null)
-                      }}
-                      placeholder="tag"
-                      className="w-24 rounded-full border border-violet-500/30 bg-white/5 px-2.5 py-0.5 text-[11px] text-white focus:outline-none focus:border-violet-400"
-                    />
-                    <button onClick={() => addTag(lightboxItem.id)} className="text-emerald-400 hover:text-emerald-300 transition-colors">
-                      <Check className="h-3.5 w-3.5" />
+                {lightboxItem.user_id === userId && (
+                  addTagId === lightboxItem.id ? (
+                    <div className="flex items-center gap-1">
+                      <input
+                        autoFocus
+                        value={tagDraft}
+                        onChange={e => setTagDraft(e.target.value)}
+                        onKeyDown={e => {
+                          if (e.key === 'Enter') addTag(lightboxItem.id)
+                          if (e.key === 'Escape') setAddTagId(null)
+                        }}
+                        placeholder="tag"
+                        className="w-24 rounded-full border border-violet-500/30 bg-white/5 px-2.5 py-0.5 text-[11px] text-white focus:outline-none focus:border-violet-400"
+                      />
+                      <button onClick={() => addTag(lightboxItem.id)} className="text-emerald-400 hover:text-emerald-300 transition-colors">
+                        <Check className="h-3.5 w-3.5" />
+                      </button>
+                      <button onClick={() => setAddTagId(null)} className="text-slate-600 hover:text-white transition-colors">
+                        <X className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
+                  ) : (
+                    <button
+                      onClick={() => { setAddTagId(lightboxItem.id); setTagDraft('') }}
+                      className="flex items-center gap-1 text-[11px] rounded-full border border-dashed border-white/20 text-slate-500 hover:text-white hover:border-white/40 px-2.5 py-0.5 transition-colors"
+                    >
+                      <Plus className="h-3 w-3" /> add tag
                     </button>
-                    <button onClick={() => setAddTagId(null)} className="text-slate-600 hover:text-white transition-colors">
-                      <X className="h-3.5 w-3.5" />
-                    </button>
-                  </div>
-                ) : (
-                  <button
-                    onClick={() => { setAddTagId(lightboxItem.id); setTagDraft('') }}
-                    className="flex items-center gap-1 text-[11px] rounded-full border border-dashed border-white/20 text-slate-500 hover:text-white hover:border-white/40 px-2.5 py-0.5 transition-colors"
-                  >
-                    <Plus className="h-3 w-3" /> add tag
-                  </button>
+                  )
                 )}
               </div>
 
@@ -569,12 +608,35 @@ export default function Gallery({ initialItems, userId }: { initialItems: Galler
                     <span className="ml-2 tabular-nums">{(lightbox ?? 0) + 1} / {filtered.length}</span>
                   )}
                 </p>
-                <button
-                  onClick={() => deleteItem(lightboxItem)}
-                  className="flex items-center gap-1.5 text-[11px] text-slate-600 hover:text-red-400 transition-colors"
-                >
-                  <Trash2 className="h-3.5 w-3.5" /> Delete
-                </button>
+                <div className="flex items-center gap-3">
+                  {/* Admin: globe toggle */}
+                  {isAdmin && lightboxItem.user_id === userId && (
+                    <button
+                      onClick={() => toggleGlobal(lightboxItem)}
+                      disabled={!!togglingGlobalId}
+                      title={lightboxItem.is_global ? 'Remove from global gallery' : 'Share to global gallery'}
+                      className={cn(
+                        'flex items-center gap-1.5 text-[11px] transition-colors',
+                        lightboxItem.is_global
+                          ? 'text-sky-400 hover:text-sky-300'
+                          : 'text-slate-600 hover:text-sky-400',
+                      )}
+                    >
+                      {togglingGlobalId === lightboxItem.id
+                        ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                        : <Globe className="h-3.5 w-3.5" />}
+                      {lightboxItem.is_global ? 'Global' : 'Make global'}
+                    </button>
+                  )}
+                  {lightboxItem.user_id === userId && (
+                    <button
+                      onClick={() => deleteItem(lightboxItem)}
+                      className="flex items-center gap-1.5 text-[11px] text-slate-600 hover:text-red-400 transition-colors"
+                    >
+                      <Trash2 className="h-3.5 w-3.5" /> Delete
+                    </button>
+                  )}
+                </div>
               </div>
             </div>
           </div>

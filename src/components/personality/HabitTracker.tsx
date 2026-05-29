@@ -281,19 +281,24 @@ function EditHabitModal({ habit, onClose, onSave }: {
 // ─── Weekly Score Card ────────────────────────────────────────
 
 function WeeklyScoreCard({
-  done, missed, weightedDone, weightedTotal,
+  done, missed, weightedDone, weightedTotal, avgCompletedStreak,
 }: {
-  done: number; missed: number; weightedDone: number; weightedTotal: number
+  done: number; missed: number; weightedDone: number; weightedTotal: number; avgCompletedStreak: number
 }) {
   const total = done + missed
   if (total === 0) return null
 
-  const score = weightedTotal > 0 ? Math.round((weightedDone / weightedTotal) * 100) : 0
+  // Base: weighted completion (0–80). Streak bonus: up to +20 for avg streak ≥ 10.
+  const baseScore   = weightedTotal > 0 ? Math.round((weightedDone / weightedTotal) * 80) : 0
+  const streakBonus = Math.min(20, Math.round(avgCompletedStreak * 2))
+  const score       = Math.min(100, baseScore + streakBonus)
+
   const { label, color, bar } =
-    score >= 80 ? { label: 'Excellent week! 🎯', color: 'text-emerald-400', bar: 'bg-emerald-500' } :
-    score >= 60 ? { label: 'Good progress 💪',   color: 'text-sky-400',     bar: 'bg-sky-500'     } :
-    score >= 40 ? { label: 'Keep going 📈',       color: 'text-amber-400',   bar: 'bg-amber-500'   } :
-                  { label: 'Room to grow 🌱',      color: 'text-slate-400',   bar: 'bg-slate-500'   }
+    score >= 90 ? { label: 'On fire! 🔥',         color: 'text-emerald-400', bar: 'bg-emerald-500' } :
+    score >= 80 ? { label: 'Excellent week! 🎯',   color: 'text-emerald-400', bar: 'bg-emerald-500' } :
+    score >= 60 ? { label: 'Good progress 💪',     color: 'text-sky-400',     bar: 'bg-sky-500'     } :
+    score >= 40 ? { label: 'Keep going 📈',         color: 'text-amber-400',   bar: 'bg-amber-500'   } :
+                  { label: 'Room to grow 🌱',        color: 'text-slate-400',   bar: 'bg-slate-500'   }
 
   return (
     <div className="rounded-xl border border-white/8 bg-white/3 p-4 space-y-3">
@@ -305,6 +310,9 @@ function WeeklyScoreCard({
           </div>
           <p className={cn('text-3xl font-bold mt-0.5', color)}>{score}%</p>
           <p className="text-xs text-slate-500 mt-0.5">{label}</p>
+          {streakBonus > 0 && (
+            <p className="text-xs text-amber-400/70 mt-0.5">+{streakBonus} streak bonus</p>
+          )}
         </div>
         <div className="text-right space-y-1">
           <p className="text-xs text-slate-500">
@@ -550,6 +558,13 @@ export default function HabitTracker() {
   const weightedTotal = weekLogs.reduce((s, l) => s + habitWeight(l.habit_id), 0)
   const topStreak  = habits.reduce((m, h) => Math.max(m, h.streak_count), 0)
 
+  // Average streak of habits completed at least once this week (for streak bonus)
+  const completedHabitIds = new Set(weekLogs.filter(l => l.status === 'done').map(l => l.habit_id))
+  const completedHabits   = habits.filter(h => completedHabitIds.has(h.id))
+  const avgCompletedStreak = completedHabits.length
+    ? completedHabits.reduce((s, h) => s + (h.streak_count ?? 0), 0) / completedHabits.length
+    : 0
+
   return (
     <div className="space-y-4">
       {/* Edit modal (controlled) */}
@@ -576,7 +591,7 @@ export default function HabitTracker() {
       </div>
 
       {/* Weekly score */}
-      <WeeklyScoreCard done={weekDone} missed={weekMissed} weightedDone={weightedDone} weightedTotal={weightedTotal} />
+      <WeeklyScoreCard done={weekDone} missed={weekMissed} weightedDone={weightedDone} weightedTotal={weightedTotal} avgCompletedStreak={avgCompletedStreak} />
 
       {/* Empty state */}
       {habits.length === 0 && (

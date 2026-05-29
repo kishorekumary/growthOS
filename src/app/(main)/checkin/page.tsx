@@ -37,7 +37,7 @@ export default async function CheckinPage() {
     supabase.from('user_habits').select('streak_count,longest_streak').eq('user_id', uid),
     supabase.from('focus_sessions').select('id').eq('user_id', uid).gte('created_at', weekStart).limit(20),
     supabase.from('workout_logs').select('workout_date').eq('user_id', uid).gte('workout_date', weekStart),
-    supabase.from('reading_log').select('status').eq('user_id', uid),
+    supabase.from('reading_log').select('status,finished_at').eq('user_id', uid),
     supabase.from('user_goals').select('is_completed').eq('user_id', uid),
     supabase.from('mood_checkins').select('mood,energy').eq('user_id', uid).gte('checked_at', twoWeekAgo),
     supabase.from('sleep_logs').select('bedtime,wake_time,quality').eq('user_id', uid).gte('sleep_date', twoWeekAgo),
@@ -57,9 +57,13 @@ export default async function CheckinPage() {
   const focusCount = focusSessions?.length ?? 0
   const focusScore = clamp(focusCount >= 5 ? 10 : focusCount * 1.8 + 1, 10)
 
-  // Knowledge: books in reading/completed
-  const activeBooks = (books ?? []).filter(b => b.status !== 'want_to_read').length
-  const knowledgeScore = clamp(activeBooks >= 4 ? 10 : activeBooks * 2 + 2, 10)
+  // Knowledge: recency-weighted — completed in last 90 days (2 pts each, max 6) + currently reading (2 pts each, max 4)
+  const ninetyDaysAgo = subDays(new Date(), 90)
+  const recentlyCompleted = (books ?? []).filter(b =>
+    b.status === 'completed' && b.finished_at && new Date(b.finished_at) >= ninetyDaysAgo
+  ).length
+  const currentlyReading = (books ?? []).filter(b => b.status === 'reading').length
+  const knowledgeScore = clamp(Math.min(6, recentlyCompleted * 2) + Math.min(4, currentlyReading * 2), 10)
 
   // Habits: average streak relative to longest
   const habitList = habits ?? []
