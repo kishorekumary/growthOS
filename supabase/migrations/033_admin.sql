@@ -9,11 +9,25 @@ ALTER TABLE public.personality_habits
   ADD COLUMN IF NOT EXISTS is_global BOOLEAN NOT NULL DEFAULT false;
 
 -- 3. Fix habit_logs unique constraint so multiple users can log the same global habit
-ALTER TABLE public.habit_logs
-  DROP CONSTRAINT IF EXISTS habit_logs_habit_id_log_date_key;
-ALTER TABLE public.habit_logs
-  ADD CONSTRAINT habit_logs_habit_id_user_id_log_date_key
-  UNIQUE (habit_id, user_id, log_date);
+--    Wrapped in a DO block so it's a no-op if the table hasn't been created yet.
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'habit_logs') THEN
+    ALTER TABLE public.habit_logs
+      DROP CONSTRAINT IF EXISTS habit_logs_habit_id_log_date_key;
+
+    IF NOT EXISTS (
+      SELECT 1 FROM information_schema.table_constraints
+      WHERE table_schema = 'public'
+        AND table_name   = 'habit_logs'
+        AND constraint_name = 'habit_logs_habit_id_user_id_log_date_key'
+    ) THEN
+      ALTER TABLE public.habit_logs
+        ADD CONSTRAINT habit_logs_habit_id_user_id_log_date_key
+        UNIQUE (habit_id, user_id, log_date);
+    END IF;
+  END IF;
+END $$;
 
 -- 4. Admin check function (used in RLS policies below)
 CREATE OR REPLACE FUNCTION public.is_admin()
