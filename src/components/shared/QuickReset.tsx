@@ -13,7 +13,7 @@ type Mode = 'menu' | 'breathing' | 'affirmations' | 'ai' | 'goals' | 'tasks' | '
 const PHASES = [
   { label: 'Inhale',  duration: 4000, expand: true  },
   { label: 'Hold',    duration: 4000, expand: true  },
-  { label: 'Exhale',  duration: 4000, expand: false },
+  { label: 'Exhale',  duration: 6000, expand: false },
   { label: 'Hold',    duration: 4000, expand: false },
 ] as const
 
@@ -71,7 +71,7 @@ function BreathingExercise() {
       <div className="flex flex-col items-center gap-6 py-6">
         <div className="text-center space-y-1.5">
           <p className="text-white font-semibold">Box Breathing</p>
-          <p className="text-slate-400 text-sm">Inhale · Hold · Exhale · Hold — 4 seconds each</p>
+          <p className="text-slate-400 text-sm">Inhale 4s · Hold 4s · Exhale 6s · Hold 4s</p>
         </div>
 
         <div className="relative flex items-center justify-center w-44 h-44">
@@ -100,13 +100,13 @@ function BreathingExercise() {
           expanded
             ? 'w-44 h-44 border-blue-400/50 bg-blue-500/10'
             : 'w-20 h-20 border-blue-400/20 bg-blue-500/5',
-          phase === 0 || phase === 2 ? 'duration-[4000ms]' : 'duration-150',
+          phase === 0 ? 'duration-[4000ms]' : phase === 2 ? 'duration-[6000ms]' : 'duration-150',
         )} />
         {/* inner circle */}
         <div className={cn(
           'absolute rounded-full transition-all ease-in-out',
           expanded ? 'w-28 h-28 bg-blue-500/25' : 'w-10 h-10 bg-blue-500/15',
-          phase === 0 || phase === 2 ? 'duration-[4000ms]' : 'duration-150',
+          phase === 0 ? 'duration-[4000ms]' : phase === 2 ? 'duration-[6000ms]' : 'duration-150',
         )} />
         <p className="relative z-10 text-blue-200 text-sm font-medium">{current.label}</p>
       </div>
