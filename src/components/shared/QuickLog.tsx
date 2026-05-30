@@ -5,12 +5,13 @@ import { useRouter } from 'next/navigation'
 import {
   Plus, X, Utensils, Dumbbell, CheckSquare, CreditCard, BookOpen,
   Loader2, Check, Camera, Image as ImageIcon, Zap, Sparkles, AlertCircle, CheckCircle2,
+  Mic, MicOff, RefreshCw,
 } from 'lucide-react'
 import { createSupabaseBrowserClient } from '@/lib/supabase'
 import { cn } from '@/lib/utils'
 import RichTextEditor from './RichTextEditor'
 
-type Panel = 'meal' | 'workout' | 'habit' | 'finance' | 'journal'
+type Panel = 'voice' | 'meal' | 'workout' | 'habit' | 'finance' | 'journal'
 type MealType    = 'breakfast' | 'lunch' | 'dinner' | 'snack'
 type WorkoutType = 'cardio' | 'strength' | 'yoga' | 'sports' | 'rest'
 type TxnType     = 'expense' | 'income' | 'savings'
@@ -735,12 +736,367 @@ function JournalPanel({ onDone }: { onDone: () => void }) {
   )
 }
 
+// ─── Voice Panel ─────────────────────────────────────────────────
+
+type VoiceState = 'idle' | 'listening' | 'parsing' | 'confirm' | 'saving' | 'done' | 'error' | 'unsupported'
+
+type VoiceResult =
+  | { type: 'transaction'; txn_type: 'expense' | 'income' | 'savings'; amount: number; category: string; description: string; summary: string }
+  | { type: 'workout';     workout_type: string; duration_mins: number | null; notes: string; summary: string }
+  | { type: 'meal';        meal_type: string; food_name: string; summary: string }
+  | { type: 'habit';       habit_name: string; summary: string }
+  | { type: 'unknown';     summary: string }
+
+const INTENT_META: Record<string, { label: string; color: string; bg: string }> = {
+  transaction: { label: 'Finance',  color: 'text-violet-300', bg: 'border-violet-500/30 bg-violet-500/10' },
+  workout:     { label: 'Workout',  color: 'text-sky-300',    bg: 'border-sky-500/30 bg-sky-500/10'       },
+  meal:        { label: 'Meal',     color: 'text-amber-300',  bg: 'border-amber-500/30 bg-amber-500/10'   },
+  habit:       { label: 'Habit',    color: 'text-emerald-300',bg: 'border-emerald-500/30 bg-emerald-500/10'},
+  unknown:     { label: 'Unknown',  color: 'text-slate-400',  bg: 'border-white/10 bg-white/5'            },
+}
+
+function VoicePanel({ onDone }: { onDone: () => void }) {
+  const [state, setState]         = useState<VoiceState>('idle')
+  const [transcript, setTranscript] = useState('')
+  const [interim, setInterim]     = useState('')
+  const [result, setResult]       = useState<VoiceResult | null>(null)
+  const [errorMsg, setErrorMsg]   = useState('')
+  const [matchedHabit, setMatchedHabit] = useState<Habit | null>(null)
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const recognitionRef = useRef<any>(null)
+
+  function getSR() {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const w = window as any
+    return w.SpeechRecognition ?? w.webkitSpeechRecognition ?? null
+  }
+
+  // Check browser support on mount
+  useEffect(() => { if (!getSR()) setState('unsupported') }, [])
+
+  function startListening() {
+    const SR = getSR()
+    if (!SR) { setState('unsupported'); return }
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const r: any = new SR()
+    r.continuous     = false
+    r.interimResults = true
+    r.lang           = 'en-IN'
+    recognitionRef.current = r
+
+    r.onstart  = () => setState('listening')
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    r.onerror  = (e: any) => {
+      if (e.error === 'aborted') return
+      setErrorMsg(e.error === 'not-allowed' ? 'Microphone access denied.' : `Error: ${e.error}`)
+      setState('error')
+    }
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    r.onresult = (e: any) => {
+      let final = ''; let inter = ''
+      for (let i = e.resultIndex; i < e.results.length; i++) {
+        const t = e.results[i][0].transcript
+        if (e.results[i].isFinal) final += t
+        else inter += t
+      }
+      if (final) setTranscript(p => (p + ' ' + final).trim())
+      setInterim(inter)
+    }
+    r.onend = () => {
+      setInterim('')
+      setTranscript(p => p.trim())
+      setState(prev => prev === 'listening' ? 'parsing' : prev)
+    }
+
+    setTranscript('')
+    setInterim('')
+    setResult(null)
+    r.start()
+  }
+
+  function stopListening() {
+    recognitionRef.current?.stop()
+  }
+
+  // Trigger parse when state becomes 'parsing'
+  useEffect(() => {
+    if (state !== 'parsing') return
+    if (!transcript.trim()) { setState('idle'); return }
+    parseTranscript(transcript)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [state])
+
+  async function parseTranscript(text: string) {
+    try {
+      const res  = await fetch('/api/ai/voice-log', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ transcript: text }),
+      })
+      const data: VoiceResult = await res.json()
+      if (!res.ok) throw new Error((data as unknown as { error: string }).error ?? 'Parse failed')
+
+      // For habit intents, try to match to a real habit
+      if (data.type === 'habit') {
+        const supabase = createSupabaseBrowserClient()
+        const { data: { session } } = await supabase.auth.getSession()
+        if (session?.user) {
+          const { data: habits } = await supabase
+            .from('personality_habits')
+            .select('id, habit_name, category, streak_count, longest_streak, last_done_at, frequency, is_keystone')
+            .eq('user_id', session.user.id)
+          const needle = data.habit_name.toLowerCase()
+          const match = (habits as Habit[] ?? []).find(h =>
+            h.habit_name.toLowerCase().includes(needle) ||
+            needle.includes(h.habit_name.toLowerCase())
+          )
+          setMatchedHabit(match ?? null)
+        }
+      }
+
+      setResult(data)
+      setState('confirm')
+    } catch (e) {
+      setErrorMsg(e instanceof Error ? e.message : 'Failed to parse command')
+      setState('error')
+    }
+  }
+
+  async function confirmLog() {
+    if (!result) return
+    setState('saving')
+    const supabase = createSupabaseBrowserClient()
+    const { data: { session } } = await supabase.auth.getSession()
+    if (!session?.user) { setState('error'); setErrorMsg('Not signed in'); return }
+    const uid   = session.user.id
+    const today = todayStr()
+
+    try {
+      if (result.type === 'transaction') {
+        await supabase.from('transactions').insert({
+          user_id:     uid,
+          txn_date:    today,
+          type:        result.txn_type,
+          category:    result.category,
+          amount:      result.amount,
+          description: result.description || null,
+        })
+      } else if (result.type === 'workout') {
+        await supabase.from('workout_logs').insert({
+          user_id:       uid,
+          log_date:      today,
+          workout_type:  result.workout_type,
+          duration_mins: result.duration_mins ?? 0,
+          exercises:     [],
+          notes:         result.notes || null,
+        })
+      } else if (result.type === 'meal') {
+        await supabase.from('nutrition_logs').insert({
+          user_id:   uid,
+          log_date:  today,
+          meal_type: result.meal_type,
+          food_name: result.food_name,
+          calories:  0,
+        })
+      } else if (result.type === 'habit' && matchedHabit) {
+        const h         = matchedHabit
+        const newStreak = computeStreak(h.streak_count, h.last_done_at, h.frequency)
+        const now       = new Date().toISOString()
+        await Promise.all([
+          supabase.from('personality_habits').update({
+            streak_count:   newStreak,
+            longest_streak: Math.max(newStreak, h.longest_streak),
+            last_done_at:   now,
+            updated_at:     now,
+          }).eq('id', h.id),
+          supabase.from('habit_logs').upsert(
+            { user_id: uid, habit_id: h.id, log_date: today, status: 'done' },
+            { onConflict: 'habit_id,log_date' }
+          ),
+        ])
+      }
+      setState('done')
+      setTimeout(onDone, 1200)
+    } catch (e) {
+      setErrorMsg(e instanceof Error ? e.message : 'Save failed')
+      setState('error')
+    }
+  }
+
+  function retry() {
+    setTranscript(''); setResult(null); setErrorMsg(''); setMatchedHabit(null)
+    setState('idle')
+  }
+
+  // ── Renders ──────────────────────────────────────────────────────
+
+  if (state === 'unsupported') return (
+    <div className="flex flex-col items-center gap-3 py-10 text-center px-4">
+      <MicOff className="h-10 w-10 text-slate-600" />
+      <p className="text-sm text-slate-400 font-medium">Voice not supported</p>
+      <p className="text-xs text-slate-600">Use Chrome or Safari on mobile for voice input.</p>
+    </div>
+  )
+
+  if (state === 'done') return (
+    <div className="flex flex-col items-center gap-3 py-10">
+      <div className="flex h-14 w-14 items-center justify-center rounded-full bg-emerald-500/20 border border-emerald-500/30">
+        <Check className="h-7 w-7 text-emerald-400" />
+      </div>
+      <p className="text-sm font-medium text-white">Logged!</p>
+      <p className="text-xs text-slate-500">{result?.summary}</p>
+    </div>
+  )
+
+  if (state === 'error') return (
+    <div className="flex flex-col items-center gap-4 py-8 text-center">
+      <div className="flex items-start gap-2 rounded-xl border border-red-500/20 bg-red-500/10 px-4 py-3 text-sm text-red-400 w-full">
+        <AlertCircle className="h-4 w-4 shrink-0 mt-0.5" />
+        <span className="text-left leading-snug">{errorMsg}</span>
+      </div>
+      <button onClick={retry} className="flex items-center gap-2 text-sm text-slate-400 hover:text-white transition-colors">
+        <RefreshCw className="h-3.5 w-3.5" /> Try again
+      </button>
+    </div>
+  )
+
+  const meta = result ? (INTENT_META[result.type] ?? INTENT_META.unknown) : null
+
+  return (
+    <div className="space-y-5">
+      {/* Instruction */}
+      {state === 'idle' && (
+        <p className="text-xs text-center text-slate-500">
+          Tap the mic and say something like<br />
+          <span className="text-slate-400">"Spent ₹150 on coffee"</span> or <span className="text-slate-400">"Did yoga for 30 mins"</span>
+        </p>
+      )}
+
+      {/* Transcript display */}
+      {(state === 'listening' || state === 'parsing' || state === 'confirm') && (
+        <div className="rounded-xl border border-white/10 bg-white/5 px-4 py-3 min-h-[52px]">
+          <p className="text-sm text-white leading-relaxed">
+            {transcript}
+            {interim && <span className="text-slate-500"> {interim}</span>}
+            {!transcript && !interim && state === 'listening' && (
+              <span className="text-slate-600 italic">Listening…</span>
+            )}
+          </p>
+        </div>
+      )}
+
+      {/* Mic button */}
+      {(state === 'idle' || state === 'listening') && (
+        <div className="flex justify-center py-2">
+          <button
+            onClick={state === 'listening' ? stopListening : startListening}
+            className={cn(
+              'relative flex h-20 w-20 items-center justify-center rounded-full border-2 transition-all',
+              state === 'listening'
+                ? 'border-red-500 bg-red-500/20 text-red-400 scale-110'
+                : 'border-emerald-500/60 bg-emerald-500/10 text-emerald-400 hover:scale-105 active:scale-95',
+            )}
+          >
+            {state === 'listening' && (
+              <span className="absolute inset-0 rounded-full animate-ping bg-red-500/20 pointer-events-none" />
+            )}
+            <Mic className="h-8 w-8" />
+          </button>
+        </div>
+      )}
+
+      {/* Parsing spinner */}
+      {state === 'parsing' && (
+        <div className="flex flex-col items-center gap-3 py-4">
+          <Loader2 className="h-7 w-7 animate-spin text-emerald-400" />
+          <p className="text-xs text-slate-500">Understanding your command…</p>
+        </div>
+      )}
+
+      {/* Parsed result preview */}
+      {state === 'confirm' && result && meta && (
+        <div className={cn('rounded-xl border px-4 py-3.5 space-y-2', meta.bg)}>
+          <div className="flex items-center gap-2">
+            <span className={cn('text-xs font-semibold uppercase tracking-wider', meta.color)}>{meta.label}</span>
+            {result.type === 'unknown' && <AlertCircle className="h-3.5 w-3.5 text-slate-500" />}
+          </div>
+          <p className="text-sm text-white leading-snug">{result.summary}</p>
+
+          {/* Compact details */}
+          {result.type === 'transaction' && (
+            <p className="text-xs text-slate-400">
+              {result.txn_type} · ₹{result.amount} · {result.category}
+              {result.description && ` · ${result.description}`}
+            </p>
+          )}
+          {result.type === 'workout' && result.duration_mins && (
+            <p className="text-xs text-slate-400">{result.workout_type} · {result.duration_mins} min</p>
+          )}
+          {result.type === 'meal' && (
+            <p className="text-xs text-slate-400">{result.meal_type} · {result.food_name}</p>
+          )}
+          {result.type === 'habit' && (
+            <p className="text-xs text-slate-400">
+              {matchedHabit ? `Matched: "${matchedHabit.habit_name}"` : `No habit matching "${result.habit_name}" found`}
+            </p>
+          )}
+        </div>
+      )}
+
+      {/* Action buttons */}
+      {state === 'confirm' && result && result.type !== 'unknown' && (
+        !(result.type === 'habit' && !matchedHabit) ? (
+          <div className="flex gap-2">
+            <button
+              onClick={confirmLog}
+              className="flex-1 flex items-center justify-center gap-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 px-4 py-3 text-sm font-semibold text-white transition-all"
+            >
+              <Check className="h-4 w-4" /> Log it
+            </button>
+            <button
+              onClick={retry}
+              className="flex items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/5 hover:bg-white/10 px-4 py-3 text-sm text-slate-400 transition-all"
+            >
+              <RefreshCw className="h-4 w-4" />
+            </button>
+          </div>
+        ) : (
+          <div className="flex gap-2">
+            <button onClick={retry} className="flex-1 flex items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-slate-400 hover:text-white transition-all">
+              <RefreshCw className="h-3.5 w-3.5" /> Try again
+            </button>
+          </div>
+        )
+      )}
+      {state === 'confirm' && result?.type === 'unknown' && (
+        <button onClick={retry} className="w-full flex items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-slate-400 hover:text-white transition-all">
+          <RefreshCw className="h-3.5 w-3.5" /> Try again
+        </button>
+      )}
+
+      {state === 'saving' && (
+        <div className="flex justify-center py-2">
+          <Loader2 className="h-6 w-6 animate-spin text-emerald-400" />
+        </div>
+      )}
+    </div>
+  )
+}
+
 // ─── Tab config ───────────────────────────────────────────────────
 
 const TABS: {
   id: Panel; label: string; Icon: React.ElementType
   activeClass: string; inactiveClass: string; route: string
 }[] = [
+  {
+    id: 'voice', label: 'Voice', Icon: Mic,
+    activeClass:   'border-emerald-500 bg-emerald-500/20 text-white',
+    inactiveClass: 'border-emerald-500/20 bg-emerald-500/8 text-emerald-400/80 hover:opacity-100',
+    route: '/',
+  },
   {
     id: 'habit', label: 'Habits', Icon: CheckSquare,
     activeClass:   'border-emerald-500 bg-emerald-500/20 text-white',
@@ -778,7 +1134,7 @@ const TABS: {
 export default function QuickLog() {
   const router = useRouter()
   const [open, setOpen]       = useState(false)
-  const [panel, setPanel]     = useState<Panel>('habit')
+  const [panel, setPanel]     = useState<Panel>('voice')
   const [pinging, setPinging] = useState(true)
 
   useEffect(() => {
@@ -841,6 +1197,7 @@ export default function QuickLog() {
 
             {/* Panel content */}
             <div className="flex-1 overflow-y-auto px-5 pb-5 min-h-0">
+              {panel === 'voice'   && <VoicePanel   onDone={handleDone} />}
               {panel === 'meal'    && <MealPanel    onDone={handleDone} />}
               {panel === 'workout' && <WorkoutPanel onDone={handleDone} />}
               {panel === 'habit'   && <HabitPanel />}
