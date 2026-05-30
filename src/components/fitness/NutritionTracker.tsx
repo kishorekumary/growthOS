@@ -19,7 +19,7 @@ import { cn } from '@/lib/utils'
 interface NutritionLog {
   id: string
   log_date: string
-  meal_type: 'breakfast' | 'lunch' | 'dinner' | 'snack'
+  meal_type: 'breakfast' | 'lunch' | 'dinner' | 'snack' | 'drink'
   food_name: string
   calories: number
   protein_g: number
@@ -27,6 +27,13 @@ interface NutritionLog {
   fiber_g: number
   fat_g: number
   notes: string | null
+  logged_at?: string | null
+}
+
+interface WaterLog {
+  id: string
+  amount_ml: number
+  logged_at: string
 }
 
 interface Macros {
@@ -53,8 +60,17 @@ interface Recommendation {
 
 const DEFAULT_GOALS: Goals = { calories: 2000, protein_g: 150, carbs_g: 250, fiber_g: 30, fat_g: 65 }
 
-const MEAL_TYPES  = ['breakfast', 'lunch', 'dinner', 'snack'] as const
-const MEAL_ICONS: Record<string, string> = { breakfast: '🌅', lunch: '☀️', dinner: '🌙', snack: '🍎' }
+const MEAL_TYPES  = ['breakfast', 'lunch', 'dinner', 'snack', 'drink'] as const
+const MEAL_ICONS: Record<string, string> = { breakfast: '🌅', lunch: '☀️', dinner: '🌙', snack: '🍎', drink: '☕' }
+
+const WATER_GOAL_ML = 4000
+const WATER_PRESETS = [
+  { label: '☕', desc: 'Espresso', ml: 30 },
+  { label: '🍵', desc: 'Cup',     ml: 150 },
+  { label: '🥤', desc: 'Glass',   ml: 250 },
+  { label: '🫗', desc: 'Bottle',  ml: 500 },
+  { label: '💧', desc: '1 Litre', ml: 1000 },
+]
 
 // ─── Utilities ────────────────────────────────────────────────
 
@@ -207,6 +223,192 @@ function computeBadges(streak: number, totalDays: number, totals: Macros, goals:
   ]
 }
 
+// ─── Water Tracker ────────────────────────────────────────────
+
+function WaterTracker({ userId }: { userId: string }) {
+  const [logs, setLogs]   = useState<WaterLog[]>([])
+  const [loading, setLoading] = useState(true)
+  const [adding, setAdding]   = useState<number | null>(null)
+
+  useEffect(() => {
+    async function load() {
+      const supabase = createSupabaseBrowserClient()
+      const { data } = await supabase
+        .from('water_logs')
+        .select('id, amount_ml, logged_at')
+        .eq('user_id', userId)
+        .eq('log_date', todayStr())
+        .order('logged_at', { ascending: true })
+      setLogs((data as WaterLog[]) ?? [])
+      setLoading(false)
+    }
+    load()
+  }, [userId])
+
+  async function addWater(ml: number) {
+    setAdding(ml)
+    const supabase = createSupabaseBrowserClient()
+    const { data } = await supabase
+      .from('water_logs')
+      .insert({ user_id: userId, log_date: todayStr(), amount_ml: ml, logged_at: new Date().toISOString() })
+      .select('id, amount_ml, logged_at')
+      .single()
+    if (data) setLogs(prev => [...prev, data as WaterLog])
+    setAdding(null)
+  }
+
+  async function undoLast() {
+    if (!logs.length) return
+    const last = logs[logs.length - 1]
+    setLogs(prev => prev.slice(0, -1))
+    const supabase = createSupabaseBrowserClient()
+    await supabase.from('water_logs').delete().eq('id', last.id)
+  }
+
+  const totalMl = logs.reduce((s, l) => s + l.amount_ml, 0)
+  const p       = Math.min(100, Math.round((totalMl / WATER_GOAL_ML) * 100))
+  const barColor = p >= 100 ? 'bg-emerald-400' : p >= 75 ? 'bg-sky-400' : p >= 50 ? 'bg-sky-500' : 'bg-sky-600'
+
+  if (loading) return null
+
+  return (
+    <div className="rounded-xl border border-sky-500/20 bg-sky-500/5 p-4 space-y-3">
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <span className="text-base">💧</span>
+          <p className="text-sm font-semibold text-white">Water</p>
+        </div>
+        <div className="flex items-center gap-2">
+          <span className="text-sm font-bold text-sky-300 tabular-nums">{totalMl} ml</span>
+          <span className="text-xs text-slate-600">/ {WATER_GOAL_ML} ml</span>
+          {logs.length > 0 && (
+            <button onClick={undoLast} className="text-[10px] text-slate-600 hover:text-red-400 transition-colors ml-1">
+              undo
+            </button>
+          )}
+        </div>
+      </div>
+
+      {/* Progress bar */}
+      <div className="space-y-1">
+        <div className="h-4 rounded-full bg-white/5 overflow-hidden relative">
+          <div
+            className={cn('h-full rounded-full transition-all duration-700', barColor)}
+            style={{ width: `${p}%` }}
+          />
+          {/* Litre markers */}
+          {[25, 50, 75].map(mark => (
+            <div key={mark} className="absolute top-0 h-full w-px bg-white/10" style={{ left: `${mark}%` }} />
+          ))}
+        </div>
+        <div className="flex justify-between text-[10px] text-slate-600">
+          <span>{p}%</span>
+          <span className="tabular-nums">
+            {p >= 100
+              ? <span className="text-emerald-400 font-medium">Goal reached 🎉</span>
+              : `${WATER_GOAL_ML - totalMl} ml to go`}
+          </span>
+        </div>
+      </div>
+
+      {/* Quick-add buttons */}
+      <div className="flex gap-1.5 flex-wrap">
+        {WATER_PRESETS.map(preset => (
+          <button
+            key={preset.ml}
+            onClick={() => addWater(preset.ml)}
+            disabled={!!adding}
+            title={preset.desc}
+            className="flex items-center gap-1 rounded-lg border border-sky-500/30 bg-sky-500/10 hover:bg-sky-500/20 disabled:opacity-50 px-2.5 py-1.5 text-xs font-medium text-sky-300 transition-all"
+          >
+            {adding === preset.ml
+              ? <Loader2 className="h-3 w-3 animate-spin" />
+              : <span>{preset.label}</span>}
+            <span>+{preset.ml < 1000 ? `${preset.ml}` : '1000'}ml</span>
+          </button>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+// ─── Daily AI Analysis Card ────────────────────────────────────
+
+interface DailyAnalysisResult {
+  type: 'complement' | 'suggestion' | 'neutral'
+  message: string
+}
+
+function DailyAnalysisCard({ logs, goals, waterMl }: { logs: NutritionLog[]; goals: Goals; waterMl: number }) {
+  const [result, setResult]   = useState<DailyAnalysisResult | null>(null)
+  const [loading, setLoading] = useState(false)
+  const [error, setError]     = useState<string | null>(null)
+
+  async function analyze() {
+    setLoading(true); setError(null)
+    try {
+      const res = await fetch('/api/nutrition/daily-analysis', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ logs, goals, waterMl }),
+      })
+      const data: DailyAnalysisResult = await res.json()
+      if (!res.ok) throw new Error((data as unknown as { error: string }).error ?? 'Analysis failed')
+      setResult(data)
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Failed')
+    } finally { setLoading(false) }
+  }
+
+  if (!logs.length) return null
+
+  const cardStyle = result
+    ? result.type === 'complement'
+      ? 'border-emerald-500/30 bg-emerald-500/6'
+      : result.type === 'suggestion'
+        ? 'border-amber-500/30 bg-amber-500/6'
+        : 'border-white/10 bg-white/3'
+    : 'border-violet-500/20 bg-violet-500/5'
+
+  const icon = result?.type === 'complement' ? '🎉' : result?.type === 'suggestion' ? '💡' : '✨'
+
+  return (
+    <div className={cn('rounded-xl border p-4 space-y-2.5', cardStyle)}>
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <Sparkles className="h-3.5 w-3.5 text-violet-400" />
+          <p className="text-xs font-semibold text-slate-300 uppercase tracking-wider">AI Feedback</p>
+        </div>
+        <button
+          onClick={analyze}
+          disabled={loading}
+          className="flex items-center gap-1 text-xs text-violet-400 hover:text-violet-300 transition-colors"
+        >
+          {loading
+            ? <Loader2 className="h-3 w-3 animate-spin" />
+            : <RefreshCw className="h-3 w-3" />}
+          {result ? 'Refresh' : 'Analyze today'}
+        </button>
+      </div>
+      {result && (
+        <p className="text-sm text-slate-200 leading-relaxed">
+          <span className="mr-1.5">{icon}</span>{result.message}
+        </p>
+      )}
+      {!result && !loading && (
+        <p className="text-xs text-slate-600">
+          Tap "Analyze today" for AI feedback on your full intake including beverages
+        </p>
+      )}
+      {error && (
+        <p className="text-xs text-red-400 flex items-center gap-1">
+          <AlertCircle className="h-3 w-3 shrink-0" />{error}
+        </p>
+      )}
+    </div>
+  )
+}
+
 // ─── Add Meal Modal ────────────────────────────────────────────
 
 function AddMealModal({ onSave, onClose }: {
@@ -230,10 +432,14 @@ function AddMealModal({ onSave, onClose }: {
   const [notes, setNotes]             = useState('')
   const [autofilling, setAutofilling] = useState(false)
   const [autofillErr, setAutofillErr] = useState<string | null>(null)
+  const [loggedTime, setLoggedTime]   = useState(() => {
+    const now = new Date()
+    return `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`
+  })
 
   useEffect(() => {
     const h = new Date().getHours()
-    setMealType(h < 10 ? 'breakfast' : h < 14 ? 'lunch' : h < 20 ? 'dinner' : 'snack')
+    setMealType(h < 10 ? 'breakfast' : h < 14 ? 'lunch' : h < 20 ? 'dinner' : h < 22 ? 'snack' : 'drink')
   }, [])
 
   function fillFields(r: NutritionEstimate) {
@@ -296,12 +502,16 @@ function AddMealModal({ onSave, onClose }: {
   async function handleSave() {
     if (!foodName.trim() || !calories) return
     setSaving(true)
+    // Build a full ISO timestamp from today's date + the time input
+    const [hh, mm] = loggedTime.split(':').map(Number)
+    const ts = new Date(); ts.setHours(hh, mm, 0, 0)
     await onSave({
       meal_type: mealType, food_name: foodName.trim(),
-      calories: Math.round(Number(calories) || 0),
+      calories:  Math.round(Number(calories) || 0),
       protein_g: Number(protein) || 0, carbs_g: Number(carbs) || 0,
       fiber_g:   Number(fiber)   || 0, fat_g:   Number(fat)   || 0,
-      notes: notes.trim() || null,
+      notes:     notes.trim() || null,
+      logged_at: ts.toISOString(),
     })
     setSaving(false); onClose()
   }
@@ -313,8 +523,19 @@ function AddMealModal({ onSave, onClose }: {
         {/* ── Scrollable form content ── */}
         <div className="p-5 space-y-4 overflow-y-auto flex-1 min-h-0">
           <div className="flex items-center justify-between">
-            <h3 className="font-semibold text-white">Log a Meal</h3>
+            <h3 className="font-semibold text-white">Log Intake</h3>
             <button onClick={onClose} className="text-slate-500 hover:text-white text-xl leading-none">×</button>
+          </div>
+
+          {/* Time field */}
+          <div className="flex items-center gap-3">
+            <Label className="text-slate-400 text-xs shrink-0">Time</Label>
+            <input
+              type="time"
+              value={loggedTime}
+              onChange={e => setLoggedTime(e.target.value)}
+              className="rounded-lg border border-white/10 bg-white/5 px-3 py-1.5 text-sm text-white focus:outline-none focus:border-violet-500 tabular-nums"
+            />
           </div>
 
           {/* Image zone */}
@@ -378,10 +599,10 @@ function AddMealModal({ onSave, onClose }: {
                   <CheckCircle2 className="h-3.5 w-3.5 shrink-0" /> AI estimate ready — adjust if needed
                 </div>
               )}
-              <div className="grid grid-cols-4 gap-1.5">
+              <div className="flex gap-1.5 overflow-x-auto pb-0.5">
                 {MEAL_TYPES.map(t => (
                   <button key={t} type="button" onClick={() => setMealType(t)}
-                    className={cn('rounded-lg border py-1.5 text-xs font-medium capitalize transition-all',
+                    className={cn('shrink-0 rounded-lg border px-2.5 py-1.5 text-xs font-medium capitalize transition-all',
                       mealType === t ? 'border-violet-500 bg-violet-500/20 text-white'
                                     : 'border-white/10 bg-white/5 text-slate-400 hover:border-white/20')}>
                     {MEAL_ICONS[t]} {t}
@@ -695,6 +916,7 @@ export default function NutritionTracker() {
   const [loading, setLoading]       = useState(true)
   const [showModal, setShowModal]   = useState(false)
   const [deletingId, setDeletingId] = useState<string | null>(null)
+  const [waterTotal, setWaterTotal] = useState(0)
 
   const fetchData = useCallback(async () => {
     const supabase = createSupabaseBrowserClient()
@@ -702,13 +924,16 @@ export default function NutritionTracker() {
     if (!session?.user) { setLoading(false); return }
     setUserId(session.user.id)
     const today = todayStr()
-    const [logsRes, datesRes] = await Promise.all([
+    const [logsRes, datesRes, waterRes] = await Promise.all([
       supabase.from('nutrition_logs').select('*').eq('user_id', session.user.id)
-        .eq('log_date', today).order('created_at', { ascending: true }),
+        .eq('log_date', today).order('logged_at', { ascending: true, nullsFirst: true }),
       supabase.from('nutrition_logs').select('log_date').eq('user_id', session.user.id),
+      supabase.from('water_logs').select('amount_ml').eq('user_id', session.user.id).eq('log_date', today),
     ])
     setTodayLogs((logsRes.data as NutritionLog[]) ?? [])
     setAllDates(((datesRes.data ?? []) as { log_date: string }[]).map(r => r.log_date))
+    const wml = ((waterRes.data ?? []) as { amount_ml: number }[]).reduce((s, r) => s + r.amount_ml, 0)
+    setWaterTotal(wml)
     setLoading(false)
   }, [])
 
@@ -781,9 +1006,12 @@ export default function NutritionTracker() {
             </div>
             <button onClick={() => setShowModal(true)}
               className="flex items-center gap-1.5 rounded-lg bg-violet-600 hover:bg-violet-700 px-3 py-1.5 text-xs font-semibold text-white transition-colors">
-              <Plus className="h-3.5 w-3.5" /> Log Meal
+              <Plus className="h-3.5 w-3.5" /> Log Intake
             </button>
           </div>
+
+          {/* Water tracker */}
+          {userId && <WaterTracker userId={userId} key={userId} />}
 
           {/* Calorie ring + macro bars */}
           <div className="rounded-xl border border-white/10 bg-white/3 p-4">
@@ -818,14 +1046,17 @@ export default function NutritionTracker() {
             </div>
           </div>
 
+          {/* AI daily analysis */}
+          <DailyAnalysisCard logs={todayLogs} goals={goals} waterMl={waterTotal} />
+
           {/* Meals list */}
           <div className="space-y-2">
-            <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Today's Meals</p>
+            <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Today's Intake</p>
             {todayLogs.length === 0 ? (
               <div className="rounded-xl border border-dashed border-white/8 p-8 text-center">
                 <Camera className="h-8 w-8 text-slate-700 mx-auto mb-2" />
-                <p className="text-sm text-slate-500">No meals logged yet.</p>
-                <p className="text-xs text-slate-600 mt-1">Type a meal name and let AI fill in the macros.</p>
+                <p className="text-sm text-slate-500">Nothing logged yet.</p>
+                <p className="text-xs text-slate-600 mt-1">Log meals, snacks, coffee, and any drink throughout the day.</p>
               </div>
             ) : todayLogs.map(log => (
               <div key={log.id}
@@ -833,7 +1064,14 @@ export default function NutritionTracker() {
                 <span className="text-lg leading-none mt-0.5">{MEAL_ICONS[log.meal_type] ?? '🍽️'}</span>
                 <div className="flex-1 min-w-0 space-y-1">
                   <div className="flex items-start justify-between gap-2">
-                    <p className="text-sm font-medium text-white truncate">{log.food_name}</p>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium text-white truncate">{log.food_name}</p>
+                      {log.logged_at && (
+                        <p className="text-[10px] text-slate-600 tabular-nums">
+                          {new Date(log.logged_at).toLocaleTimeString('en', { hour: '2-digit', minute: '2-digit', hour12: true })}
+                        </p>
+                      )}
+                    </div>
                     <span className="text-xs font-bold text-violet-300 shrink-0">{log.calories} kcal</span>
                   </div>
                   <div className="flex flex-wrap gap-x-3 gap-y-0.5 text-[11px] text-slate-500">
