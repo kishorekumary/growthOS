@@ -775,7 +775,8 @@ function VoicePanel({ onDone }: { onDone: () => void }) {
   const [parsingMsg, setParsingMsg]       = useState('Understanding your command…')
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const recognitionRef = useRef<any>(null)
+  const recognitionRef  = useRef<any>(null)
+  const silenceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   function getSR() {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -792,7 +793,7 @@ function VoicePanel({ onDone }: { onDone: () => void }) {
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const r: any = new SR()
-    r.continuous     = false
+    r.continuous     = true   // keep recording through natural pauses
     r.interimResults = true
     r.lang           = 'en-IN'
     recognitionRef.current = r
@@ -801,11 +802,15 @@ function VoicePanel({ onDone }: { onDone: () => void }) {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     r.onerror  = (e: any) => {
       if (e.error === 'aborted') return
+      if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current)
       setErrorMsg(e.error === 'not-allowed' ? 'Microphone access denied.' : `Error: ${e.error}`)
       setState('error')
     }
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     r.onresult = (e: any) => {
+      // Any speech activity resets the 3-second silence countdown
+      if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current)
+
       let final = ''; let inter = ''
       for (let i = e.resultIndex; i < e.results.length; i++) {
         const t = e.results[i][0].transcript
@@ -814,8 +819,14 @@ function VoicePanel({ onDone }: { onDone: () => void }) {
       }
       if (final) setTranscript(p => (p + ' ' + final).trim())
       setInterim(inter)
+
+      // Auto-stop 3 seconds after the last detected word
+      silenceTimerRef.current = setTimeout(() => {
+        recognitionRef.current?.stop()
+      }, 3000)
     }
     r.onend = () => {
+      if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current)
       setInterim('')
       setTranscript(p => p.trim())
       setState(prev => prev === 'listening' ? 'parsing' : prev)
@@ -824,10 +835,12 @@ function VoicePanel({ onDone }: { onDone: () => void }) {
     setTranscript('')
     setInterim('')
     setResult(null)
+    setNutritionData(null)
     r.start()
   }
 
   function stopListening() {
+    if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current)
     recognitionRef.current?.stop()
   }
 
@@ -1032,7 +1045,7 @@ function VoicePanel({ onDone }: { onDone: () => void }) {
 
       {/* Mic button */}
       {(state === 'idle' || state === 'listening') && (
-        <div className="flex justify-center py-2">
+        <div className="flex flex-col items-center gap-2 py-2">
           <button
             onClick={state === 'listening' ? stopListening : startListening}
             className={cn(
@@ -1047,6 +1060,11 @@ function VoicePanel({ onDone }: { onDone: () => void }) {
             )}
             <Mic className="h-8 w-8" />
           </button>
+          {state === 'listening' && (
+            <p className="text-xs text-slate-500 text-center">
+              Tap to stop · auto-stops after 3 s of silence
+            </p>
+          )}
         </div>
       )}
 
