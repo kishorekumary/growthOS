@@ -1,7 +1,7 @@
 import { createSupabaseAdminClient } from '@/lib/supabase-admin'
 import { createSupabaseServerClient } from '@/lib/supabase-server'
 import AdminDashboard from './AdminDashboard'
-import type { GlobalGalleryItem } from './AdminDashboard'
+import type { GlobalGalleryItem, GlobalBookItem } from './AdminDashboard'
 
 function getWeekStart(): string {
   const d = new Date()
@@ -25,6 +25,7 @@ export default async function AdminPage() {
     { data: todos },
     { data: globalHabits },
     { data: globalGallery },
+    { data: globalBooks },
   ] = await Promise.all([
     adminClient.auth.admin.listUsers({ perPage: 1000 }),
     adminClient.from('user_profiles').select('id, full_name, avatar_url, is_admin, is_superadmin, created_at'),
@@ -36,6 +37,7 @@ export default async function AdminPage() {
     adminClient.from('user_todos').select('user_id, completed'),
     adminClient.from('personality_habits').select('id, habit_name, category, frequency, created_at').eq('is_global', true).order('created_at', { ascending: false }),
     adminClient.from('user_gallery').select('id, url, caption, mime_type, storage_path, created_at').eq('is_global', true).order('created_at', { ascending: false }),
+    adminClient.from('reading_log').select('id, book_title, author, genre, status, key_lessons, created_at').eq('is_global', true).order('created_at', { ascending: false }),
   ])
 
   // Build per-user stats maps
@@ -101,12 +103,15 @@ export default async function AdminPage() {
   }))
 
   const galleryItems: GlobalGalleryItem[] = (globalGallery ?? []).map(r => ({
-    id:           r.id,
-    url:          r.url,
-    caption:      r.caption ?? null,
-    mime_type:    r.mime_type ?? null,
-    storage_path: r.storage_path,
-    created_at:   r.created_at,
+    id: r.id, url: r.url, caption: r.caption ?? null,
+    mime_type: r.mime_type ?? null, storage_path: r.storage_path, created_at: r.created_at,
+  }))
+
+  const bookItems: GlobalBookItem[] = (globalBooks ?? []).map(r => ({
+    id: r.id, book_title: r.book_title, author: r.author ?? null,
+    genre: r.genre ?? null, status: r.status,
+    has_mindmap: !!(r.key_lessons && (r.key_lessons as string).startsWith('[')),
+    created_at: r.created_at,
   }))
 
   return (
@@ -114,6 +119,7 @@ export default async function AdminPage() {
       users={users}
       globalHabits={globalHabits ?? []}
       globalGallery={galleryItems}
+      globalBooks={bookItems}
       meId={me?.id ?? ''}
       isSuperadmin={meProfile?.is_superadmin ?? false}
     />

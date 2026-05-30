@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
-import { Loader2, Plus, Star, Sparkles, BookOpen, AlertCircle, GitBranch, Trash2, Quote, Scroll } from 'lucide-react'
+import { Loader2, Plus, Star, Sparkles, BookOpen, AlertCircle, GitBranch, Trash2, Quote, Scroll, Globe } from 'lucide-react'
 import { createSupabaseBrowserClient } from '@/lib/supabase'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -19,6 +19,7 @@ type Status = 'want_to_read' | 'reading' | 'completed'
 
 interface Book {
   id: string
+  user_id: string
   book_title: string
   author: string | null
   genre: string | null
@@ -28,6 +29,7 @@ interface Book {
   key_lessons: string | null
   quotes: string | null
   stories: string | null
+  is_global: boolean
 }
 
 interface AiData { summary: string; lessons: string[] }
@@ -188,7 +190,7 @@ function AddBookModal({ onAdd }: { onAdd: () => void }) {
 
 // ─── Book Detail Dialog ───────────────────────────────────────
 
-function BookDetailDialog({ book, onUpdate, onClose }: { book: Book; onUpdate: () => void; onClose: () => void }) {
+function BookDetailDialog({ book, onUpdate, onClose, readonly = false }: { book: Book; onUpdate: () => void; onClose: () => void; readonly?: boolean }) {
   const [aiData, setAiData]       = useState<AiData | null>(parseAi(book.ai_summary))
   const [loadingAi, setLoadingAi] = useState(false)
   const [title, setTitle]         = useState(book.book_title)
@@ -245,6 +247,14 @@ function BookDetailDialog({ book, onUpdate, onClose }: { book: Book; onUpdate: (
       </DialogHeader>
 
       <div className="space-y-5">
+        {/* Global read-only notice */}
+        {readonly && (
+          <div className="flex items-center gap-2 rounded-xl border border-sky-500/20 bg-sky-500/8 px-3 py-2.5">
+            <Globe className="h-3.5 w-3.5 text-sky-400 shrink-0" />
+            <p className="text-xs text-sky-300">This is a global book — view only</p>
+          </div>
+        )}
+
         {/* Title / Author / Genre */}
         <div className="space-y-3 rounded-xl border border-white/10 bg-white/3 p-4">
           <div className="space-y-1.5">
@@ -359,14 +369,16 @@ function BookDetailDialog({ book, onUpdate, onClose }: { book: Book; onUpdate: (
           </div>
         )}
 
-        <Button
-          className="w-full bg-white/10 hover:bg-white/15 border border-white/15 text-white"
-          onClick={saveChanges}
-          disabled={saving || !title.trim()}
-        >
-          {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-          Save Changes
-        </Button>
+        {!readonly && (
+          <Button
+            className="w-full bg-white/10 hover:bg-white/15 border border-white/15 text-white"
+            onClick={saveChanges}
+            disabled={saving || !title.trim()}
+          >
+            {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+            Save Changes
+          </Button>
+        )}
       </div>
     </DialogContent>
   )
@@ -386,6 +398,18 @@ export default function ReadingList() {
   const [insightsTab, setInsightsTab]         = useState<'quotes' | 'stories'>('quotes')
   const [deleteTarget, setDeleteTarget]       = useState<Book | null>(null)
   const [deleting, setDeleting]         = useState(false)
+  const [currentUserId, setCurrentUserId]     = useState<string | null>(null)
+  const [isAdmin, setIsAdmin]                 = useState(false)
+  const [togglingGlobalId, setTogglingGlobalId] = useState<string | null>(null)
+
+  async function toggleGlobal(book: Book) {
+    if (togglingGlobalId) return
+    setTogglingGlobalId(book.id)
+    const next = !book.is_global
+    const res = await fetch(`/api/admin/global-books?id=${book.id}&global=${next}`, { method: 'PATCH' })
+    if (res.ok) setBooks(prev => prev.map(b => b.id === book.id ? { ...b, is_global: next } : b))
+    setTogglingGlobalId(null)
+  }
 
   async function handleDelete() {
     if (!deleteTarget) return
@@ -403,27 +427,35 @@ export default function ReadingList() {
       const supabase = createSupabaseBrowserClient()
       const { data: { session } } = await supabase.auth.getSession()
       if (!session?.user) { setLoading(false); return }
+      const uid = session.user.id
+      setCurrentUserId(uid)
 
-      const { data, error } = await supabase
-        .from('reading_log')
-        .select('id, book_title, author, genre, status, rating, ai_summary, key_lessons, quotes, stories')
-        .eq('user_id', session.user.id)
-        .order('updated_at', { ascending: false })
+      const [booksRes, profileRes] = await Promise.all([
+        supabase
+          .from('reading_log')
+          .select('id, user_id, book_title, author, genre, status, rating, ai_summary, key_lessons, quotes, stories, is_global')
+          .or(`user_id.eq.${uid},is_global.eq.true`)
+          .order('is_global', { ascending: false }) // global books first
+          .order('updated_at', { ascending: false }),
+        supabase.from('user_profiles').select('is_admin').eq('id', uid).single(),
+      ])
 
-      if (error) {
-        // key_lessons column missing — fall back without it
+      setIsAdmin(profileRes.data?.is_admin ?? false)
+
+      if (booksRes.error) {
+        // Fallback: is_global column may not exist yet
         const { data: fallback, error: fallbackError } = await supabase
           .from('reading_log')
-          .select('id, book_title, author, genre, status, rating, ai_summary')
-          .eq('user_id', session.user.id)
+          .select('id, user_id, book_title, author, genre, status, rating, ai_summary, key_lessons, quotes, stories')
+          .eq('user_id', uid)
           .order('updated_at', { ascending: false })
         if (fallbackError) {
           setFetchError(fallbackError.message)
         } else {
-          setBooks(((fallback ?? []) as Book[]).map(b => ({ ...b, key_lessons: null, quotes: null, stories: null })))
+          setBooks(((fallback ?? []) as Book[]).map(b => ({ ...b, is_global: false })))
         }
       } else {
-        setBooks((data as Book[]) ?? [])
+        setBooks((booksRes.data as Book[]) ?? [])
       }
     } catch (err) {
       setFetchError(err instanceof Error ? err.message : 'Failed to load books')
@@ -455,7 +487,9 @@ export default function ReadingList() {
     )
   }
 
+  const isOwner = (book: Book) => book.user_id === currentUserId
   const filtered = books.filter(b => b.status === activeStatus)
+  const globalCount = books.filter(b => b.is_global && !isOwner(b)).length
   const counts: Record<Status, number> = {
     want_to_read: books.filter(b => b.status === 'want_to_read').length,
     reading:      books.filter(b => b.status === 'reading').length,
@@ -468,7 +502,10 @@ export default function ReadingList() {
         <div>
           <h2 className="font-semibold text-white">My Reading List</h2>
           {books.length > 0 && (
-            <p className="text-xs text-slate-500 mt-0.5">{books.length} book{books.length !== 1 ? 's' : ''} tracked</p>
+            <p className="text-xs text-slate-500 mt-0.5">
+              {books.filter(b => isOwner(b)).length} book{books.filter(b => isOwner(b)).length !== 1 ? 's' : ''} tracked
+              {globalCount > 0 && <span> · <Globe className="inline h-3 w-3 text-sky-400 mb-0.5" /> {globalCount} global</span>}
+            </p>
           )}
         </div>
         <AddBookModal onAdd={fetchBooks} />
@@ -507,10 +544,17 @@ export default function ReadingList() {
         </div>
       ) : (
         <div className="space-y-2">
-          {filtered.map(book => (
+          {filtered.map(book => {
+          const owned = isOwner(book)
+          return (
             <div
               key={book.id}
-              className="group flex items-center gap-1 rounded-xl border border-white/10 bg-white/5 hover:border-violet-500/30 hover:bg-violet-500/5 transition-all"
+              className={cn(
+                'group flex items-center gap-1 rounded-xl border bg-white/5 transition-all',
+                book.is_global
+                  ? 'border-sky-500/25 hover:border-sky-500/50 hover:bg-sky-500/5'
+                  : 'border-white/10 hover:border-violet-500/30 hover:bg-violet-500/5',
+              )}
             >
               <button
                 type="button"
@@ -518,11 +562,24 @@ export default function ReadingList() {
                 className="flex-1 text-left px-4 py-3.5 min-w-0"
               >
                 <div className="flex items-center gap-3">
-                  <div className="h-10 w-8 rounded bg-gradient-to-br from-violet-600 to-violet-800 flex items-center justify-center shrink-0">
+                  <div className={cn(
+                    'h-10 w-8 rounded flex items-center justify-center shrink-0',
+                    book.is_global
+                      ? 'bg-gradient-to-br from-sky-600 to-sky-800'
+                      : 'bg-gradient-to-br from-violet-600 to-violet-800',
+                  )}>
                     <BookOpen className="h-4 w-4 text-white/70" />
                   </div>
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium text-white truncate">{book.book_title}</p>
+                    <div className="flex items-center gap-1.5">
+                      <p className="text-sm font-medium text-white truncate">{book.book_title}</p>
+                      {book.is_global && (
+                        <span className="shrink-0 flex items-center gap-0.5 rounded-full bg-sky-500/15 border border-sky-500/30 px-1.5 py-0.5">
+                          <Globe className="h-2.5 w-2.5 text-sky-400" />
+                          <span className="text-[9px] font-medium text-sky-400">Global</span>
+                        </span>
+                      )}
+                    </div>
                     <p className="text-xs text-slate-500 truncate">
                       {book.author ?? 'Unknown author'}
                       {book.genre ? ` · ${book.genre}` : ''}
@@ -575,11 +632,11 @@ export default function ReadingList() {
                 </div>
               </button>
 
-              {/* Mind Map button */}
+              {/* Mind Map button — readonly for non-owners of global books */}
               <button
                 type="button"
-                onClick={() => { setMindMapReadonly(false); setMindMapBook(book) }}
-                title="Open mind map"
+                onClick={() => { setMindMapReadonly(!owned); setMindMapBook(book) }}
+                title={owned ? 'Open mind map' : 'View mind map (read-only)'}
                 className="shrink-0 flex items-center gap-1 rounded-lg border border-cyan-500/30 bg-cyan-500/10 px-2.5 py-1.5 text-[11px] font-medium text-cyan-400 opacity-0 group-hover:opacity-100 hover:bg-cyan-500/20 transition-all"
               >
                 <GitBranch className="h-3 w-3" />
@@ -608,17 +665,42 @@ export default function ReadingList() {
                 Stories
               </button>
 
-              {/* Delete button */}
-              <button
-                type="button"
-                onClick={() => setDeleteTarget(book)}
-                title="Delete book"
-                className="shrink-0 mr-3 flex items-center justify-center rounded-lg border border-red-500/30 bg-red-500/10 p-1.5 text-red-400 opacity-0 group-hover:opacity-100 hover:bg-red-500/20 transition-all"
-              >
-                <Trash2 className="h-3.5 w-3.5" />
-              </button>
+              {/* Admin: globe toggle (own books only) */}
+              {isAdmin && owned && (
+                <button
+                  type="button"
+                  onClick={() => toggleGlobal(book)}
+                  disabled={!!togglingGlobalId}
+                  title={book.is_global ? 'Remove from global' : 'Share globally'}
+                  className={cn(
+                    'shrink-0 flex items-center justify-center rounded-lg border p-1.5 opacity-0 group-hover:opacity-100 transition-all',
+                    book.is_global
+                      ? 'border-sky-500/40 bg-sky-500/15 text-sky-400 hover:bg-sky-500/25'
+                      : 'border-white/10 bg-white/5 text-slate-500 hover:text-sky-400 hover:border-sky-500/30',
+                  )}
+                >
+                  {togglingGlobalId === book.id
+                    ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                    : <Globe className="h-3.5 w-3.5" />}
+                </button>
+              )}
+
+              {/* Delete — only for books the user owns */}
+              {owned && (
+                <button
+                  type="button"
+                  onClick={() => setDeleteTarget(book)}
+                  title="Delete book"
+                  className="shrink-0 mr-3 flex items-center justify-center rounded-lg border border-red-500/30 bg-red-500/10 p-1.5 text-red-400 opacity-0 group-hover:opacity-100 hover:bg-red-500/20 transition-all"
+                >
+                  <Trash2 className="h-3.5 w-3.5" />
+                </button>
+              )}
+              {/* Spacer for global books (no delete) */}
+              {!owned && <div className="mr-3" />}
             </div>
-          ))}
+          )
+        })}
         </div>
       )}
 
@@ -629,6 +711,7 @@ export default function ReadingList() {
             book={selected}
             onUpdate={fetchBooks}
             onClose={() => setSelected(null)}
+            readonly={selected.is_global && !isOwner(selected)}
           />
         </Dialog>
       )}

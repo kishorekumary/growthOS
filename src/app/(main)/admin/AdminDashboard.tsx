@@ -28,6 +28,11 @@ export interface GlobalGalleryItem {
   storage_path: string; created_at: string
 }
 
+export interface GlobalBookItem {
+  id: string; book_title: string; author: string | null; genre: string | null
+  status: string; has_mindmap: boolean; created_at: string
+}
+
 const CATEGORY_COLOR: Record<string, string> = {
   mindset:      'text-violet-300 bg-violet-500/15',
   social:       'text-sky-300 bg-sky-500/15',
@@ -38,20 +43,24 @@ export default function AdminDashboard({
   users: initialUsers,
   globalHabits: initialGlobalHabits,
   globalGallery: initialGlobalGallery,
+  globalBooks: initialGlobalBooks,
   meId,
   isSuperadmin,
 }: {
   users: UserRow[]
   globalHabits: GlobalHabit[]
   globalGallery: GlobalGalleryItem[]
+  globalBooks: GlobalBookItem[]
   meId: string
   isSuperadmin: boolean
 }) {
-  const [tab, setTab]                 = useState<'users' | 'global' | 'gallery'>('users')
+  const [tab, setTab]                 = useState<'users' | 'global' | 'gallery' | 'books'>('users')
   const [search, setSearch]           = useState('')
   const [users, setUsers]             = useState(initialUsers)
   const [globalHabits, setGlobalHabits] = useState(initialGlobalHabits)
   const [globalGallery, setGlobalGallery] = useState(initialGlobalGallery)
+  const [globalBooks, setGlobalBooks]     = useState(initialGlobalBooks)
+  const [removingBookId, setRemovingBookId] = useState<string | null>(null)
   const [togglingId, setTogglingId]   = useState<string | null>(null)
   const [deletingId, setDeletingId]   = useState<string | null>(null)
   const [removingGalleryId, setRemovingGalleryId] = useState<string | null>(null)
@@ -104,6 +113,13 @@ export default function AdminDashboard({
     setAddingHabit(false)
   }
 
+  async function removeFromGlobalBooks(id: string) {
+    setRemovingBookId(id)
+    await fetch(`/api/admin/global-books?id=${id}&global=false`, { method: 'PATCH' })
+    setGlobalBooks(prev => prev.filter(b => b.id !== id))
+    setRemovingBookId(null)
+  }
+
   async function removeFromGlobalGallery(id: string) {
     setRemovingGalleryId(id)
     await fetch(`/api/admin/global-gallery?id=${id}&global=false`, { method: 'PATCH' })
@@ -139,13 +155,14 @@ export default function AdminDashboard({
       </div>
 
       {/* Stats row */}
-      <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
         {[
           { label: 'Total Users',      value: totalUsers,            icon: Users,  color: 'text-indigo-400' },
           { label: 'Admins',           value: adminCount,            icon: Shield, color: 'text-violet-400' },
           { label: 'Active This Week', value: activeThisWk,          icon: Flame,  color: 'text-orange-400' },
-          { label: 'Global Habits',    value: totalGlobal,           icon: Globe,  color: 'text-emerald-400' },
-          { label: 'Global Gallery',   value: globalGallery.length,  icon: Image,  color: 'text-sky-400' },
+          { label: 'Global Habits',    value: totalGlobal,           icon: Globe,     color: 'text-emerald-400' },
+          { label: 'Global Gallery',   value: globalGallery.length,  icon: Image,     color: 'text-sky-400'     },
+          { label: 'Global Books',     value: globalBooks.length,    icon: BookOpen,  color: 'text-amber-400'   },
         ].map(({ label, value, icon: Icon, color }) => (
           <div key={label} className="rounded-xl border border-white/[0.06] bg-white/[0.03] p-4 flex items-center gap-3">
             <div className={cn('p-2 rounded-lg bg-white/[0.05]', color)}>
@@ -165,6 +182,7 @@ export default function AdminDashboard({
           { key: 'users',   label: `Users (${totalUsers})` },
           { key: 'global',  label: `Global Habits (${totalGlobal})` },
           { key: 'gallery', label: `Global Gallery (${globalGallery.length})` },
+          { key: 'books',   label: `Global Books (${globalBooks.length})` },
         ] as const).map(({ key, label }) => (
           <button
             key={key}
@@ -380,6 +398,59 @@ export default function AdminDashboard({
                   </div>
                 )
               })}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Global Books tab */}
+      {tab === 'books' && (
+        <div className="space-y-4">
+          <p className="text-sm text-slate-400">
+            Books marked global appear in every user&apos;s reading list. They can view the mind map, summary, quotes, and stories — but cannot edit or delete them.
+            Mark books global from your{' '}
+            <a href="/books" className="text-amber-400 hover:text-amber-300 underline underline-offset-2">Books page</a>
+            {' '}using the 🌐 globe icon on hover.
+          </p>
+
+          {globalBooks.length === 0 ? (
+            <div className="rounded-xl border border-white/[0.06] p-12 text-center">
+              <BookOpen className="h-10 w-10 text-slate-700 mx-auto mb-3" />
+              <p className="text-sm text-slate-500">No global books yet.</p>
+              <p className="text-xs text-slate-600 mt-1">
+                Go to your Books page, hover a book, and click the 🌐 icon.
+              </p>
+            </div>
+          ) : (
+            <div className="space-y-2">
+              {globalBooks.map(book => (
+                <div key={book.id} className="group flex items-center gap-3 rounded-xl border border-amber-500/20 bg-amber-500/5 px-4 py-3">
+                  <div className="h-9 w-7 rounded bg-gradient-to-br from-amber-600 to-amber-800 flex items-center justify-center shrink-0">
+                    <BookOpen className="h-3.5 w-3.5 text-white/70" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2">
+                      <p className="text-sm font-medium text-white truncate">{book.book_title}</p>
+                      {book.has_mindmap && (
+                        <span className="text-[10px] text-cyan-400 border border-cyan-500/30 rounded px-1.5 py-0.5 shrink-0">map</span>
+                      )}
+                    </div>
+                    <p className="text-xs text-slate-500 truncate">
+                      {book.author ?? 'Unknown author'}
+                      {book.genre ? ` · ${book.genre}` : ''}
+                      {' · '}<span className="capitalize">{book.status.replace('_', ' ')}</span>
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => removeFromGlobalBooks(book.id)}
+                    disabled={removingBookId === book.id}
+                    title="Remove from global"
+                    className="flex items-center justify-center w-7 h-7 rounded-md border border-white/10 text-slate-500 opacity-0 group-hover:opacity-100 hover:text-red-400 hover:border-red-500/30 transition-all"
+                  >
+                    {removingBookId === book.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <X className="h-3.5 w-3.5" />}
+                  </button>
+                </div>
+              ))}
             </div>
           )}
         </div>
