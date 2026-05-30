@@ -64,6 +64,16 @@ function getDepth(id: string, nodes: MindNode[]): number {
   return d
 }
 
+// Collect all descendant IDs of a node (recursive)
+function getAllDescendants(nodeId: string, nodes: MindNode[]): string[] {
+  const result: string[] = []
+  const collect = (id: string) => {
+    nodes.filter(n => n.parentId === id).forEach(c => { result.push(c.id); collect(c.id) })
+  }
+  collect(nodeId)
+  return result
+}
+
 // Returns true if nodeId is a descendant of ancestorId (prevents cyclic reparenting)
 function isDescendant(nodeId: string, ancestorId: string, nodes: MindNode[]): boolean {
   const children = nodes.filter(n => n.parentId === ancestorId)
@@ -732,9 +742,10 @@ export default function BookMindMap({ bookId, bookTitle, initialJson, onClose, r
   }
 
   // ── Drag / connect refs ───────────────────────────────────
-  const moveRef      = useRef<{ id: string; ox: number; oy: number; mx: number; my: number } | null>(null)
+  type ChildOffsets  = Record<string, { ox: number; oy: number }>
+  const moveRef      = useRef<{ id: string; ox: number; oy: number; mx: number; my: number; childOffsets: ChildOffsets } | null>(null)
   const connRef      = useRef<{ fromId: string } | null>(null)
-  const touchMoveRef = useRef<{ id: string; ox: number; oy: number; startTX: number; startTY: number } | null>(null)
+  const touchMoveRef = useRef<{ id: string; ox: number; oy: number; startTX: number; startTY: number; childOffsets: ChildOffsets } | null>(null)
   const resizeRef    = useRef<{
     id: string; side: 'left' | 'right' | 'top' | 'bottom'
     startX: number; startY: number
@@ -775,12 +786,15 @@ export default function BookMindMap({ bookId, bookTitle, initialJson, onClose, r
         return
       }
       if (moveRef.current) {
-        const { id, ox, oy, mx, my } = moveRef.current
+        const { id, ox, oy, mx, my, childOffsets } = moveRef.current
         const dx = e.clientX - mx
         const dy = e.clientY - my
-        setNodes(prev =>
-          prev.map(n => n.id === id ? { ...n, x: Math.max(4, ox + dx), y: Math.max(4, oy + dy) } : n)
-        )
+        setNodes(prev => prev.map(n => {
+          if (n.id === id) return { ...n, x: Math.max(4, ox + dx), y: Math.max(4, oy + dy) }
+          const orig = childOffsets[n.id]
+          if (orig) return { ...n, x: Math.max(4, orig.ox + dx), y: Math.max(4, orig.oy + dy) }
+          return n
+        }))
       }
       if (connRef.current) setConnPos(canvasXY(e.clientX, e.clientY))
     }
@@ -813,12 +827,15 @@ export default function BookMindMap({ bookId, bookTitle, initialJson, onClose, r
     function handleTouchMove(e: TouchEvent) {
       if (touchMoveRef.current && e.touches.length === 1) {
         const touch = e.touches[0]
-        const { id, ox, oy, startTX, startTY } = touchMoveRef.current
+        const { id, ox, oy, startTX, startTY, childOffsets } = touchMoveRef.current
         const dx = touch.clientX - startTX
         const dy = touch.clientY - startTY
-        setNodes(prev =>
-          prev.map(n => n.id === id ? { ...n, x: Math.max(4, ox + dx), y: Math.max(4, oy + dy) } : n)
-        )
+        setNodes(prev => prev.map(n => {
+          if (n.id === id) return { ...n, x: Math.max(4, ox + dx), y: Math.max(4, oy + dy) }
+          const orig = childOffsets[n.id]
+          if (orig) return { ...n, x: Math.max(4, orig.ox + dx), y: Math.max(4, orig.oy + dy) }
+          return n
+        }))
         e.preventDefault()
       }
     }
@@ -839,11 +856,20 @@ export default function BookMindMap({ bookId, bookTitle, initialJson, onClose, r
     }
   }, [])
 
+  function captureChildOffsets(nodeId: string): Record<string, { ox: number; oy: number }> {
+    const offsets: Record<string, { ox: number; oy: number }> = {}
+    for (const descId of getAllDescendants(nodeId, nodesRef.current)) {
+      const n = nodesRef.current.find(n => n.id === descId)
+      if (n) offsets[descId] = { ox: n.x, oy: n.y }
+    }
+    return offsets
+  }
+
   function startMove(e: React.MouseEvent, node: MindNode) {
     if (node.id === 'root' || isReadOnly || reparentId) return
     if (Date.now() - lastTouchRef.current < 500) return // skip synthesized mouse events after touch
     pushHistory()
-    moveRef.current = { id: node.id, ox: node.x, oy: node.y, mx: e.clientX, my: e.clientY }
+    moveRef.current = { id: node.id, ox: node.x, oy: node.y, mx: e.clientX, my: e.clientY, childOffsets: captureChildOffsets(node.id) }
     e.stopPropagation()
     e.preventDefault()
   }
@@ -853,7 +879,7 @@ export default function BookMindMap({ bookId, bookTitle, initialJson, onClose, r
     const touch = e.touches[0]
     lastTouchRef.current = Date.now()
     pushHistory()
-    touchMoveRef.current = { id: node.id, ox: node.x, oy: node.y, startTX: touch.clientX, startTY: touch.clientY }
+    touchMoveRef.current = { id: node.id, ox: node.x, oy: node.y, startTX: touch.clientX, startTY: touch.clientY, childOffsets: captureChildOffsets(node.id) }
     e.stopPropagation()
   }
 
