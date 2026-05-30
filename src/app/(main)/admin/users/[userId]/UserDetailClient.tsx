@@ -216,6 +216,12 @@ export default function UserDetailClient({
   const booksReading   = books.filter(b => b.status === 'reading')
   const booksCompleted = books.filter(b => b.status === 'completed')
 
+  const topStreak      = habits.reduce((m, h) => Math.max(m, h.streak_count ?? 0), 0)
+  const bestEver       = habits.reduce((m, h) => Math.max(m, h.longest_streak ?? 0), 0)
+  const weekDone       = habitLogs.filter(l => l.status === 'done').length
+  const weekTotal      = habitLogs.length
+  const weekPct        = weekTotal > 0 ? Math.round((weekDone / weekTotal) * 100) : null
+
   return (
     <div className="min-h-screen p-4 md:p-8 space-y-6 max-w-5xl mx-auto">
       {/* Back + edit toggle */}
@@ -268,11 +274,21 @@ export default function UserDetailClient({
             )}
           </div>
         </div>
-        <div className="hidden md:grid grid-cols-3 gap-3 text-center shrink-0">
+        <div className="hidden md:grid grid-cols-4 gap-3 text-center shrink-0">
+          {/* Habits — streak-first */}
+          <div className="rounded-lg border border-white/[0.06] px-3 py-2">
+            <Flame className="h-3.5 w-3.5 text-orange-400 mx-auto mb-1" />
+            <p className="text-base font-bold text-orange-400">{topStreak}</p>
+            <p className="text-[10px] text-slate-500">Top Streak</p>
+            <p className="text-[10px] text-slate-600">
+              {habits.length} habit{habits.length !== 1 ? 's' : ''}
+              {bestEver > topStreak ? ` · best ${bestEver}` : ''}
+            </p>
+          </div>
           {[
-            { icon: Dumbbell, label: 'Workouts', value: workouts.length, sub: 'recent 10' },
-            { icon: BookOpen,  label: 'Books',    value: booksReading.length + booksCompleted.length, sub: `${booksCompleted.length} done` },
-            { icon: Target,    label: 'Goals',    value: activeGoals.length, sub: `${completedGoals.length} done` },
+            { icon: Dumbbell, label: 'Workouts', value: workouts.length,                              sub: 'recent 10' },
+            { icon: BookOpen,  label: 'Books',    value: booksReading.length + booksCompleted.length,  sub: `${booksCompleted.length} done` },
+            { icon: Target,    label: 'Goals',    value: activeGoals.length,                           sub: `${completedGoals.length} done` },
           ].map(({ icon: Icon, label, value, sub }) => (
             <div key={label} className="rounded-lg border border-white/[0.06] px-3 py-2">
               <Icon className="h-3.5 w-3.5 text-slate-500 mx-auto mb-1" />
@@ -288,7 +304,19 @@ export default function UserDetailClient({
         {/* ── Habits ── */}
         <div className="space-y-2">
           <div className="flex items-center justify-between">
-            <h2 className="text-sm font-semibold text-slate-400 uppercase tracking-wider">Habits</h2>
+            <div className="flex items-center gap-3">
+              <h2 className="text-sm font-semibold text-slate-400 uppercase tracking-wider">Habits</h2>
+              {topStreak > 0 && (
+                <span className="flex items-center gap-1 text-xs text-orange-400 font-medium">
+                  <Flame className="h-3 w-3" />{topStreak} streak
+                </span>
+              )}
+              {weekPct !== null && (
+                <span className={cn('text-xs font-medium', weekPct >= 70 ? 'text-emerald-400' : weekPct >= 40 ? 'text-amber-400' : 'text-red-400')}>
+                  {weekPct}% this week
+                </span>
+              )}
+            </div>
             {editMode && (
               <button onClick={() => setAddingHabit(a => !a)} className="flex items-center gap-1 text-xs text-indigo-400 hover:text-indigo-300">
                 <Plus className="h-3.5 w-3.5" /> Add
