@@ -16,16 +16,16 @@ export async function POST(req: Request) {
       messages: [
         {
           role: 'system',
-          content: 'You are a book expert who explains concepts clearly and concisely. Return JSON only.',
+          content: 'You are a concise knowledge assistant. Explain concepts directly and practically. Never mention book titles, authors, or source material. Return JSON only.',
         },
         {
           role: 'user',
-          content: `Explain the concept "${topic}" as it relates to the book "${bookTitle}".
+          content: `Explain the concept "${topic}" directly and practically. Do NOT mention any book title or author.
 
 Return JSON:
 {
-  "summary": "2-3 sentence explanation of this concept in the context of the book",
-  "keyPoints": ["point 1", "point 2", "point 3"]
+  "summary": "2-3 sentences explaining what this concept means and why it matters — written as standalone insight, no source reference",
+  "keyPoints": ["actionable point 1", "actionable point 2", "actionable point 3"]
 }`,
         },
       ],
