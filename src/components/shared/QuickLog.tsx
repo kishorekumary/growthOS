@@ -12,7 +12,7 @@ import { cn } from '@/lib/utils'
 import RichTextEditor from './RichTextEditor'
 
 type Panel = 'voice' | 'meal' | 'workout' | 'habit' | 'finance' | 'journal'
-type MealType    = 'breakfast' | 'lunch' | 'dinner' | 'snack'
+type MealType    = 'breakfast' | 'lunch' | 'dinner' | 'snack' | 'drink'
 type WorkoutType = 'cardio' | 'strength' | 'yoga' | 'sports' | 'rest'
 type TxnType     = 'expense' | 'income' | 'savings'
 
@@ -81,6 +81,15 @@ const MEAL_TYPES: { value: MealType; icon: string; label: string }[] = [
   { value: 'lunch',     icon: '☀️', label: 'Lunch'     },
   { value: 'dinner',    icon: '🌙', label: 'Dinner'    },
   { value: 'snack',     icon: '🍎', label: 'Snack'     },
+  { value: 'drink',     icon: '☕', label: 'Drink'     },
+]
+
+const WATER_QUICK = [
+  { icon: '☕', ml: 30,   label: '+30' },
+  { icon: '🍵', ml: 150,  label: '+150' },
+  { icon: '🥤', ml: 250,  label: '+250' },
+  { icon: '🫗', ml: 500,  label: '+500' },
+  { icon: '💧', ml: 1000, label: '+1L'  },
 ]
 
 function MealPanel({ onDone }: { onDone: () => void }) {
@@ -89,7 +98,11 @@ function MealPanel({ onDone }: { onDone: () => void }) {
 
   const [mealType, setMealType]       = useState<MealType>(() => {
     const h = new Date().getHours()
-    return h < 10 ? 'breakfast' : h < 14 ? 'lunch' : h < 20 ? 'dinner' : 'snack'
+    return h < 10 ? 'breakfast' : h < 14 ? 'lunch' : h < 20 ? 'dinner' : h < 22 ? 'snack' : 'drink'
+  })
+  const [loggedTime, setLoggedTime]   = useState(() => {
+    const n = new Date()
+    return `${String(n.getHours()).padStart(2,'0')}:${String(n.getMinutes()).padStart(2,'0')}`
   })
   const [preview, setPreview]         = useState<string | null>(null)
   const [analyzing, setAnalyzing]     = useState(false)
@@ -102,13 +115,18 @@ function MealPanel({ onDone }: { onDone: () => void }) {
   const [macros, setMacros]           = useState({ protein_g: 0, carbs_g: 0, fiber_g: 0, fat_g: 0 })
   const [saving, setSaving]           = useState(false)
   const [saved, setSaved]             = useState(false)
+  const [waterAdded, setWaterAdded]   = useState(0)
+  const [addingWater, setAddingWater] = useState<number | null>(null)
+  const [userId, setUserId]           = useState<string | null>(null)
+
+  useEffect(() => {
+    createSupabaseBrowserClient().auth.getSession()
+      .then(({ data: { session } }) => setUserId(session?.user?.id ?? null))
+  }, [])
 
   function handleFile(file: File) {
     const reader = new FileReader()
-    reader.onload = e => {
-      setPreview(e.target?.result as string)
-      setAiReady(false); setAnalyzeErr(null)
-    }
+    reader.onload = e => { setPreview(e.target?.result as string); setAiReady(false); setAnalyzeErr(null) }
     reader.readAsDataURL(file)
   }
 
@@ -124,36 +142,28 @@ function MealPanel({ onDone }: { onDone: () => void }) {
     setAnalyzing(true); setAnalyzeErr(null)
     try {
       const { base64, mediaType } = await resizeImage(preview)
-      const res  = await fetch('/api/nutrition/analyze', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ imageBase64: base64, mediaType }),
-      })
+      const res  = await fetch('/api/nutrition/analyze', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ imageBase64: base64, mediaType }) })
       const text = await res.text()
       let data: NutritionEstimate
       try { data = JSON.parse(text) } catch { throw new Error(res.ok ? 'Unexpected response' : `Server error ${res.status}`) }
       if (!res.ok) throw new Error((data as unknown as { error: string }).error ?? 'Analysis failed')
       fillFromEstimate(data)
-    } catch (e) {
-      setAnalyzeErr(e instanceof Error ? e.message : 'Analysis failed')
-    } finally { setAnalyzing(false) }
+    } catch (e) { setAnalyzeErr(e instanceof Error ? e.message : 'Analysis failed') }
+    finally { setAnalyzing(false) }
   }
 
   async function autofill() {
     if (!foodName.trim() || autofilling) return
     setAutofilling(true); setAutofillErr(null)
     try {
-      const res  = await fetch('/api/nutrition/autofill', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ foodName: foodName.trim() }),
-      })
+      const res  = await fetch('/api/nutrition/autofill', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ foodName: foodName.trim() }) })
       const text = await res.text()
       let data: NutritionEstimate
       try { data = JSON.parse(text) } catch { throw new Error(res.ok ? 'Unexpected response' : `Server error ${res.status}`) }
       if (!res.ok) throw new Error((data as unknown as { error: string }).error ?? 'Autofill failed')
       fillFromEstimate(data)
-    } catch (e) {
-      setAutofillErr(e instanceof Error ? e.message : 'Autofill failed')
-    } finally { setAutofilling(false) }
+    } catch (e) { setAutofillErr(e instanceof Error ? e.message : 'Autofill failed') }
+    finally { setAutofilling(false) }
   }
 
   async function handleSave() {
@@ -162,16 +172,28 @@ function MealPanel({ onDone }: { onDone: () => void }) {
     const supabase = createSupabaseBrowserClient()
     const { data: { session } } = await supabase.auth.getSession()
     if (!session?.user) { setSaving(false); return }
+    const [hh, mm] = loggedTime.split(':').map(Number)
+    const ts = new Date(); ts.setHours(hh, mm, 0, 0)
     await supabase.from('nutrition_logs').insert({
       user_id:   session.user.id,
       log_date:  todayStr(),
       meal_type: mealType,
       food_name: foodName.trim(),
       calories:  Math.round(Number(calories)),
+      logged_at: ts.toISOString(),
       ...macros,
     })
     setSaving(false); setSaved(true)
     setTimeout(onDone, 900)
+  }
+
+  async function addWater(ml: number) {
+    if (!userId) return
+    setAddingWater(ml)
+    const supabase = createSupabaseBrowserClient()
+    await supabase.from('water_logs').insert({ user_id: userId, log_date: todayStr(), amount_ml: ml, logged_at: new Date().toISOString() })
+    setWaterAdded(w => w + ml)
+    setAddingWater(null)
   }
 
   if (saved) return (
@@ -179,31 +201,38 @@ function MealPanel({ onDone }: { onDone: () => void }) {
       <div className="flex h-12 w-12 items-center justify-center rounded-full bg-amber-500/20 border border-amber-500/30">
         <Check className="h-6 w-6 text-amber-400" />
       </div>
-      <p className="text-sm text-slate-300">Meal logged!</p>
+      <p className="text-sm text-slate-300">Logged!</p>
     </div>
   )
 
   return (
     <div className="space-y-3.5">
-      {/* Meal type */}
-      <div className="grid grid-cols-4 gap-1.5">
-        {MEAL_TYPES.map(t => (
-          <button key={t.value} type="button" onClick={() => setMealType(t.value)}
-            className={cn(
-              'flex flex-col items-center gap-1 rounded-lg border py-2.5 px-1 text-xs font-medium transition-all',
-              mealType === t.value
-                ? 'border-amber-500 bg-amber-500/20 text-white'
-                : 'border-white/10 bg-white/5 text-slate-400 hover:border-white/20',
-            )}>
-            <span className="text-base">{t.icon}</span>
-            {t.label}
-          </button>
-        ))}
+      {/* Time + meal type row */}
+      <div className="flex items-center gap-2">
+        <input
+          type="time"
+          value={loggedTime}
+          onChange={e => setLoggedTime(e.target.value)}
+          className="rounded-lg border border-white/10 bg-white/5 px-2.5 py-1.5 text-xs text-white focus:outline-none focus:border-amber-500 tabular-nums shrink-0"
+        />
+        <div className="flex gap-1 overflow-x-auto">
+          {MEAL_TYPES.map(t => (
+            <button key={t.value} type="button" onClick={() => setMealType(t.value)}
+              className={cn(
+                'shrink-0 flex items-center gap-1 rounded-lg border px-2 py-1.5 text-xs font-medium transition-all',
+                mealType === t.value
+                  ? 'border-amber-500 bg-amber-500/20 text-white'
+                  : 'border-white/10 bg-white/5 text-slate-400 hover:border-white/20',
+              )}>
+              <span>{t.icon}</span> {t.label}
+            </button>
+          ))}
+        </div>
       </div>
 
       {/* Photo zone */}
       {preview ? (
-        <div className="relative rounded-xl overflow-hidden h-36 cursor-pointer group" onClick={() => fileRef.current?.click()}>
+        <div className="relative rounded-xl overflow-hidden h-32 cursor-pointer group" onClick={() => fileRef.current?.click()}>
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src={preview} alt="food" className="w-full h-full object-cover" />
           <div className="absolute inset-0 flex items-center justify-center bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity">
@@ -213,25 +242,21 @@ function MealPanel({ onDone }: { onDone: () => void }) {
       ) : (
         <div className="grid grid-cols-2 gap-2">
           <button type="button" onClick={() => cameraRef.current?.click()}
-            className="flex flex-col items-center gap-2 rounded-xl border-2 border-dashed border-white/10 hover:border-amber-500/40 py-4 text-slate-500 hover:text-slate-300 transition-all">
-            <Camera className="h-6 w-6" />
-            <span className="text-xs font-medium">Take Photo</span>
+            className="flex flex-col items-center gap-2 rounded-xl border-2 border-dashed border-white/10 hover:border-amber-500/40 py-3.5 text-slate-500 hover:text-slate-300 transition-all">
+            <Camera className="h-5 w-5" /><span className="text-xs font-medium">Take Photo</span>
           </button>
           <button type="button" onClick={() => fileRef.current?.click()}
-            className="flex flex-col items-center gap-2 rounded-xl border-2 border-dashed border-white/10 hover:border-amber-500/40 py-4 text-slate-500 hover:text-slate-300 transition-all">
-            <ImageIcon className="h-6 w-6" />
-            <span className="text-xs font-medium">Upload Photo</span>
+            className="flex flex-col items-center gap-2 rounded-xl border-2 border-dashed border-white/10 hover:border-amber-500/40 py-3.5 text-slate-500 hover:text-slate-300 transition-all">
+            <ImageIcon className="h-5 w-5" /><span className="text-xs font-medium">Upload Photo</span>
           </button>
         </div>
       )}
 
-      {/* Hidden file inputs */}
       <input ref={cameraRef} type="file" accept="image/*" capture="environment" className="hidden"
         onChange={e => { if (e.target.files?.[0]) { handleFile(e.target.files[0]); e.target.value = '' } }} />
-      <input ref={fileRef} type="file" accept="image/*" className="hidden"
+      <input ref={fileRef}   type="file" accept="image/*" className="hidden"
         onChange={e => { if (e.target.files?.[0]) { handleFile(e.target.files[0]); e.target.value = '' } }} />
 
-      {/* Analyze button */}
       {preview && !aiReady && (
         <button onClick={analyze} disabled={analyzing}
           className="w-full flex items-center justify-center gap-2 rounded-xl border border-amber-500/30 bg-amber-500/10 hover:bg-amber-500/20 disabled:opacity-60 px-4 py-2.5 text-sm font-medium text-amber-300 transition-all">
@@ -239,67 +264,93 @@ function MealPanel({ onDone }: { onDone: () => void }) {
           {analyzing ? 'Analysing…' : 'Analyse with AI'}
         </button>
       )}
-
       {analyzeErr && (
         <div className="flex items-start gap-2 rounded-lg border border-red-500/20 bg-red-500/10 px-3 py-2 text-xs text-red-400">
           <AlertCircle className="h-3.5 w-3.5 shrink-0 mt-0.5" />{analyzeErr}
         </div>
       )}
 
-      {aiReady && (
-        <div className="flex items-center gap-2 rounded-lg border border-emerald-500/20 bg-emerald-500/10 px-3 py-2 text-xs text-emerald-400">
-          <CheckCircle2 className="h-3.5 w-3.5 shrink-0" /> AI estimate ready — adjust if needed
-        </div>
-      )}
-
-      {/* Food name + autofill */}
+      {/* Food name + autofill (auto-triggers on Enter) */}
       <div className="flex gap-2">
         <input
           autoFocus
-          placeholder="What did you eat?"
+          placeholder={mealType === 'drink' ? 'What did you drink?' : 'What did you eat?'}
           value={foodName}
-          onChange={e => { setFoodName(e.target.value); setAutofillErr(null) }}
+          onChange={e => { setFoodName(e.target.value); setAutofillErr(null); setAiReady(false) }}
           onKeyDown={e => { if (e.key === 'Enter' && foodName.trim().length >= 3) autofill() }}
           className="flex-1 rounded-lg border border-white/10 bg-white/5 px-3 py-2.5 text-sm text-white placeholder:text-slate-600 focus:outline-none focus:border-amber-500"
         />
         <button type="button" onClick={autofill} disabled={autofilling || !foodName.trim()}
-          title="Auto-fill macros with AI"
+          title="Auto-fill macros with AI (or press Enter)"
           className={cn(
             'shrink-0 flex items-center gap-1 rounded-lg border px-3 py-2.5 text-xs font-medium transition-all',
-            autofilling
-              ? 'border-amber-500/30 bg-amber-500/10 text-amber-400'
-              : foodName.trim()
-                ? 'border-amber-500/40 bg-amber-500/10 text-amber-300 hover:bg-amber-500/20'
-                : 'border-white/10 bg-white/5 text-slate-600 cursor-not-allowed',
+            autofilling ? 'border-amber-500/30 bg-amber-500/10 text-amber-400'
+              : foodName.trim() ? 'border-amber-500/40 bg-amber-500/10 text-amber-300 hover:bg-amber-500/20'
+              : 'border-white/10 bg-white/5 text-slate-600 cursor-not-allowed',
           )}>
           {autofilling ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Sparkles className="h-3.5 w-3.5" />}
         </button>
       </div>
+      {autofillErr && <p className="text-[11px] text-red-400 flex items-center gap-1"><AlertCircle className="h-3 w-3 shrink-0" />{autofillErr}</p>}
 
-      {autofillErr && (
-        <p className="text-[11px] text-red-400 flex items-center gap-1">
-          <AlertCircle className="h-3 w-3 shrink-0" />{autofillErr}
-        </p>
+      {/* Macros grid — shown after autofill */}
+      {aiReady && (
+        <div className="rounded-xl border border-emerald-500/20 bg-emerald-500/6 p-3 space-y-2">
+          <div className="flex items-center gap-1.5 text-xs text-emerald-400">
+            <CheckCircle2 className="h-3.5 w-3.5 shrink-0" /> AI estimate ready — adjust if needed
+          </div>
+          <div className="grid grid-cols-4 gap-1.5">
+            {[
+              { label: 'kcal',    value: calories,              color: 'text-amber-300',  isStr: true, onChange: setCalories },
+              { label: 'protein', value: String(macros.protein_g), color: 'text-sky-300',  isStr: false, onChange: (v: string) => setMacros(m => ({ ...m, protein_g: Number(v) })) },
+              { label: 'carbs',   value: String(macros.carbs_g),   color: 'text-violet-300',isStr: false, onChange: (v: string) => setMacros(m => ({ ...m, carbs_g: Number(v) })) },
+              { label: 'fat',     value: String(macros.fat_g),     color: 'text-orange-300',isStr: false, onChange: (v: string) => setMacros(m => ({ ...m, fat_g: Number(v) })) },
+            ].map(({ label, value, color, onChange }) => (
+              <div key={label} className="flex flex-col items-center rounded-lg bg-black/20 py-1.5 px-1">
+                <input
+                  type="number" min={0}
+                  value={value}
+                  onChange={e => onChange(e.target.value)}
+                  className={cn('w-full bg-transparent text-center text-sm font-bold focus:outline-none tabular-nums', color)}
+                />
+                <span className="text-[10px] text-slate-500">{label}</span>
+              </div>
+            ))}
+          </div>
+        </div>
       )}
 
-      {/* Calories */}
-      <input
-        type="number" min={0}
-        placeholder="Calories (kcal)"
-        value={calories}
-        onChange={e => setCalories(e.target.value)}
-        onKeyDown={e => { if (e.key === 'Enter') handleSave() }}
-        className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2.5 text-sm text-white placeholder:text-slate-600 focus:outline-none focus:border-amber-500"
-      />
+      {/* Calories field when no autofill yet */}
+      {!aiReady && (
+        <input type="number" min={0} placeholder="Calories (kcal)" value={calories}
+          onChange={e => setCalories(e.target.value)}
+          onKeyDown={e => { if (e.key === 'Enter') handleSave() }}
+          className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2.5 text-sm text-white placeholder:text-slate-600 focus:outline-none focus:border-amber-500"
+        />
+      )}
 
-      <button
-        onClick={handleSave}
-        disabled={saving || !foodName.trim() || !calories}
-        className="w-full flex items-center justify-center gap-2 rounded-xl bg-amber-600 hover:bg-amber-700 disabled:opacity-50 disabled:cursor-not-allowed px-4 py-3 text-sm font-semibold text-white transition-all"
-      >
+      <button onClick={handleSave} disabled={saving || !foodName.trim() || !calories}
+        className="w-full flex items-center justify-center gap-2 rounded-xl bg-amber-600 hover:bg-amber-700 disabled:opacity-50 disabled:cursor-not-allowed px-4 py-3 text-sm font-semibold text-white transition-all">
         {saving && <Loader2 className="h-4 w-4 animate-spin" />}
-        Log Meal
+        Log Intake
       </button>
+
+      {/* Water quick-log */}
+      <div className="rounded-xl border border-sky-500/20 bg-sky-500/5 p-3 space-y-2">
+        <div className="flex items-center justify-between">
+          <p className="text-xs font-medium text-sky-300">💧 Log Water</p>
+          {waterAdded > 0 && <span className="text-xs text-sky-400 tabular-nums">+{waterAdded}ml added</span>}
+        </div>
+        <div className="flex gap-1.5 flex-wrap">
+          {WATER_QUICK.map(w => (
+            <button key={w.ml} onClick={() => addWater(w.ml)} disabled={!userId || !!addingWater}
+              className="flex items-center gap-1 rounded-lg border border-sky-500/30 bg-sky-500/10 hover:bg-sky-500/20 disabled:opacity-50 px-2 py-1 text-xs font-medium text-sky-300 transition-all">
+              {addingWater === w.ml ? <Loader2 className="h-3 w-3 animate-spin" /> : <span>{w.icon}</span>}
+              {w.label}
+            </button>
+          ))}
+        </div>
+      </div>
     </div>
   )
 }
@@ -946,6 +997,7 @@ function VoicePanel({ onDone }: { onDone: () => void }) {
           carbs_g:   nutritionData?.carbs_g   ?? 0,
           fat_g:     nutritionData?.fat_g     ?? 0,
           fiber_g:   nutritionData?.fiber_g   ?? 0,
+          logged_at: new Date().toISOString(),
         })
       } else if (result.type === 'habit' && matchedHabit) {
         const h         = matchedHabit
