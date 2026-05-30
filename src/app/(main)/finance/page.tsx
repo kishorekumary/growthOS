@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import dynamic from 'next/dynamic'
 import { Loader2 } from 'lucide-react'
 import { cn } from '@/lib/utils'
@@ -42,6 +42,11 @@ type Tab = typeof TABS[number]
 export default function FinancePage() {
   const [tab, setTab] = useState<Tab>('Overview')
   const [monthIdx, setMonthIdx] = useState(0)
+
+  useEffect(() => {
+    const t = new URLSearchParams(window.location.search).get('tab')
+    if (t && (TABS as readonly string[]).includes(t)) setTab(t as Tab)
+  }, [])
   const selectedMonth = MONTHS[monthIdx]
 
   return (

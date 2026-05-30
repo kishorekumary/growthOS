@@ -1129,7 +1129,7 @@ const TABS: {
     id: 'meal', label: 'Meal', Icon: Utensils,
     activeClass:   'border-amber-500 bg-amber-500/20 text-white',
     inactiveClass: 'border-amber-500/20 bg-amber-500/8 text-amber-400/80 hover:opacity-100',
-    route: '/fitness',
+    route: '/fitness?tab=Nutrition',
   },
   {
     id: 'workout', label: 'Workout', Icon: Dumbbell,
@@ -1141,7 +1141,7 @@ const TABS: {
     id: 'finance', label: 'Finance', Icon: CreditCard,
     activeClass:   'border-violet-500 bg-violet-500/20 text-white',
     inactiveClass: 'border-violet-500/20 bg-violet-500/8 text-violet-400/80 hover:opacity-100',
-    route: '/finance',
+    route: '/finance?tab=Tracker',
   },
   {
     id: 'journal', label: 'Journal', Icon: BookOpen,
