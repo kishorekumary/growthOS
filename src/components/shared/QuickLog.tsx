@@ -770,7 +770,9 @@ function VoicePanel({ onDone }: { onDone: () => void }) {
   const [interim, setInterim]     = useState('')
   const [result, setResult]       = useState<VoiceResult | null>(null)
   const [errorMsg, setErrorMsg]   = useState('')
-  const [matchedHabit, setMatchedHabit] = useState<Habit | null>(null)
+  const [matchedHabit, setMatchedHabit]   = useState<Habit | null>(null)
+  const [nutritionData, setNutritionData] = useState<NutritionEstimate | null>(null)
+  const [parsingMsg, setParsingMsg]       = useState('Understanding your command…')
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const recognitionRef = useRef<any>(null)
@@ -839,13 +841,32 @@ function VoicePanel({ onDone }: { onDone: () => void }) {
 
   async function parseTranscript(text: string) {
     try {
+      setParsingMsg('Understanding your command…')
       const res  = await fetch('/api/ai/voice-log', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ transcript: text }),
       })
-      const data: VoiceResult = await res.json()
+      let data: VoiceResult = await res.json()
       if (!res.ok) throw new Error((data as unknown as { error: string }).error ?? 'Parse failed')
+
+      // For meal intents: chain the nutrition autofill to get macros
+      if (data.type === 'meal') {
+        setParsingMsg('Analyzing nutrition…')
+        try {
+          const autofillRes = await fetch('/api/nutrition/autofill', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ foodName: data.food_name }),
+          })
+          if (autofillRes.ok) {
+            const nutrition: NutritionEstimate = await autofillRes.json()
+            setNutritionData(nutrition)
+            // Use autofill's cleaned-up food name
+            data = { ...data, food_name: nutrition.food_name }
+          }
+        } catch { /* non-fatal — proceed without macros */ }
+      }
 
       // For habit intents, try to match to a real habit
       if (data.type === 'habit') {
@@ -906,8 +927,12 @@ function VoicePanel({ onDone }: { onDone: () => void }) {
           user_id:   uid,
           log_date:  today,
           meal_type: result.meal_type,
-          food_name: result.food_name,
-          calories:  0,
+          food_name: nutritionData?.food_name || result.food_name,
+          calories:  nutritionData?.calories  ?? 0,
+          protein_g: nutritionData?.protein_g ?? 0,
+          carbs_g:   nutritionData?.carbs_g   ?? 0,
+          fat_g:     nutritionData?.fat_g     ?? 0,
+          fiber_g:   nutritionData?.fiber_g   ?? 0,
         })
       } else if (result.type === 'habit' && matchedHabit) {
         const h         = matchedHabit
@@ -942,7 +967,8 @@ function VoicePanel({ onDone }: { onDone: () => void }) {
   }
 
   function retry() {
-    setTranscript(''); setResult(null); setErrorMsg(''); setMatchedHabit(null)
+    setTranscript(''); setResult(null); setErrorMsg('')
+    setMatchedHabit(null); setNutritionData(null)
     setState('idle')
   }
 
@@ -986,7 +1012,8 @@ function VoicePanel({ onDone }: { onDone: () => void }) {
       {state === 'idle' && (
         <p className="text-xs text-center text-slate-500">
           Tap the mic and say something like<br />
-          <span className="text-slate-400">"Spent ₹150 on coffee"</span> or <span className="text-slate-400">"Did yoga for 30 mins"</span>
+          <span className="text-slate-400">"Had two egg dosa for breakfast"</span><br />
+          <span className="text-slate-400">"Spent ₹150 on coffee"</span> · <span className="text-slate-400">"Did yoga for 30 mins"</span>
         </p>
       )}
 
@@ -1027,7 +1054,7 @@ function VoicePanel({ onDone }: { onDone: () => void }) {
       {state === 'parsing' && (
         <div className="flex flex-col items-center gap-3 py-4">
           <Loader2 className="h-7 w-7 animate-spin text-emerald-400" />
-          <p className="text-xs text-slate-500">Understanding your command…</p>
+          <p className="text-xs text-slate-500">{parsingMsg}</p>
         </div>
       )}
 
@@ -1051,7 +1078,24 @@ function VoicePanel({ onDone }: { onDone: () => void }) {
             <p className="text-xs text-slate-400">{result.workout_type} · {result.duration_mins} min</p>
           )}
           {result.type === 'meal' && (
-            <p className="text-xs text-slate-400">{result.meal_type} · {result.food_name}</p>
+            <div className="space-y-2">
+              <p className="text-xs text-slate-400 capitalize">{result.meal_type} · {result.food_name}</p>
+              {nutritionData && (
+                <div className="grid grid-cols-4 gap-1.5 pt-1">
+                  {[
+                    { label: 'kcal',    value: nutritionData.calories,  color: 'text-amber-300'  },
+                    { label: 'protein', value: `${nutritionData.protein_g}g`, color: 'text-sky-300'    },
+                    { label: 'carbs',   value: `${nutritionData.carbs_g}g`,   color: 'text-violet-300' },
+                    { label: 'fat',     value: `${nutritionData.fat_g}g`,     color: 'text-orange-300' },
+                  ].map(({ label, value, color }) => (
+                    <div key={label} className="flex flex-col items-center rounded-lg bg-black/20 py-1.5">
+                      <span className={cn('text-sm font-bold', color)}>{value}</span>
+                      <span className="text-[10px] text-slate-500">{label}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
           )}
           {result.type === 'habit' && (
             <p className="text-xs text-slate-400">

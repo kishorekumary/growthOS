@@ -16,8 +16,13 @@ WORKOUT (any physical exercise):
 {"type":"workout","workout_type":"cardio"|"strength"|"yoga"|"sports"|"rest","duration_mins":<number|null>,"notes":"<text>","summary":"<1 sentence>"}
 
 MEAL (food consumed):
-{"type":"meal","meal_type":"breakfast"|"lunch"|"dinner"|"snack","food_name":"<text>","summary":"<1 sentence>"}
-Infer meal_type from time references or context ("morning" → breakfast, "noon/lunch" → lunch, "evening/dinner" → dinner, else "snack").
+{"type":"meal","meal_type":"breakfast"|"lunch"|"dinner"|"snack","food_name":"<full description with quantity>","summary":"<1 sentence>"}
+Rules for food_name:
+- ALWAYS preserve quantities and descriptors: "two egg dosa" → "two egg dosa" (NOT "dosa")
+- "I had X for Y" → food_name: X (verbatim, with quantity), meal_type: Y
+- Include preparation: "scrambled eggs" not just "eggs", "masala oats" not just "oats"
+- Examples: "2 egg dosa", "a bowl of oatmeal with fruits", "chicken biryani half plate"
+Infer meal_type from context: "morning/breakfast" → breakfast, "lunch/noon/afternoon" → lunch, "dinner/evening/night" → dinner, else snack.
 
 HABIT (completing a habit or daily routine):
 {"type":"habit","habit_name":"<core habit name only>","summary":"<1 sentence>"}
