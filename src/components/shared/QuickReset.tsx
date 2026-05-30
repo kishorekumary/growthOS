@@ -1,13 +1,13 @@
 'use client'
 
 import { useState, useEffect, useRef, useCallback, type TouchEvent } from 'react'
-import { Wind, Sparkles, Brain, X, ChevronLeft, ChevronRight, Loader2, RefreshCw, Zap, Target, CheckSquare, Circle, ScrollText } from 'lucide-react'
+import { Wind, Sparkles, Brain, X, ChevronLeft, ChevronRight, Loader2, RefreshCw, Zap, Target, CheckSquare, Circle, ScrollText, Leaf } from 'lucide-react'
 import { differenceInDays, isBefore, parseISO, startOfDay } from 'date-fns'
 import { createSupabaseBrowserClient } from '@/lib/supabase'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 
-type Mode = 'menu' | 'breathing' | 'affirmations' | 'ai' | 'goals' | 'tasks' | 'identity'
+type Mode = 'menu' | 'breathing' | 'affirmations' | 'ai' | 'goals' | 'tasks' | 'identity' | 'grounding'
 
 // ─── Box breathing phases ─────────────────────────────────────────
 const PHASES = [
@@ -518,6 +518,152 @@ function IdentityView() {
   )
 }
 
+// ─── 5-4-3-2-1 Grounding exercise ────────────────────────────────
+
+const GROUNDING_STEPS = [
+  { count: 5, sense: 'SEE',   emoji: '👁',  color: 'text-sky-300',     ring: 'border-sky-500/30',    bg: 'bg-sky-500/10',    placeholder: 'e.g. the ceiling, my phone, a plant…' },
+  { count: 4, sense: 'FEEL',  emoji: '🤚',  color: 'text-amber-300',   ring: 'border-amber-500/30',  bg: 'bg-amber-500/10',  placeholder: 'e.g. the chair, my breath, warmth…'    },
+  { count: 3, sense: 'HEAR',  emoji: '👂',  color: 'text-emerald-300', ring: 'border-emerald-500/30',bg: 'bg-emerald-500/10',placeholder: 'e.g. traffic, birds, my heartbeat…'    },
+  { count: 2, sense: 'SMELL', emoji: '👃',  color: 'text-violet-300',  ring: 'border-violet-500/30', bg: 'bg-violet-500/10', placeholder: 'e.g. coffee, fresh air…'                },
+  { count: 1, sense: 'TASTE', emoji: '👅',  color: 'text-rose-300',    ring: 'border-rose-500/30',   bg: 'bg-rose-500/10',   placeholder: 'e.g. mint, water, nothing…'             },
+] as const
+
+function GroundingExercise() {
+  const [stepIdx, setStepIdx] = useState(-1)
+  const [answers, setAnswers] = useState<string[][]>(
+    GROUNDING_STEPS.map(s => Array.from({ length: s.count }, () => ''))
+  )
+
+  const step   = stepIdx >= 0 && stepIdx < GROUNDING_STEPS.length ? GROUNDING_STEPS[stepIdx] : null
+  const isLast = stepIdx === GROUNDING_STEPS.length - 1
+  const isDone = stepIdx >= GROUNDING_STEPS.length
+
+  function updateAnswer(itemIdx: number, value: string) {
+    setAnswers(prev => prev.map((arr, si) =>
+      si === stepIdx ? arr.map((v, i) => i === itemIdx ? value : v) : arr
+    ))
+  }
+
+  function canAdvance() {
+    if (stepIdx < 0) return true
+    return answers[stepIdx].some(a => a.trim().length > 0)
+  }
+
+  function advance() { setStepIdx(i => i + 1) }
+
+  function reset() {
+    setStepIdx(-1)
+    setAnswers(GROUNDING_STEPS.map(s => Array.from({ length: s.count }, () => '')))
+  }
+
+  function handleKeyDown(e: React.KeyboardEvent<HTMLInputElement>, itemIdx: number) {
+    if (e.key !== 'Enter') return
+    e.preventDefault()
+    // Move to the next input in the same step, or advance if last
+    const next = document.querySelector<HTMLInputElement>(`[data-step="${stepIdx}"] [data-item="${itemIdx + 1}"]`)
+    if (next) next.focus()
+    else if (canAdvance()) advance()
+  }
+
+  // ── Intro ────────────────────────────────────────────────────────
+  if (stepIdx === -1) return (
+    <div className="flex flex-col items-center gap-5 py-2 text-center">
+      <div className="space-y-1.5">
+        <p className="text-white font-semibold text-base">5-4-3-2-1 Grounding</p>
+        <p className="text-slate-400 text-sm leading-relaxed px-2">
+          Anchor to the present by noticing your surroundings through each sense.
+        </p>
+      </div>
+      <div className="flex flex-col gap-1.5 w-full">
+        {GROUNDING_STEPS.map(s => (
+          <div key={s.sense} className={cn('flex items-center gap-3 rounded-xl px-4 py-2.5', s.bg)}>
+            <span className="text-lg w-7 text-center">{s.emoji}</span>
+            <span className={cn('text-sm font-medium', s.color)}>
+              <span className="font-bold">{s.count}</span> things you can <span className="font-bold">{s.sense.toLowerCase()}</span>
+            </span>
+          </div>
+        ))}
+      </div>
+      <Button onClick={advance} className="bg-teal-600 hover:bg-teal-700 text-white px-10">
+        Begin
+      </Button>
+    </div>
+  )
+
+  // ── Completion ───────────────────────────────────────────────────
+  if (isDone) return (
+    <div className="flex flex-col items-center gap-5 py-4 text-center">
+      <div className="flex h-16 w-16 items-center justify-center rounded-full bg-teal-500/20 border-2 border-teal-500/30">
+        <span className="text-3xl">🌿</span>
+      </div>
+      <div className="space-y-1.5">
+        <p className="text-white font-semibold text-base">You&rsquo;re grounded</p>
+        <p className="text-slate-400 text-sm px-3 leading-relaxed">
+          You just brought yourself into the present moment. Take one more slow breath and carry this calm with you.
+        </p>
+      </div>
+      <Button variant="outline" onClick={reset}
+        className="border-white/20 bg-white/5 text-slate-400 hover:text-white hover:bg-white/10">
+        <RefreshCw className="mr-2 h-3.5 w-3.5" /> Do it again
+      </Button>
+    </div>
+  )
+
+  // ── Active step ──────────────────────────────────────────────────
+  return (
+    <div className="flex flex-col gap-4">
+      {/* Progress pills */}
+      <div className="flex justify-center gap-1.5">
+        {GROUNDING_STEPS.map((s, i) => (
+          <div key={s.sense} className={cn(
+            'h-1.5 rounded-full transition-all duration-300',
+            i < stepIdx   ? 'bg-teal-400 w-4' :
+            i === stepIdx ? 'bg-teal-400 w-6' :
+                            'bg-white/15 w-4',
+          )} />
+        ))}
+      </div>
+
+      {/* Sense header */}
+      <div className={cn('rounded-2xl border px-5 py-4 text-center space-y-1', step!.ring, step!.bg)}>
+        <div className="flex items-center justify-center gap-3">
+          <span className="text-3xl">{step!.emoji}</span>
+          <span className={cn('text-5xl font-bold tabular-nums leading-none', step!.color)}>{step!.count}</span>
+        </div>
+        <p className={cn('text-sm font-bold uppercase tracking-widest mt-1', step!.color)}>
+          things you can {step!.sense.toLowerCase()}
+        </p>
+      </div>
+
+      {/* Inputs — key forces remount on step change so autoFocus works */}
+      <div key={stepIdx} data-step={stepIdx} className="space-y-2">
+        {answers[stepIdx].map((val, i) => (
+          <div key={i} className="flex items-center gap-3">
+            <span className="text-xs text-slate-600 w-4 shrink-0 text-right tabular-nums">{i + 1}</span>
+            <input
+              data-item={i}
+              autoFocus={i === 0}
+              value={val}
+              onChange={e => updateAnswer(i, e.target.value)}
+              onKeyDown={e => handleKeyDown(e, i)}
+              placeholder={i === 0 ? step!.placeholder : ''}
+              className="flex-1 rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-white placeholder:text-slate-700 focus:outline-none focus:border-teal-500/50 transition-colors"
+            />
+          </div>
+        ))}
+      </div>
+
+      <Button
+        onClick={advance}
+        disabled={!canAdvance()}
+        className="w-full bg-teal-600 hover:bg-teal-700 disabled:opacity-40 text-white"
+      >
+        {isLast ? '✓ Complete' : `Next →`}
+      </Button>
+    </div>
+  )
+}
+
 // ─── Mode config ──────────────────────────────────────────────────
 const MODES = [
   {
@@ -528,7 +674,17 @@ const MODES = [
     border: 'border-blue-500/20',
     bg:     'bg-blue-500/8',
     hover:  'hover:bg-blue-500/15',
-    desc:   'Box breathing · 4 seconds each',
+    desc:   'Box breathing · 4-4-6-4s',
+  },
+  {
+    id:     'grounding'    as Mode,
+    label:  'Ground',
+    icon:   Leaf,
+    accent: 'text-teal-400',
+    border: 'border-teal-500/20',
+    bg:     'bg-teal-500/8',
+    hover:  'hover:bg-teal-500/15',
+    desc:   '5-4-3-2-1 senses technique',
   },
   {
     id:     'affirmations' as Mode,
@@ -621,7 +777,7 @@ export default function QuickReset({ floatingOnly = false }: { floatingOnly?: bo
                   onClick={() => { setMode(m.id); setOpen(true) }}
                   className={cn(
                     'flex flex-col items-center gap-2 rounded-xl border py-3.5 px-2 transition-all active:scale-95',
-                    i === MODES.length - 1 && MODES.length % 3 === 2 ? 'col-span-1' : '',
+                    i === MODES.length - 1 && MODES.length % 3 === 1 ? 'col-span-3' : '',
                     m.border, m.bg, m.hover,
                   )}
                 >
@@ -713,6 +869,7 @@ export default function QuickReset({ floatingOnly = false }: { floatingOnly?: bo
         {mode === 'goals'        && <GoalsView />}
         {mode === 'tasks'        && <TasksView />}
         {mode === 'identity'     && <IdentityView />}
+        {mode === 'grounding'    && <GroundingExercise />}
       </div>
     </div>
   )
