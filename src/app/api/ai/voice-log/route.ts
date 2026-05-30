@@ -20,16 +20,30 @@ MEAL (food consumed):
 Infer meal_type from time references or context ("morning" → breakfast, "noon/lunch" → lunch, "evening/dinner" → dinner, else "snack").
 
 HABIT (completing a habit or daily routine):
-{"type":"habit","habit_name":"<extracted name>","summary":"<1 sentence>"}
+{"type":"habit","habit_name":"<core habit name only>","summary":"<1 sentence>"}
+Rules for habit_name:
+- If command starts with "Habit" or "habit", strip that prefix word entirely.
+- Strip trailing words: done, completed, finished, today, again, already.
+- Example: "Habit Book reading done" → habit_name: "Book reading"
+- Example: "habit meditation completed" → habit_name: "meditation"
+- Example: "completed my morning run" → habit_name: "morning run"
+- Keep only the core activity name.
+
+JOURNAL (personal journal entry — starts with "journal" keyword OR is clearly a diary/reflection):
+{"type":"journal","title":<string|null>,"content":"<full text after the journal keyword>","summary":"<1 sentence>"}
+Rules:
+- Strip the leading "Journal" or "journal" keyword from the content.
+- title: extract a short title if the user says one (e.g. "Journal title Today's wins: ..."), otherwise null.
+- content: the full journal text the user dictated.
 
 UNKNOWN (cannot parse):
 {"type":"unknown","summary":"Could not understand the command."}
 
-Rules:
+General rules:
 - Return ONLY the JSON object — no markdown, no code fences, no explanation.
 - Amounts should always be numeric (strip currency words like rupees, dollars, INR).
 - Map workout activities: run/jog/walk/cycling/swim → cardio, gym/weights/push-ups/pull-ups → strength, yoga/pilates → yoga, football/cricket/tennis/basketball → sports.
-- If amount is mentioned with a verb like "spent", "paid", "bought" → expense. "earned", "received", "got paid" → income. "saved", "deposited", "invested" → savings.`
+- If amount is mentioned with "spent", "paid", "bought" → expense. "earned", "received", "got paid" → income. "saved", "deposited", "invested" → savings.`
 
 export async function POST(req: NextRequest) {
   const { data: { user } } = await createSupabaseServerClient().auth.getUser()
@@ -42,7 +56,7 @@ export async function POST(req: NextRequest) {
   try {
     const res = await openai.chat.completions.create({
       model:      'gpt-4o-mini',
-      max_tokens: 256,
+      max_tokens: 512,
       messages: [
         { role: 'system', content: SYSTEM },
         { role: 'user',   content: transcript.trim() },

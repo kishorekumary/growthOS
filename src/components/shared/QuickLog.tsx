@@ -405,6 +405,7 @@ const CAT_BADGE: Record<string, string> = {
 function HabitPanel() {
   const [habits, setHabits]       = useState<Habit[]>([])
   const [doneIds, setDoneIds]     = useState<Set<string>>(new Set())
+  const [missedIds, setMissedIds] = useState<Set<string>>(new Set())
   const [loading, setLoading]     = useState(true)
   const [markingId, setMarkingId] = useState<string | null>(null)
   const [userId, setUserId]       = useState<string | null>(null)
@@ -423,18 +424,21 @@ function HabitPanel() {
           .eq('user_id', session.user.id)
           .order('created_at', { ascending: true }),
         supabase.from('habit_logs')
-          .select('habit_id')
+          .select('habit_id, status')
           .eq('user_id', session.user.id)
-          .eq('log_date', today)
-          .eq('status', 'done'),
+          .eq('log_date', today),
       ])
 
       const fetchedHabits = (habitsRes.data as Habit[]) ?? []
       setHabits(fetchedHabits)
 
-      const done = new Set<string>()
+      const done   = new Set<string>()
+      const missed = new Set<string>()
       if (!logsRes.error && logsRes.data) {
-        for (const row of logsRes.data as { habit_id: string }[]) done.add(row.habit_id)
+        for (const row of logsRes.data as { habit_id: string; status: string }[]) {
+          if (row.status === 'done')   done.add(row.habit_id)
+          if (row.status === 'missed') missed.add(row.habit_id)
+        }
       }
       // Fallback: check last_done_at for today
       for (const h of fetchedHabits) {
@@ -445,6 +449,7 @@ function HabitPanel() {
         }
       }
       setDoneIds(done)
+      setMissedIds(missed)
       setLoading(false)
     }
     load()
@@ -488,14 +493,16 @@ function HabitPanel() {
     </div>
   )
 
-  const pending  = habits.filter(h => !doneIds.has(h.id))
+  // Missed habits are hidden; only show pending and done
+  const pending  = habits.filter(h => !doneIds.has(h.id) && !missedIds.has(h.id))
   const doneList = habits.filter(h => doneIds.has(h.id))
-  const allDone  = doneIds.size === habits.length
+  const visible  = pending.length + doneList.length
+  const allDone  = visible > 0 && pending.length === 0
 
   return (
     <div className="space-y-3">
       <p className="text-xs text-center text-slate-500">
-        {doneIds.size}/{habits.length} done today
+        {doneList.length}/{visible} done today
         {allDone && ' 🎉'}
       </p>
       <div className="space-y-2 max-h-[50vh] overflow-y-auto pr-1">
@@ -745,6 +752,7 @@ type VoiceResult =
   | { type: 'workout';     workout_type: string; duration_mins: number | null; notes: string; summary: string }
   | { type: 'meal';        meal_type: string; food_name: string; summary: string }
   | { type: 'habit';       habit_name: string; summary: string }
+  | { type: 'journal';     title: string | null; content: string; summary: string }
   | { type: 'unknown';     summary: string }
 
 const INTENT_META: Record<string, { label: string; color: string; bg: string }> = {
@@ -752,6 +760,7 @@ const INTENT_META: Record<string, { label: string; color: string; bg: string }> 
   workout:     { label: 'Workout',  color: 'text-sky-300',    bg: 'border-sky-500/30 bg-sky-500/10'       },
   meal:        { label: 'Meal',     color: 'text-amber-300',  bg: 'border-amber-500/30 bg-amber-500/10'   },
   habit:       { label: 'Habit',    color: 'text-emerald-300',bg: 'border-emerald-500/30 bg-emerald-500/10'},
+  journal:     { label: 'Journal',  color: 'text-rose-300',   bg: 'border-rose-500/30 bg-rose-500/10'     },
   unknown:     { label: 'Unknown',  color: 'text-slate-400',  bg: 'border-white/10 bg-white/5'            },
 }
 
@@ -916,6 +925,13 @@ function VoicePanel({ onDone }: { onDone: () => void }) {
             { onConflict: 'habit_id,log_date' }
           ),
         ])
+      } else if (result.type === 'journal') {
+        await supabase.from('journal_entries').insert({
+          title:      result.title?.trim() || null,
+          content:    result.content.trim(),
+          mood:       null,
+          entry_date: today,
+        })
       }
       setState('done')
       setTimeout(onDone, 1200)
@@ -1040,6 +1056,12 @@ function VoicePanel({ onDone }: { onDone: () => void }) {
           {result.type === 'habit' && (
             <p className="text-xs text-slate-400">
               {matchedHabit ? `Matched: "${matchedHabit.habit_name}"` : `No habit matching "${result.habit_name}" found`}
+            </p>
+          )}
+          {result.type === 'journal' && (
+            <p className="text-xs text-slate-400 line-clamp-2">
+              {result.title ? <><span className="text-rose-300/80">{result.title}</span> · </> : null}
+              {result.content}
             </p>
           )}
         </div>
