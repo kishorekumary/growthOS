@@ -1,7 +1,8 @@
 'use client'
 
 import dynamic from 'next/dynamic'
-import { Timer, Loader2 } from 'lucide-react'
+import Link from 'next/link'
+import { Timer, Loader2, Brain } from 'lucide-react'
 
 const FocusTimer = dynamic(() => import('@/components/focus/FocusTimer'), {
   loading: () => (
@@ -25,6 +26,25 @@ export default function FocusPage() {
       </div>
 
       <FocusTimer />
+
+      {/* Mindshift survey card */}
+      <Link
+        href="/focus/mindshift"
+        className="mt-6 flex items-center gap-4 rounded-2xl border border-violet-500/20 bg-violet-600/5 p-5 hover:bg-violet-600/10 transition-colors group"
+      >
+        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-violet-600/20 border border-violet-500/30">
+          <Brain className="h-5 w-5 text-violet-400" />
+        </div>
+        <div>
+          <p className="text-sm font-semibold text-white group-hover:text-violet-300 transition-colors">
+            Mindshift Leakage Score
+          </p>
+          <p className="text-xs text-slate-400 mt-0.5">
+            Discover where your mental energy leaks — 20 questions across 5 dimensions
+          </p>
+        </div>
+        <span className="ml-auto text-slate-600 group-hover:text-slate-400 transition-colors text-sm">→</span>
+      </Link>
     </div>
   )
 }
