@@ -2,7 +2,7 @@
 
 import dynamic from 'next/dynamic'
 import Link from 'next/link'
-import { Timer, Loader2, Brain } from 'lucide-react'
+import { Timer, Loader2, Brain, SearchCheck } from 'lucide-react'
 
 const FocusTimer = dynamic(() => import('@/components/focus/FocusTimer'), {
   loading: () => (
@@ -41,6 +41,25 @@ export default function FocusPage() {
           </p>
           <p className="text-xs text-slate-400 mt-0.5">
             Discover where your mental energy leaks — 20 questions across 5 dimensions
+          </p>
+        </div>
+        <span className="ml-auto text-slate-600 group-hover:text-slate-400 transition-colors text-sm">→</span>
+      </Link>
+
+      {/* Overthinking Audit card */}
+      <Link
+        href="/focus/overthinking-audit"
+        className="mt-3 flex items-center gap-4 rounded-2xl border border-amber-500/20 bg-amber-500/5 p-5 hover:bg-amber-500/10 transition-colors group"
+      >
+        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-amber-500/20 border border-amber-500/30">
+          <SearchCheck className="h-5 w-5 text-amber-400" />
+        </div>
+        <div>
+          <p className="text-sm font-semibold text-white group-hover:text-amber-300 transition-colors">
+            The Overthinking Audit
+          </p>
+          <p className="text-xs text-slate-400 mt-0.5">
+            Diagnose your thinking patterns — 10 questions across 3 buckets
           </p>
         </div>
         <span className="ml-auto text-slate-600 group-hover:text-slate-400 transition-colors text-sm">→</span>
