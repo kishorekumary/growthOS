@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { Loader2, Plus, Star, Sparkles, BookOpen, AlertCircle, GitBranch, Trash2, Quote, Scroll, Globe } from 'lucide-react'
 import { createSupabaseBrowserClient } from '@/lib/supabase'
 import { Button } from '@/components/ui/button'
@@ -466,6 +466,31 @@ export default function ReadingList() {
 
   useEffect(() => { fetchBooks() }, [fetchBooks])
 
+  // Highlight a specific book when navigated from search
+  const highlightRef = useRef<string | null>(null)
+  useEffect(() => {
+    highlightRef.current = new URLSearchParams(window.location.search).get('highlight')
+  }, [])
+
+  const [highlightId, setHighlightId] = useState<string | null>(null)
+
+  useEffect(() => {
+    if (!books.length || !highlightRef.current) return
+    const id = highlightRef.current
+    const book = books.find(b => b.id === id)
+    if (!book) return
+    // Switch to the correct status tab so the book is visible
+    setActiveStatus(book.status)
+    setHighlightId(id)
+    // After tab renders, scroll to the book
+    setTimeout(() => {
+      const el = document.getElementById(`book-${id}`)
+      el?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+      // Clear highlight glow after 2.5s
+      setTimeout(() => setHighlightId(null), 2500)
+    }, 100)
+  }, [books])
+
   if (loading) {
     return (
       <div className="flex items-center justify-center py-12">
@@ -549,11 +574,13 @@ export default function ReadingList() {
           return (
             <div
               key={book.id}
+              id={`book-${book.id}`}
               className={cn(
-                'group flex items-center gap-1 rounded-xl border bg-white/5 transition-all',
+                'group flex items-center gap-1 rounded-xl border bg-white/5 transition-all duration-300',
                 book.is_global
                   ? 'border-sky-500/25 hover:border-sky-500/50 hover:bg-sky-500/5'
                   : 'border-white/10 hover:border-violet-500/30 hover:bg-violet-500/5',
+                highlightId === book.id && 'ring-2 ring-indigo-400/60 border-indigo-500/50 bg-indigo-500/[0.07]',
               )}
             >
               <button

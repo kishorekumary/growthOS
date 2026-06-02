@@ -5,7 +5,7 @@ import { usePathname, useRouter } from 'next/navigation'
 import {
   LayoutDashboard, Brain, Dumbbell, Wallet, BookOpen,
   Target, CheckSquare, Timer, Newspaper, CalendarCheck,
-  Flame, NotebookPen, Images, Settings, LogOut, ShieldCheck,
+  Flame, NotebookPen, Images, Settings, LogOut, ShieldCheck, Search,
 } from 'lucide-react'
 import { createSupabaseBrowserClient } from '@/lib/supabase'
 import { cn } from '@/lib/utils'
@@ -60,8 +60,22 @@ export default function Sidebar({ userName, userEmail, avatarUrl, isAdmin = fals
         </div>
       </Link>
 
+      {/* Search trigger */}
+      <div className="px-3 pt-3 pb-1">
+        <button
+          onClick={() => window.dispatchEvent(new Event('global-search-open'))}
+          className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium text-slate-500 hover:bg-white/[0.05] hover:text-slate-300 transition-all duration-150 group"
+        >
+          <Search className="h-4 w-4 shrink-0 text-slate-600 group-hover:text-slate-400" />
+          <span className="flex-1 text-left">Search</span>
+          <kbd className="hidden lg:flex items-center gap-0.5 rounded border border-white/[0.08] bg-white/[0.04] px-1.5 py-0.5 text-[10px] text-slate-700 font-mono">
+            ⌘K
+          </kbd>
+        </button>
+      </div>
+
       {/* Nav */}
-      <nav className="flex-1 overflow-y-auto px-3 py-4 space-y-0.5">
+      <nav className="flex-1 overflow-y-auto px-3 py-2 space-y-0.5">
         {NAV_ITEMS.map(({ href, label, icon: Icon }) => {
           const active = pathname === href || pathname.startsWith(href + '/')
           return (

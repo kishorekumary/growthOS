@@ -6,10 +6,12 @@ import Sidebar from '@/components/layout/Sidebar'
 import BottomNav from '@/components/layout/BottomNav'
 import ServiceWorkerRegister from '@/components/layout/ServiceWorkerRegister'
 import ZenithIcon from '@/components/layout/ZenithIcon'
+import MobileSearchButton from '@/components/layout/MobileSearchButton'
 import { TimerProvider } from '@/contexts/TimerContext'
 import FloatingTimer from '@/components/focus/FloatingTimer'
 import QuickLog from '@/components/shared/QuickLog'
 import QuickReset from '@/components/shared/QuickReset'
+import GlobalSearch from '@/components/shared/GlobalSearch'
 
 export default async function MainLayout({ children }: { children: React.ReactNode }) {
   const supabase = createSupabaseServerClient()
@@ -39,9 +41,12 @@ export default async function MainLayout({ children }: { children: React.ReactNo
           <ZenithIcon className="h-7 w-7" />
           <span className="text-base font-bold text-white tracking-tight">Zenith</span>
         </Link>
-        <Link href="/settings" className="flex h-8 w-8 items-center justify-center rounded-lg text-slate-500 hover:text-white hover:bg-white/[0.06] transition-colors">
-          <Settings className="h-4 w-4" />
-        </Link>
+        <div className="flex items-center gap-1">
+          <MobileSearchButton />
+          <Link href="/settings" className="flex h-8 w-8 items-center justify-center rounded-lg text-slate-500 hover:text-white hover:bg-white/[0.06] transition-colors">
+            <Settings className="h-4 w-4" />
+          </Link>
+        </div>
       </header>
 
       <main className="md:ml-64 pb-20 md:pb-0 pt-14 md:pt-0">
@@ -51,6 +56,7 @@ export default async function MainLayout({ children }: { children: React.ReactNo
       <FloatingTimer />
       <QuickLog />
       <QuickReset floatingOnly />
+      <GlobalSearch />
       <ServiceWorkerRegister />
       <div className="fixed bottom-1.5 right-2 text-[9px] text-slate-800 font-mono select-none pointer-events-none z-50 hidden md:block">
         {process.env.NEXT_PUBLIC_GIT_BRANCH}/{process.env.NEXT_PUBLIC_GIT_COMMIT}

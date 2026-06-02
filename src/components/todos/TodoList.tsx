@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import {
   Plus, Check, Trash2, ChevronDown, ChevronUp,
   Loader2, StickyNote, Calendar, X, Pencil,
@@ -70,6 +70,23 @@ export default function TodoList({ initialTodos = [] }: { initialTodos?: Todo[] 
   const [editDate, setEditDate]     = useState('')
   const [editNotes, setEditNotes]   = useState('')
   const [editSaving, setEditSaving] = useState(false)
+
+  // Highlight a specific todo when navigated from search
+  const [highlightId, setHighlightId] = useState<string | null>(null)
+  const highlightInitRef = useRef(false)
+  useEffect(() => {
+    if (highlightInitRef.current || !todos.length) return
+    highlightInitRef.current = true
+    const id = new URLSearchParams(window.location.search).get('highlight')
+    if (!id) return
+    // Switch to 'all' filter so the task is always visible
+    setFilter('all')
+    setHighlightId(id)
+    setTimeout(() => {
+      document.getElementById(`todo-${id}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+      setTimeout(() => setHighlightId(null), 2500)
+    }, 100)
+  }, [todos])
 
   // Only called as a fallback when insert+select returns null.
   async function refreshFromDb() {
@@ -318,10 +335,12 @@ export default function TodoList({ initialTodos = [] }: { initialTodos?: Todo[] 
           {filtered.map(todo => (
             <div
               key={todo.id}
+              id={`todo-${todo.id}`}
               className={cn(
-                'rounded-xl border bg-white/3 px-4 py-3 transition-all group',
+                'rounded-xl border bg-white/3 px-4 py-3 transition-all duration-300 group',
                 isOverdue(todo.due_date) ? 'border-red-500/20' : 'border-white/8',
-                editingId === todo.id && 'border-violet-500/30'
+                editingId === todo.id && 'border-violet-500/30',
+                highlightId === todo.id && 'ring-2 ring-indigo-400/60 border-indigo-500/50 bg-indigo-500/[0.07]',
               )}
             >
               <div className="flex items-start gap-3">
