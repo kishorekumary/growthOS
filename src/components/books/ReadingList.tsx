@@ -472,23 +472,18 @@ export default function ReadingList() {
     highlightRef.current = new URLSearchParams(window.location.search).get('highlight')
   }, [])
 
-  const [highlightId, setHighlightId] = useState<string | null>(null)
-
   useEffect(() => {
     if (!books.length || !highlightRef.current) return
     const id = highlightRef.current
+    highlightRef.current = null  // consume so it only fires once
     const book = books.find(b => b.id === id)
     if (!book) return
-    // Switch to the correct status tab so the book is visible
+    // Switch to correct status tab then open the mindmap directly
     setActiveStatus(book.status)
-    setHighlightId(id)
-    // After tab renders, scroll to the book
     setTimeout(() => {
-      const el = document.getElementById(`book-${id}`)
-      el?.scrollIntoView({ behavior: 'smooth', block: 'center' })
-      // Clear highlight glow after 2.5s
-      setTimeout(() => setHighlightId(null), 2500)
-    }, 100)
+      setMindMapReadonly(book.user_id !== currentUserId)
+      setMindMapBook(book)
+    }, 80)
   }, [books])
 
   if (loading) {
@@ -580,23 +575,30 @@ export default function ReadingList() {
                 book.is_global
                   ? 'border-sky-500/25 hover:border-sky-500/50 hover:bg-sky-500/5'
                   : 'border-white/10 hover:border-violet-500/30 hover:bg-violet-500/5',
-                highlightId === book.id && 'ring-2 ring-indigo-400/60 border-indigo-500/50 bg-indigo-500/[0.07]',
               )}
             >
-              <button
-                type="button"
-                onClick={() => { setMindMapReadonly(!owned); setMindMapBook(book) }}
-                className="flex-1 text-left px-4 py-3.5 min-w-0"
-              >
-                <div className="flex items-center gap-3">
-                  <div className={cn(
-                    'h-10 w-8 rounded flex items-center justify-center shrink-0',
+              <div className="flex-1 flex items-center gap-3 px-4 py-3.5 min-w-0">
+                {/* Book icon — opens detail/overview/edit */}
+                <button
+                  type="button"
+                  title="View details"
+                  onClick={() => setSelected(book)}
+                  className={cn(
+                    'h-10 w-8 rounded flex items-center justify-center shrink-0 transition-opacity hover:opacity-75',
                     book.is_global
                       ? 'bg-gradient-to-br from-sky-600 to-sky-800'
                       : 'bg-gradient-to-br from-violet-600 to-violet-800',
-                  )}>
-                    <BookOpen className="h-4 w-4 text-white/70" />
-                  </div>
+                  )}
+                >
+                  <BookOpen className="h-4 w-4 text-white/70" />
+                </button>
+
+                {/* Title/author area — opens mindmap */}
+                <button
+                  type="button"
+                  onClick={() => { setMindMapReadonly(!owned); setMindMapBook(book) }}
+                  className="flex-1 text-left min-w-0"
+                >
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-1.5">
                       <p className="text-sm font-medium text-white truncate">{book.book_title}</p>
@@ -612,52 +614,49 @@ export default function ReadingList() {
                       {book.genre ? ` · ${book.genre}` : ''}
                     </p>
                   </div>
-                  <div className="flex items-center gap-2 shrink-0">
-                    {book.ai_summary && (
-                      <span title="Summary available" className="text-violet-400">
-                        <Sparkles className="h-3.5 w-3.5" />
-                      </span>
-                    )}
-                    {book.key_lessons && book.key_lessons.startsWith('[') && (
-                      <button
-                        type="button"
-                        title="Preview mind map (read-only)"
-                        onClick={e => { e.stopPropagation(); setMindMapReadonly(true); setMindMapBook(book) }}
-                        className="text-cyan-500 hover:text-cyan-300 transition-colors"
-                      >
-                        <GitBranch className="h-3.5 w-3.5" />
-                      </button>
-                    )}
-                    {book.quotes && book.quotes.startsWith('[') && (
-                      <button
-                        type="button"
-                        title="View quotes"
-                        onClick={e => { e.stopPropagation(); setInsightsTab('quotes'); setInsightsBook(book) }}
-                        className="text-amber-500 hover:text-amber-300 transition-colors"
-                      >
-                        <Quote className="h-3.5 w-3.5" />
-                      </button>
-                    )}
-                    {book.stories && book.stories.startsWith('[') && (
-                      <button
-                        type="button"
-                        title="View stories"
-                        onClick={e => { e.stopPropagation(); setInsightsTab('stories'); setInsightsBook(book) }}
-                        className="text-violet-500 hover:text-violet-300 transition-colors"
-                      >
-                        <Scroll className="h-3.5 w-3.5" />
-                      </button>
-                    )}
-                    {book.status === 'completed' && book.rating && (
-                      <div className="flex items-center gap-0.5">
-                        {Array.from({ length: book.rating }).map((_, i) => (
-                          <Star key={i} className="h-3 w-3 fill-amber-400 text-amber-400" />
-                        ))}
-                      </div>
-                    )}
-                  </div>
+                </button>
+
+                {/* Icon badges — outside the mindmap button so they don't trigger it */}
+                <div className="flex items-center gap-2 shrink-0">
+                  {book.ai_summary && (
+                    <span title="Summary available" className="text-violet-400">
+                      <Sparkles className="h-3.5 w-3.5" />
+                    </span>
+                  )}
+                  {book.key_lessons && book.key_lessons.startsWith('[') && (
+                    <span title="Has mind map" className="text-cyan-500">
+                      <GitBranch className="h-3.5 w-3.5" />
+                    </span>
+                  )}
+                  {book.quotes && book.quotes.startsWith('[') && (
+                    <button
+                      type="button"
+                      title="View quotes"
+                      onClick={e => { e.stopPropagation(); setInsightsTab('quotes'); setInsightsBook(book) }}
+                      className="text-amber-500 hover:text-amber-300 transition-colors"
+                    >
+                      <Quote className="h-3.5 w-3.5" />
+                    </button>
+                  )}
+                  {book.stories && book.stories.startsWith('[') && (
+                    <button
+                      type="button"
+                      title="View stories"
+                      onClick={e => { e.stopPropagation(); setInsightsTab('stories'); setInsightsBook(book) }}
+                      className="text-violet-500 hover:text-violet-300 transition-colors"
+                    >
+                      <Scroll className="h-3.5 w-3.5" />
+                    </button>
+                  )}
+                  {book.status === 'completed' && book.rating && (
+                    <div className="flex items-center gap-0.5">
+                      {Array.from({ length: book.rating }).map((_, i) => (
+                        <Star key={i} className="h-3 w-3 fill-amber-400 text-amber-400" />
+                      ))}
+                    </div>
+                  )}
                 </div>
-              </button>
+              </div>
 
 
               {/* Quotes button */}

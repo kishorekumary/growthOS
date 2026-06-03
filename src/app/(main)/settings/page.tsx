@@ -16,11 +16,18 @@ export default function SettingsPage() {
   const [isAdmin, setIsAdmin] = useState<boolean | null>(null)
 
   useEffect(() => {
-    createSupabaseBrowserClient()
-      .from('user_profiles')
-      .select('is_admin')
-      .single()
-      .then(({ data }) => setIsAdmin(data?.is_admin ?? false))
+    async function checkAdmin() {
+      const sb = createSupabaseBrowserClient()
+      const { data: { user } } = await sb.auth.getUser()
+      if (!user) { setIsAdmin(false); return }
+      const { data } = await sb
+        .from('user_profiles')
+        .select('is_admin')
+        .eq('id', user.id)
+        .single()
+      setIsAdmin(data?.is_admin ?? false)
+    }
+    checkAdmin()
   }, [])
 
   return (
