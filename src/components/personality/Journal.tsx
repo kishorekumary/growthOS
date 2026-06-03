@@ -112,6 +112,7 @@ function EntryEditor({
   const [interim, setInterim]           = useState('')
   const [voiceSupported, setVoiceSupported] = useState(false)
   const recognitionRef = useRef<any>(null)
+  const stoppedByUser  = useRef(false)
 
   useEffect(() => {
     setVoiceSupported(!!(
@@ -123,32 +124,55 @@ function EntryEditor({
   function startRecording() {
     const SR = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition
     if (!SR) return
-    const rec = new SR()
-    rec.continuous = false
-    rec.interimResults = true
-    rec.lang = 'en-US'
-    rec.onresult = (e: any) => {
-      let final = '', inter = ''
-      for (let i = e.resultIndex; i < e.results.length; i++) {
-        if (e.results[i].isFinal) final += e.results[i][0].transcript
-        else inter += e.results[i][0].transcript
+    stoppedByUser.current = false
+
+    function spawn() {
+      const rec = new SR()
+      rec.continuous = true
+      rec.interimResults = true
+      rec.lang = 'en-US'
+
+      rec.onresult = (e: any) => {
+        let final = '', inter = ''
+        for (let i = e.resultIndex; i < e.results.length; i++) {
+          if (e.results[i].isFinal) final += e.results[i][0].transcript
+          else inter += e.results[i][0].transcript
+        }
+        if (final) {
+          setContent(prev => {
+            const sep = prev && !prev.endsWith(' ') && !prev.endsWith('\n') ? ' ' : ''
+            return prev + sep + final
+          })
+        }
+        setInterim(inter)
       }
-      if (final) {
-        setContent(prev => {
-          const sep = prev && !prev.endsWith(' ') && !prev.endsWith('\n') ? ' ' : ''
-          return prev + sep + final
-        })
+
+      rec.onend = () => {
+        if (!stoppedByUser.current) {
+          try { spawn() } catch { setRecording(false); setInterim('') }
+        } else {
+          setRecording(false)
+          setInterim('')
+        }
       }
-      setInterim(inter)
+
+      rec.onerror = (e: any) => {
+        if (e.error === 'no-speech') return
+        stoppedByUser.current = true
+        setRecording(false)
+        setInterim('')
+      }
+
+      recognitionRef.current = rec
+      rec.start()
     }
-    rec.onend = () => { setRecording(false); setInterim('') }
-    rec.onerror = () => { setRecording(false); setInterim('') }
-    recognitionRef.current = rec
-    rec.start()
+
+    spawn()
     setRecording(true)
   }
 
   function stopRecording() {
+    stoppedByUser.current = true
     recognitionRef.current?.stop()
     setRecording(false)
     setInterim('')
