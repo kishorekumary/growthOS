@@ -1414,8 +1414,9 @@ export default function BookMindMap({ bookId, bookTitle, initialJson, onClose, r
           {/* Entrance animation keyframes */}
           <style>{`
             @keyframes mindmapFadeIn {
-              from { opacity: 0; transform: translateY(14px) scale(0.96); }
-              to   { opacity: 1; transform: translateY(0)    scale(1);    }
+              from { opacity: 0; transform: translateY(22px) scale(0.92); filter: blur(3px); }
+              60%  { filter: blur(0); }
+              to   { opacity: 1; transform: translateY(0) scale(1); filter: blur(0); }
             }
           `}</style>
 
@@ -1482,7 +1483,7 @@ export default function BookMindMap({ bookId, bookTitle, initialJson, onClose, r
               <div
                 key={node.id}
                 className={cn(
-                  'absolute group flex items-center justify-center rounded-lg border transition-all duration-150',
+                  'absolute group flex items-center justify-center rounded-lg border transition-colors duration-150',
                   isBeingMoved
                     ? 'shadow-[0_0_20px_rgba(6,182,212,0.5)] animate-pulse z-20'
                     : isTraversalFocus
@@ -1499,8 +1500,14 @@ export default function BookMindMap({ bookId, bookTitle, initialJson, onClose, r
                 )}
                 style={{
                   left: node.x, top: node.y, width: nw, minHeight: nh,
-                  animation: 'mindmapFadeIn 0.5s ease-out both',
-                  animationDelay: `${Math.min(staggerMap.get(node.id) ?? 0, 24) * 110}ms`,
+                  borderWidth: '3px',
+                  // Hide until staggerMap is populated (effect fires after first paint).
+                  // Once map is ready, animation-fill-mode:both keeps opacity:0 during
+                  // the stagger delay, then animates in. No flash, proper sequencing.
+                  ...(staggerMap.size > 0 ? {
+                    animation: `mindmapFadeIn 0.85s cubic-bezier(0.16,1,0.3,1) both`,
+                    animationDelay: `${Math.min(staggerMap.get(node.id) ?? 0, 30) * 150}ms`,
+                  } : { opacity: 0 }),
                   borderColor: isBeingMoved
                     ? 'rgba(6,182,212,0.7)'
                     : isTraversalFocus
