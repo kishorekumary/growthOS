@@ -597,23 +597,21 @@ export default function ReadingList() {
                 <button
                   type="button"
                   onClick={() => { setMindMapReadonly(!owned); setMindMapBook(book) }}
-                  className="flex-1 text-left min-w-0"
+                  className="flex-1 min-w-0 flex flex-col items-start gap-0.5 text-left"
                 >
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-1.5">
-                      <p className="text-sm font-medium text-white truncate">{book.book_title}</p>
-                      {book.is_global && (
-                        <span className="shrink-0 flex items-center gap-0.5 rounded-full bg-sky-500/15 border border-sky-500/30 px-1.5 py-0.5">
-                          <Globe className="h-2.5 w-2.5 text-sky-400" />
-                          <span className="text-[9px] font-medium text-sky-400">Global</span>
-                        </span>
-                      )}
-                    </div>
-                    <p className="text-xs text-slate-500 truncate">
-                      {book.author ?? 'Unknown author'}
-                      {book.genre ? ` · ${book.genre}` : ''}
-                    </p>
+                  <div className="flex items-center gap-1.5 w-full min-w-0">
+                    <p className="text-sm font-medium text-white truncate min-w-0">{book.book_title}</p>
+                    {book.is_global && (
+                      <span className="shrink-0 flex items-center gap-0.5 rounded-full bg-sky-500/15 border border-sky-500/30 px-1.5 py-0.5">
+                        <Globe className="h-2.5 w-2.5 text-sky-400" />
+                        <span className="text-[9px] font-medium text-sky-400">Global</span>
+                      </span>
+                    )}
                   </div>
+                  <p className="text-xs text-slate-500 truncate w-full">
+                    {book.author ?? 'Unknown author'}
+                    {book.genre ? ` · ${book.genre}` : ''}
+                  </p>
                 </button>
 
                 {/* Icon badges — outside the mindmap button so they don't trigger it */}
