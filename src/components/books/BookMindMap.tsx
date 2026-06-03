@@ -413,27 +413,32 @@ export default function BookMindMap({ bookId, bookTitle, initialJson, onClose, r
   }, [nodes, collapsedNodes])
 
   // ── Stagger entrance animation ────────────────────────────
+  // Value stored is the computed delay in ms (not an index).
   const [staggerMap, setStaggerMap] = useState<Map<string, number>>(new Map())
-  const prevVisibleIds = useRef<Set<string>>(new Set())
+  const prevVisibleIds  = useRef<Set<string>>(new Set())
+  // First load uses a quick cascade; user-triggered expands use 800ms per child.
+  const isFirstLoad     = useRef(true)
 
   useEffect(() => {
     const currentIds = new Set(visibleNodes.map(n => n.id))
-    const newNodes = visibleNodes.filter(n => !prevVisibleIds.current.has(n.id))
+    const newNodes   = visibleNodes.filter(n => !prevVisibleIds.current.has(n.id))
 
     const removedIds: string[] = []
     prevVisibleIds.current.forEach(id => { if (!currentIds.has(id)) removedIds.push(id) })
-
     prevVisibleIds.current = currentIds
 
     if (newNodes.length === 0 && removedIds.length === 0) return
 
+    // 120 ms between nodes on first open; 800 ms on each subsequent expand click
+    const stepMs = isFirstLoad.current ? 120 : 800
+    isFirstLoad.current = false
+
     setStaggerMap(prev => {
       const m = new Map(prev)
-      // Clear removed nodes so they re-animate when expanded again
       removedIds.forEach(id => m.delete(id))
-      // Assign stagger index top-to-bottom by y position
+      // Sort top-to-bottom by y so first child (topmost) appears first
       const sorted = [...newNodes].sort((a, b) => a.y - b.y)
-      sorted.forEach((node, idx) => m.set(node.id, idx))
+      sorted.forEach((node, idx) => m.set(node.id, idx * stepMs))
       return m
     })
   }, [visibleNodes])
@@ -1506,7 +1511,7 @@ export default function BookMindMap({ bookId, bookTitle, initialJson, onClose, r
                   // the stagger delay, then animates in. No flash, proper sequencing.
                   ...(staggerMap.size > 0 ? {
                     animation: `mindmapFadeIn 0.85s cubic-bezier(0.16,1,0.3,1) both`,
-                    animationDelay: `${Math.min(staggerMap.get(node.id) ?? 0, 30) * 150}ms`,
+                    animationDelay: `${staggerMap.get(node.id) ?? 0}ms`,
                   } : { opacity: 0 }),
                   borderColor: isBeingMoved
                     ? 'rgba(6,182,212,0.7)'
