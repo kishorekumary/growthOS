@@ -1423,6 +1423,10 @@ export default function BookMindMap({ bookId, bookTitle, initialJson, onClose, r
               60%  { filter: blur(0); }
               to   { opacity: 1; transform: translateY(0) scale(1); filter: blur(0); }
             }
+            @keyframes mindmapEdgeDraw {
+              from { stroke-dashoffset: 1; opacity: 0; }
+              to   { stroke-dashoffset: 0; opacity: 0.7; }
+            }
           `}</style>
 
           {/* ── SVG edges ── */}
@@ -1436,17 +1440,30 @@ export default function BookMindMap({ bookId, bookTitle, initialJson, onClose, r
               if (!parent) return null
               const d = getDepth(child.id, nodesRef.current)
               const color = DEPTH_COLORS[d % DEPTH_COLORS.length]
-              // Dim the edge of the branch being reparented
               const isDimmed = reparentId
                 ? child.id === reparentId || isDescendant(child.id, reparentId, nodesRef.current)
                 : false
+
+              // Mirror the node stagger: pre-load → hidden, new → draw animation, existing → show
+              const delayMs    = staggerMap.get(child.id)
+              const isPreLoad  = staggerMap.size === 0
+              const isNewEdge  = delayMs !== undefined && !isDimmed
+              const isExisting = staggerMap.size > 0 && delayMs === undefined && !isDimmed
+
               return (
                 <path key={`edge-${child.id}`}
                   d={bezier(parent, child)} fill="none"
+                  // pathLength="1" normalises dash positions so stroke-dashoffset:1 = full offset
+                  {...(isNewEdge ? { pathLength: '1' } : {})}
                   stroke={isDimmed ? '#374151' : color}
                   strokeWidth={isDimmed ? 1.5 : 3}
-                  strokeOpacity={isDimmed ? 0.3 : 0.7}
-                  strokeDasharray={isDimmed ? '5 4' : undefined}
+                  style={{
+                    strokeDasharray: isDimmed ? '5 4' : isNewEdge ? '1' : undefined,
+                    strokeOpacity:   isDimmed ? 0.3 : isExisting ? 0.7 : undefined,
+                    opacity:         isPreLoad ? 0 : undefined,
+                    animation:       isNewEdge ? `mindmapEdgeDraw 0.7s cubic-bezier(0.16,1,0.3,1) both` : undefined,
+                    animationDelay:  isNewEdge ? `${delayMs}ms` : undefined,
+                  }}
                 />
               )
             })}
