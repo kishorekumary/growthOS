@@ -44,9 +44,23 @@ Rules:
 UNKNOWN (cannot parse):
 {"type":"unknown","summary":"Could not understand the command."}
 
+QUICK EXPENSE SHORTHAND (highest priority rule — check this first):
+Any command that is ONLY a food/item name followed by a number — with no eating/activity verbs — is a quick expense log, NOT a meal entry.
+Pattern: "<what> <amount>" where <what> is a food, drink, meal name, or any item, and <amount> is a number.
+→ Always map to: {"type":"transaction","txn_type":"expense","amount":<number>,"category":"Food","description":"<what>","summary":"Logged ₹<amount> <what> expense"}
+Examples:
+- "breakfast 85"   → {type:"transaction",txn_type:"expense",amount:85,category:"Food",description:"breakfast",summary:"Logged ₹85 breakfast expense"}
+- "lunch 200"      → {type:"transaction",txn_type:"expense",amount:200,category:"Food",description:"lunch",summary:"Logged ₹200 lunch expense"}
+- "chai 30"        → {type:"transaction",txn_type:"expense",amount:30,category:"Food",description:"chai",summary:"Logged ₹30 chai expense"}
+- "coffee 150"     → {type:"transaction",txn_type:"expense",amount:150,category:"Food",description:"coffee",summary:"Logged ₹150 coffee expense"}
+- "dinner 350"     → {type:"transaction",txn_type:"expense",amount:350,category:"Food",description:"dinner",summary:"Logged ₹350 dinner expense"}
+- "auto 60"        → {type:"transaction",txn_type:"expense",amount:60,category:"Transport",description:"auto",summary:"Logged ₹60 auto expense"}
+- "petrol 500"     → {type:"transaction",txn_type:"expense",amount:500,category:"Transport",description:"petrol",summary:"Logged ₹500 petrol expense"}
+Distinguish from meal: "had breakfast" / "ate breakfast" / "I had breakfast" → MEAL. Bare "breakfast 85" → TRANSACTION.
+
 General rules:
 - Return ONLY the JSON object — no markdown, no code fences, no explanation.
-- Amounts should always be numeric (strip currency words like rupees, dollars, INR).
+- Amounts should always be numeric (strip currency words like rupees, dollars, INR, ₹).
 - Map workout activities: run/jog/walk/cycling/swim → cardio, gym/weights/push-ups/pull-ups → strength, yoga/pilates → yoga, football/cricket/tennis/basketball → sports.
 - If amount is mentioned with "spent", "paid", "bought" → expense. "earned", "received", "got paid" → income. "saved", "deposited", "invested" → savings.`
 

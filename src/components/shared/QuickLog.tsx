@@ -828,6 +828,9 @@ function VoicePanel({ onDone }: { onDone: () => void }) {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const recognitionRef  = useRef<any>(null)
   const silenceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  // Tracks the next expected final-result index to prevent mobile Chrome from
+  // re-appending already-committed finals when e.resultIndex is unreliable.
+  const nextFinalIdx    = useRef(0)
 
   function getSR() {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -863,10 +866,18 @@ function VoicePanel({ onDone }: { onDone: () => void }) {
       if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current)
 
       let final = ''; let inter = ''
-      for (let i = e.resultIndex; i < e.results.length; i++) {
+      for (let i = 0; i < e.results.length; i++) {
         const t = e.results[i][0].transcript
-        if (e.results[i].isFinal) final += t
-        else inter += t
+        if (e.results[i].isFinal) {
+          // Only append finals we haven't committed yet — guards against
+          // mobile Chrome re-sending already-finalized results.
+          if (i >= nextFinalIdx.current) {
+            final += t
+            nextFinalIdx.current = i + 1
+          }
+        } else {
+          inter += t
+        }
       }
       if (final) setTranscript(p => (p + ' ' + final).trim())
       setInterim(inter)
@@ -887,6 +898,7 @@ function VoicePanel({ onDone }: { onDone: () => void }) {
     setInterim('')
     setResult(null)
     setNutritionData(null)
+    nextFinalIdx.current = 0
     r.start()
   }
 
@@ -1078,6 +1090,7 @@ function VoicePanel({ onDone }: { onDone: () => void }) {
         <p className="text-xs text-center text-slate-500">
           Tap the mic and say something like<br />
           <span className="text-slate-400">"Had two egg dosa for breakfast"</span><br />
+          <span className="text-slate-400">"breakfast 85"</span> · <span className="text-slate-400">"lunch 200"</span> · <span className="text-slate-400">"chai 30"</span><br />
           <span className="text-slate-400">"Spent ₹150 on coffee"</span> · <span className="text-slate-400">"Did yoga for 30 mins"</span>
         </p>
       )}
