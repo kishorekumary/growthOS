@@ -37,17 +37,9 @@ export default function SettingsPage() {
         <p className="text-slate-400 text-sm mt-1">Manage your notification preferences</p>
       </div>
 
-      <div className="mb-2">
-        <div className="flex items-center gap-2 mb-4">
-          <Bell className="h-4 w-4 text-violet-400" />
-          <h2 className="text-base font-semibold text-white">Notifications</h2>
-        </div>
-        <NotificationSettings />
-      </div>
-
       {/* Admin section — only visible to admins */}
       {isAdmin === true && (
-        <div className="mt-10 border-t border-white/[0.05] pt-6">
+        <div className="mb-6">
           <button
             onClick={() => router.push('/admin')}
             className="w-full flex items-center gap-3 rounded-xl border border-violet-500/20 bg-violet-500/[0.06] px-4 py-3 text-left hover:bg-violet-500/[0.12] hover:border-violet-500/30 transition-all group"
@@ -63,6 +55,14 @@ export default function SettingsPage() {
           </button>
         </div>
       )}
+
+      <div className="mb-2">
+        <div className="flex items-center gap-2 mb-4">
+          <Bell className="h-4 w-4 text-violet-400" />
+          <h2 className="text-base font-semibold text-white">Notifications</h2>
+        </div>
+        <NotificationSettings />
+      </div>
     </div>
   )
 }

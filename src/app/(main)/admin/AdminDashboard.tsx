@@ -1,11 +1,12 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useRef } from 'react'
 import Link from 'next/link'
 import {
   Users, Globe, Flame, BookOpen, Dumbbell, Target,
   CheckSquare, Plus, Trash2, Loader2, Shield, ShieldOff,
   ChevronRight, Search, ShieldCheck, Image, FileText, Music, Video, X,
+  Send, MessageSquare,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
@@ -67,6 +68,12 @@ export default function AdminDashboard({
   const [addingHabit, setAddingHabit] = useState(false)
   const [newHabit, setNewHabit]       = useState({ habit_name: '', category: 'mindset', frequency: 'daily' })
 
+  const [msgTarget, setMsgTarget] = useState<{ id: string; name: string } | 'broadcast' | null>(null)
+  const [msgTitle, setMsgTitle]   = useState('')
+  const [msgBody, setMsgBody]     = useState('')
+  const [msgSending, setMsgSending] = useState(false)
+  const [msgSent, setMsgSent]     = useState(false)
+
   const filtered = users.filter(u =>
     u.full_name.toLowerCase().includes(search.toLowerCase()) ||
     u.email.toLowerCase().includes(search.toLowerCase())
@@ -127,6 +134,23 @@ export default function AdminDashboard({
     setRemovingGalleryId(null)
   }
 
+  async function sendMessage() {
+    if (!msgTitle.trim() || !msgBody.trim() || !msgTarget) return
+    setMsgSending(true)
+    await fetch('/api/admin/send-message', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        title: msgTitle,
+        body: msgBody,
+        user_id: msgTarget === 'broadcast' ? null : msgTarget.id,
+      }),
+    })
+    setMsgSending(false)
+    setMsgSent(true)
+    setTimeout(() => { setMsgTarget(null); setMsgTitle(''); setMsgBody(''); setMsgSent(false) }, 1500)
+  }
+
   function galleryKind(item: GlobalGalleryItem) {
     if (item.mime_type) {
       if (item.mime_type.startsWith('image/'))  return 'image'
@@ -149,9 +173,18 @@ export default function AdminDashboard({
   return (
     <div className="min-h-screen p-4 md:p-8 space-y-6 max-w-7xl mx-auto">
       {/* Header */}
-      <div>
-        <h1 className="text-2xl font-bold text-white">Admin Dashboard</h1>
-        <p className="text-sm text-slate-500 mt-0.5">Manage users, monitor progress, and set global habits</p>
+      <div className="flex items-start justify-between gap-3 flex-wrap">
+        <div>
+          <h1 className="text-2xl font-bold text-white">Admin Dashboard</h1>
+          <p className="text-sm text-slate-500 mt-0.5">Manage users, monitor progress, and set global content</p>
+        </div>
+        <button
+          onClick={() => setMsgTarget('broadcast')}
+          className="flex items-center gap-2 rounded-xl border border-violet-500/30 bg-violet-500/10 px-4 py-2 text-sm font-medium text-violet-300 hover:bg-violet-500/20 transition-colors"
+        >
+          <MessageSquare className="h-4 w-4" />
+          Broadcast
+        </button>
       </div>
 
       {/* Stats row */}
@@ -177,7 +210,7 @@ export default function AdminDashboard({
       </div>
 
       {/* Tabs */}
-      <div className="flex gap-1 border-b border-white/[0.06]">
+      <div className="flex gap-1 border-b border-white/[0.06] overflow-x-auto pb-0 scrollbar-none">
         {([
           { key: 'users',   label: `Users (${totalUsers})` },
           { key: 'global',  label: `Global Habits (${totalGlobal})` },
@@ -188,7 +221,7 @@ export default function AdminDashboard({
             key={key}
             onClick={() => setTab(key)}
             className={cn(
-              'px-4 py-2 text-sm font-medium transition-colors border-b-2 -mb-px',
+              'shrink-0 px-4 py-2 text-sm font-medium transition-colors border-b-2 -mb-px whitespace-nowrap',
               tab === key
                 ? 'border-indigo-500 text-white'
                 : 'border-transparent text-slate-500 hover:text-slate-300',
@@ -213,8 +246,8 @@ export default function AdminDashboard({
             />
           </div>
 
-          {/* Table */}
-          <div className="rounded-xl border border-white/[0.06] overflow-x-auto">
+          {/* Desktop Table */}
+          <div className="hidden md:block rounded-xl border border-white/[0.06] overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-white/[0.06] text-slate-500 text-xs">
@@ -302,6 +335,13 @@ export default function AdminDashboard({
                                 </select>
                               )
                           )}
+                          <button
+                            onClick={() => { setMsgTarget({ id: u.id, name: u.full_name || u.email }); setMsgTitle(''); setMsgBody('') }}
+                            title="Send message"
+                            className="flex items-center justify-center w-7 h-7 rounded-md border border-white/10 text-slate-500 hover:text-violet-300 hover:border-violet-500/30 transition-colors"
+                          >
+                            <MessageSquare className="h-3.5 w-3.5" />
+                          </button>
                           <Link
                             href={`/admin/users/${u.id}`}
                             className="flex items-center justify-center w-7 h-7 rounded-md border border-white/10 text-slate-500 hover:text-white hover:border-white/20 transition-colors"
@@ -320,6 +360,84 @@ export default function AdminDashboard({
                 )}
               </tbody>
             </table>
+          </div>
+
+          {/* Mobile card list */}
+          <div className="md:hidden space-y-3">
+            {filtered.map(u => {
+              const initials = u.full_name.split(' ').map((n: string) => n[0]).join('').slice(0,2).toUpperCase() || u.email[0].toUpperCase()
+              const pct = u.weekTotal > 0 ? Math.round((u.weekDone / u.weekTotal) * 100) : null
+              return (
+                <div key={u.id} className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-4 space-y-3">
+                  {/* User row */}
+                  <div className="flex items-center gap-3">
+                    {u.avatar_url
+                      ? <img src={u.avatar_url} alt={u.full_name} className="h-10 w-10 rounded-full object-cover ring-1 ring-white/10 shrink-0" />
+                      : <div className="h-10 w-10 rounded-full bg-indigo-500/20 ring-1 ring-indigo-500/30 flex items-center justify-center text-xs font-semibold text-indigo-300 shrink-0">{initials}</div>
+                    }
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-sm font-medium text-white truncate">{u.full_name || '—'}</span>
+                        {u.is_superadmin && <ShieldCheck className="h-3 w-3 text-amber-400 shrink-0" />}
+                        {u.is_admin && !u.is_superadmin && <Shield className="h-3 w-3 text-violet-400 shrink-0" />}
+                      </div>
+                      <span className="text-xs text-slate-500 truncate block">{u.email}</span>
+                    </div>
+                  </div>
+                  {/* Stats chips */}
+                  <div className="flex flex-wrap gap-2 text-xs">
+                    {pct !== null && (
+                      <span className={cn('rounded-full px-2.5 py-1 font-medium', pct >= 70 ? 'bg-emerald-500/15 text-emerald-400' : pct >= 40 ? 'bg-amber-500/15 text-amber-400' : 'bg-red-500/15 text-red-400')}>
+                        {pct}% this week
+                      </span>
+                    )}
+                    {u.topStreak > 0 && (
+                      <span className="rounded-full px-2.5 py-1 bg-orange-500/10 text-orange-400 flex items-center gap-1">
+                        <Flame className="h-3 w-3" />{u.topStreak}d
+                      </span>
+                    )}
+                    {u.habitCount > 0 && <span className="rounded-full px-2.5 py-1 bg-white/5 text-slate-400">{u.habitCount} habits</span>}
+                    {u.booksReading > 0 && <span className="rounded-full px-2.5 py-1 bg-white/5 text-slate-400">{u.booksReading} reading</span>}
+                    {u.workoutsWeek > 0 && <span className="rounded-full px-2.5 py-1 bg-white/5 text-slate-400">{u.workoutsWeek} workouts</span>}
+                  </div>
+                  {/* Actions */}
+                  <div className="flex items-center gap-2 pt-1">
+                    {u.id !== meId && (
+                      togglingId === u.id
+                        ? <Loader2 className="h-4 w-4 animate-spin text-slate-500" />
+                        : (
+                          <select
+                            value={currentRole(u)}
+                            onChange={e => setRole(u, e.target.value as Role)}
+                            disabled={!isSuperadmin && currentRole(u) === 'superadmin'}
+                            className="flex-1 text-xs rounded-lg bg-white/[0.04] border border-white/[0.10] text-slate-300 px-3 py-2 focus:outline-none focus:border-indigo-500/50 disabled:opacity-40"
+                          >
+                            <option value="user">User</option>
+                            <option value="admin">Admin</option>
+                            {isSuperadmin && <option value="superadmin">Superadmin</option>}
+                          </select>
+                        )
+                    )}
+                    <button
+                      onClick={() => { setMsgTarget({ id: u.id, name: u.full_name || u.email }); setMsgTitle(''); setMsgBody('') }}
+                      className="flex items-center gap-1.5 rounded-lg border border-white/[0.08] bg-white/[0.03] px-3 py-2 text-xs text-slate-400 hover:text-white hover:border-white/20 transition-colors"
+                    >
+                      <MessageSquare className="h-3.5 w-3.5" />
+                      Message
+                    </button>
+                    <Link
+                      href={`/admin/users/${u.id}`}
+                      className="flex items-center gap-1.5 rounded-lg border border-white/[0.08] bg-white/[0.03] px-3 py-2 text-xs text-slate-400 hover:text-white hover:border-white/20 transition-colors"
+                    >
+                      View <ChevronRight className="h-3.5 w-3.5" />
+                    </Link>
+                  </div>
+                </div>
+              )
+            })}
+            {filtered.length === 0 && (
+              <p className="text-center text-slate-500 text-sm py-8">No users found</p>
+            )}
           </div>
         </div>
       )}
@@ -533,6 +651,66 @@ export default function AdminDashboard({
               ))}
             </div>
           )}
+        </div>
+      )}
+
+      {/* Message compose modal */}
+      {msgTarget && (
+        <div className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+          <div className="w-full max-w-md rounded-2xl border border-white/10 bg-[#0d0d1a] shadow-2xl p-5 space-y-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <h3 className="text-base font-semibold text-white">Send Message</h3>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  {msgTarget === 'broadcast' ? 'To: All users (broadcast)' : `To: ${(msgTarget as any).name}`}
+                </p>
+              </div>
+              <button onClick={() => { setMsgTarget(null); setMsgTitle(''); setMsgBody('') }} className="text-slate-500 hover:text-white transition-colors">
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            {msgSent ? (
+              <div className="flex flex-col items-center gap-2 py-6">
+                <div className="h-12 w-12 rounded-full bg-emerald-500/20 flex items-center justify-center">
+                  <Send className="h-5 w-5 text-emerald-400" />
+                </div>
+                <p className="text-sm font-medium text-white">Message sent!</p>
+              </div>
+            ) : (
+              <>
+                <div className="space-y-3">
+                  <div>
+                    <label className="text-xs font-medium text-slate-400 block mb-1.5">Title</label>
+                    <input
+                      value={msgTitle}
+                      onChange={e => setMsgTitle(e.target.value)}
+                      placeholder="e.g. Platform Update"
+                      className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2.5 text-sm text-white placeholder:text-slate-600 focus:outline-none focus:border-violet-500/50"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-xs font-medium text-slate-400 block mb-1.5">Message</label>
+                    <textarea
+                      value={msgBody}
+                      onChange={e => setMsgBody(e.target.value)}
+                      placeholder="Write your message…"
+                      rows={4}
+                      className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2.5 text-sm text-white placeholder:text-slate-600 focus:outline-none focus:border-violet-500/50 resize-none"
+                    />
+                  </div>
+                </div>
+                <button
+                  onClick={sendMessage}
+                  disabled={msgSending || !msgTitle.trim() || !msgBody.trim()}
+                  className="w-full flex items-center justify-center gap-2 rounded-xl bg-violet-600 hover:bg-violet-500 disabled:opacity-40 disabled:cursor-not-allowed px-4 py-3 text-sm font-medium text-white transition-colors"
+                >
+                  {msgSending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+                  {msgSending ? 'Sending…' : 'Send Message'}
+                </button>
+              </>
+            )}
+          </div>
         </div>
       )}
     </div>

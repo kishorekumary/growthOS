@@ -2,16 +2,15 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { LayoutDashboard, CheckSquare, Dumbbell, Target, Timer, Images } from 'lucide-react'
+import { LayoutDashboard, CheckSquare, Dumbbell, Target, BookOpen } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 const NAV_ITEMS = [
   { href: '/dashboard', label: 'Home',    icon: LayoutDashboard },
+  { href: '/books',     label: 'Books',   icon: BookOpen },
   { href: '/fitness',   label: 'Fitness', icon: Dumbbell },
   { href: '/goals',     label: 'Goals',   icon: Target },
-  { href: '/focus',     label: 'Focus',   icon: Timer },
   { href: '/todos',     label: 'Tasks',   icon: CheckSquare },
-  { href: '/gallery',   label: 'Gallery', icon: Images },
 ]
 
 export default function BottomNav() {
