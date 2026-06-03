@@ -5,15 +5,15 @@ import { X, Trash2, GitBranch, Loader2, Check, Pencil, Upload, Plus, Undo2, Link
 import { createSupabaseBrowserClient } from '@/lib/supabase'
 import { cn } from '@/lib/utils'
 
-const NODE_H = 52
-const MIN_W  = 190
-const MAX_W  = 520
+const NODE_H = 58
+const MIN_W  = 200
+const MAX_W  = 540
 const H_GAP  = 440
 const V_GAP  = 96
 const DEPTH_COLORS = ['#7c3aed', '#06b6d4', '#10b981', '#f59e0b', '#ef4444', '#3b82f6']
 
 function nodeWidth(label: string): number {
-  return Math.max(MIN_W, Math.min(MAX_W, label.length * 8.5 + 100))
+  return Math.max(MIN_W, Math.min(MAX_W, label.length * 9.5 + 110))
 }
 
 // Estimate rendered height for bezier midpoint calculations.
@@ -411,6 +411,32 @@ export default function BookMindMap({ bookId, bookTitle, initialJson, onClose, r
     }
     return nodes.filter(n => isVisible(n.id))
   }, [nodes, collapsedNodes])
+
+  // ── Stagger entrance animation ────────────────────────────
+  const [staggerMap, setStaggerMap] = useState<Map<string, number>>(new Map())
+  const prevVisibleIds = useRef<Set<string>>(new Set())
+
+  useEffect(() => {
+    const currentIds = new Set(visibleNodes.map(n => n.id))
+    const newNodes = visibleNodes.filter(n => !prevVisibleIds.current.has(n.id))
+
+    const removedIds: string[] = []
+    prevVisibleIds.current.forEach(id => { if (!currentIds.has(id)) removedIds.push(id) })
+
+    prevVisibleIds.current = currentIds
+
+    if (newNodes.length === 0 && removedIds.length === 0) return
+
+    setStaggerMap(prev => {
+      const m = new Map(prev)
+      // Clear removed nodes so they re-animate when expanded again
+      removedIds.forEach(id => m.delete(id))
+      // Assign stagger index top-to-bottom by y position
+      const sorted = [...newNodes].sort((a, b) => a.y - b.y)
+      sorted.forEach((node, idx) => m.set(node.id, idx))
+      return m
+    })
+  }, [visibleNodes])
 
   const searchMatches = useMemo(() => {
     const q = searchQuery.trim().toLowerCase()
@@ -1385,6 +1411,14 @@ export default function BookMindMap({ bookId, bookTitle, initialJson, onClose, r
           onDoubleClick={handleCanvasDoubleClick}
         >
 
+          {/* Entrance animation keyframes */}
+          <style>{`
+            @keyframes mindmapFadeIn {
+              from { opacity: 0; transform: translateY(14px) scale(0.96); }
+              to   { opacity: 1; transform: translateY(0)    scale(1);    }
+            }
+          `}</style>
+
           {/* ── SVG edges ── */}
           <svg
             className="absolute inset-0 pointer-events-none"
@@ -1404,7 +1438,7 @@ export default function BookMindMap({ bookId, bookTitle, initialJson, onClose, r
                 <path key={`edge-${child.id}`}
                   d={bezier(parent, child)} fill="none"
                   stroke={isDimmed ? '#374151' : color}
-                  strokeWidth={isDimmed ? 1.5 : 2}
+                  strokeWidth={isDimmed ? 1.5 : 3}
                   strokeOpacity={isDimmed ? 0.3 : 0.7}
                   strokeDasharray={isDimmed ? '5 4' : undefined}
                 />
@@ -1465,6 +1499,8 @@ export default function BookMindMap({ bookId, bookTitle, initialJson, onClose, r
                 )}
                 style={{
                   left: node.x, top: node.y, width: nw, minHeight: nh,
+                  animation: 'mindmapFadeIn 0.5s ease-out both',
+                  animationDelay: `${Math.min(staggerMap.get(node.id) ?? 0, 24) * 110}ms`,
                   borderColor: isBeingMoved
                     ? 'rgba(6,182,212,0.7)'
                     : isTraversalFocus
@@ -1525,12 +1561,12 @@ export default function BookMindMap({ bookId, bookTitle, initialJson, onClose, r
                       }}
                       onBlur={() => commitEdit(node.id)}
                       onMouseDown={e => e.stopPropagation()}
-                      className="w-full bg-transparent text-sm font-medium focus:outline-none resize-none leading-snug text-center"
+                      className="w-full bg-transparent text-[15px] font-bold focus:outline-none resize-none leading-snug text-center"
                       style={{ color: isRoot ? '#c4b5fd' : color }}
                     />
                   ) : (
                     <span
-                      className="text-sm font-medium leading-snug break-words text-center block w-full"
+                      className="text-[15px] font-bold leading-snug break-words text-center block w-full"
                       style={{ color: isBeingMoved ? '#67e8f9' : isTraversalFocus ? '#6ee7b7' : isSearchFocus ? '#fef3c7' : isRoot ? '#c4b5fd' : color }}
                     >
                       <HighlightedLabel text={node.label} query={searchQuery} />
