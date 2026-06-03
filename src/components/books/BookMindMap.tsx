@@ -1404,8 +1404,8 @@ export default function BookMindMap({ bookId, bookTitle, initialJson, onClose, r
                 <path key={`edge-${child.id}`}
                   d={bezier(parent, child)} fill="none"
                   stroke={isDimmed ? '#374151' : color}
-                  strokeWidth={1.5}
-                  strokeOpacity={isDimmed ? 0.3 : 0.4}
+                  strokeWidth={isDimmed ? 1.5 : 2}
+                  strokeOpacity={isDimmed ? 0.3 : 0.7}
                   strokeDasharray={isDimmed ? '5 4' : undefined}
                 />
               )
@@ -1474,10 +1474,10 @@ export default function BookMindMap({ bookId, bookTitle, initialJson, onClose, r
                         : isSearchMatch
                           ? 'rgba(251,191,36,0.4)'
                           : isValidTarget && reparentId
-                            ? 'rgba(6,182,212,0.35)'
+                            ? 'rgba(6,182,212,0.6)'
                             : isRoot
-                              ? 'rgba(124,58,237,0.55)'
-                              : color + '44',
+                              ? 'rgba(124,58,237,0.9)'
+                              : color + 'cc',
                   background: isBeingMoved
                     ? 'rgba(6,182,212,0.15)'
                     : isTraversalFocus

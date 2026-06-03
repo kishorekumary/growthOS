@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import dynamic from 'next/dynamic'
-import { Loader2, Bell, ShieldCheck, Lock, ChevronRight } from 'lucide-react'
+import { Loader2, Bell, ShieldCheck, ChevronRight } from 'lucide-react'
 import { createSupabaseBrowserClient } from '@/lib/supabase'
 
 const NotificationSettings = dynamic(
@@ -38,34 +38,22 @@ export default function SettingsPage() {
         <NotificationSettings />
       </div>
 
-      {/* Admin section — subtle, at the bottom */}
-      {isAdmin !== null && (
+      {/* Admin section — only visible to admins */}
+      {isAdmin === true && (
         <div className="mt-10 border-t border-white/[0.05] pt-6">
-          {isAdmin ? (
-            <button
-              onClick={() => router.push('/admin')}
-              className="w-full flex items-center gap-3 rounded-xl border border-violet-500/20 bg-violet-500/[0.06] px-4 py-3 text-left hover:bg-violet-500/[0.12] hover:border-violet-500/30 transition-all group"
-            >
-              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-violet-500/20 shrink-0">
-                <ShieldCheck className="h-4 w-4 text-violet-400" />
-              </div>
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium text-violet-300">Admin Panel</p>
-                <p className="text-xs text-slate-600">Manage users, content &amp; platform settings</p>
-              </div>
-              <ChevronRight className="h-4 w-4 text-slate-700 group-hover:text-violet-500 transition-colors shrink-0" />
-            </button>
-          ) : (
-            <div className="flex items-center gap-3 rounded-xl border border-white/[0.05] bg-white/[0.02] px-4 py-3 opacity-50 cursor-not-allowed">
-              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-white/5 shrink-0">
-                <Lock className="h-4 w-4 text-slate-600" />
-              </div>
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium text-slate-600">Admin Panel</p>
-                <p className="text-xs text-slate-700">No admin privileges</p>
-              </div>
+          <button
+            onClick={() => router.push('/admin')}
+            className="w-full flex items-center gap-3 rounded-xl border border-violet-500/20 bg-violet-500/[0.06] px-4 py-3 text-left hover:bg-violet-500/[0.12] hover:border-violet-500/30 transition-all group"
+          >
+            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-violet-500/20 shrink-0">
+              <ShieldCheck className="h-4 w-4 text-violet-400" />
             </div>
-          )}
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-medium text-violet-300">Admin Panel</p>
+              <p className="text-xs text-slate-600">Manage users, content &amp; platform settings</p>
+            </div>
+            <ChevronRight className="h-4 w-4 text-slate-700 group-hover:text-violet-500 transition-colors shrink-0" />
+          </button>
         </div>
       )}
     </div>

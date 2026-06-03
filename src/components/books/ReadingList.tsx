@@ -585,7 +585,7 @@ export default function ReadingList() {
             >
               <button
                 type="button"
-                onClick={() => setSelected(book)}
+                onClick={() => { setMindMapReadonly(!owned); setMindMapBook(book) }}
                 className="flex-1 text-left px-4 py-3.5 min-w-0"
               >
                 <div className="flex items-center gap-3">
@@ -659,16 +659,6 @@ export default function ReadingList() {
                 </div>
               </button>
 
-              {/* Mind Map button — readonly for non-owners of global books */}
-              <button
-                type="button"
-                onClick={() => { setMindMapReadonly(!owned); setMindMapBook(book) }}
-                title={owned ? 'Open mind map' : 'View mind map (read-only)'}
-                className="shrink-0 flex items-center gap-1 rounded-lg border border-cyan-500/30 bg-cyan-500/10 px-2.5 py-1.5 text-[11px] font-medium text-cyan-400 opacity-0 group-hover:opacity-100 hover:bg-cyan-500/20 transition-all"
-              >
-                <GitBranch className="h-3 w-3" />
-                Map
-              </button>
 
               {/* Quotes button */}
               <button
