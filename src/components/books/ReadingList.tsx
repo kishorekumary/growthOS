@@ -657,23 +657,23 @@ export default function ReadingList() {
               </div>
 
 
-              {/* Quotes button */}
+              {/* Quotes button — desktop hover only, hidden on mobile (icon badge handles it) */}
               <button
                 type="button"
                 onClick={() => { setInsightsTab('quotes'); setInsightsBook(book) }}
                 title="Open quotes"
-                className="shrink-0 flex items-center gap-1 rounded-lg border border-amber-500/30 bg-amber-500/10 px-2.5 py-1.5 text-[11px] font-medium text-amber-400 opacity-0 group-hover:opacity-100 hover:bg-amber-500/20 transition-all"
+                className="hidden md:flex shrink-0 items-center gap-1 rounded-lg border border-amber-500/30 bg-amber-500/10 px-2.5 py-1.5 text-[11px] font-medium text-amber-400 opacity-0 group-hover:opacity-100 hover:bg-amber-500/20 transition-all"
               >
                 <Quote className="h-3 w-3" />
                 Quotes
               </button>
 
-              {/* Stories button */}
+              {/* Stories button — desktop hover only, hidden on mobile */}
               <button
                 type="button"
                 onClick={() => { setInsightsTab('stories'); setInsightsBook(book) }}
                 title="Open stories"
-                className="shrink-0 flex items-center gap-1 rounded-lg border border-violet-500/30 bg-violet-500/10 px-2.5 py-1.5 text-[11px] font-medium text-violet-400 opacity-0 group-hover:opacity-100 hover:bg-violet-500/20 transition-all"
+                className="hidden md:flex shrink-0 items-center gap-1 rounded-lg border border-violet-500/30 bg-violet-500/10 px-2.5 py-1.5 text-[11px] font-medium text-violet-400 opacity-0 group-hover:opacity-100 hover:bg-violet-500/20 transition-all"
               >
                 <Scroll className="h-3 w-3" />
                 Stories

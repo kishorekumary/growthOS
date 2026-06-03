@@ -201,69 +201,73 @@ export default function BookInsights({
   return (
     <div className="fixed inset-0 z-50 flex flex-col bg-[#07070f]/97 backdrop-blur-md">
       {/* ── Header ── */}
-      <div className="flex items-center justify-between gap-3 px-4 py-3 border-b border-white/8 shrink-0">
-        <div className="flex items-center gap-3 min-w-0">
-          <span className="text-xs text-slate-500 shrink-0">Insights</span>
-          <span className="text-xs text-slate-600">·</span>
-          <span className="text-sm font-semibold text-white truncate">{bookTitle}</span>
-        </div>
-
-        {/* Tab switcher */}
-        <div className="flex items-center gap-1 rounded-lg bg-white/5 border border-white/8 p-0.5">
-          <button
-            onClick={() => { setTab('quotes'); cancelEdit() }}
-            className={cn(
-              'flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-all',
-              tab === 'quotes'
-                ? 'bg-white/10 text-white border border-white/15'
-                : 'text-slate-400 hover:text-white'
-            )}
-          >
-            <Quote className="h-3 w-3" />
-            Quotes
-            {quotes.length > 0 && (
-              <span className="ml-0.5 text-[10px] tabular-nums opacity-70">{quotes.length}</span>
-            )}
-          </button>
-          <button
-            onClick={() => { setTab('stories'); cancelEdit() }}
-            className={cn(
-              'flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-all',
-              tab === 'stories'
-                ? 'bg-white/10 text-white border border-white/15'
-                : 'text-slate-400 hover:text-white'
-            )}
-          >
-            <Scroll className="h-3 w-3" />
-            Stories
-            {stories.length > 0 && (
-              <span className="ml-0.5 text-[10px] tabular-nums opacity-70">{stories.length}</span>
-            )}
-          </button>
-        </div>
-
-        {/* Right actions */}
-        <div className="flex items-center gap-2 shrink-0">
+      <div className="shrink-0 border-b border-white/8">
+        {/* Row 1: title + close — always one row, close always reachable */}
+        <div className="flex items-center gap-3 px-4 pt-3 pb-2">
+          <div className="flex items-center gap-2 min-w-0 flex-1">
+            <span className="text-xs text-slate-500 shrink-0 hidden sm:inline">Insights ·</span>
+            <span className="text-sm font-semibold text-white truncate">{bookTitle}</span>
+          </div>
+          {/* Read Only toggle — icon-only on mobile, labelled on desktop */}
           <button
             onClick={() => { setIsReadOnly(r => !r); cancelEdit() }}
             title={isReadOnly ? 'Switch to edit mode' : 'Switch to read-only mode'}
             className={cn(
-              'flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium border transition-all',
+              'flex items-center gap-1.5 rounded-lg px-2 py-1.5 text-xs font-medium border transition-all shrink-0',
               isReadOnly
                 ? 'bg-white/8 border-white/15 text-slate-200 hover:bg-white/12'
                 : 'bg-white/5 border-white/10 text-slate-400 hover:bg-white/10 hover:text-slate-200'
             )}
           >
-            {isReadOnly ? <Eye className="h-3 w-3" /> : <EyeOff className="h-3 w-3" />}
-            {isReadOnly ? 'Read Only' : 'View'}
+            {isReadOnly ? <Eye className="h-3.5 w-3.5" /> : <EyeOff className="h-3.5 w-3.5" />}
+            <span className="hidden sm:inline">{isReadOnly ? 'Read Only' : 'View'}</span>
           </button>
+          <button onClick={handleClose} className="rounded-lg p-1.5 text-slate-500 hover:text-white hover:bg-white/10 transition-colors shrink-0">
+            <X className="h-5 w-5" />
+          </button>
+        </div>
+
+        {/* Row 2: tabs + save */}
+        <div className="flex items-center justify-between gap-2 px-4 pb-3">
+          <div className="flex items-center gap-1 rounded-lg bg-white/5 border border-white/8 p-0.5">
+            <button
+              onClick={() => { setTab('quotes'); cancelEdit() }}
+              className={cn(
+                'flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-all',
+                tab === 'quotes'
+                  ? 'bg-white/10 text-white border border-white/15'
+                  : 'text-slate-400 hover:text-white'
+              )}
+            >
+              <Quote className="h-3 w-3" />
+              Quotes
+              {quotes.length > 0 && (
+                <span className="ml-0.5 text-[10px] tabular-nums opacity-70">{quotes.length}</span>
+              )}
+            </button>
+            <button
+              onClick={() => { setTab('stories'); cancelEdit() }}
+              className={cn(
+                'flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-all',
+                tab === 'stories'
+                  ? 'bg-white/10 text-white border border-white/15'
+                  : 'text-slate-400 hover:text-white'
+              )}
+            >
+              <Scroll className="h-3 w-3" />
+              Stories
+              {stories.length > 0 && (
+                <span className="ml-0.5 text-[10px] tabular-nums opacity-70">{stories.length}</span>
+              )}
+            </button>
+          </div>
 
           {!isReadOnly && (
             <button
               onClick={save}
               disabled={saving}
               className={cn(
-                'flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium transition-all',
+                'flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium transition-all shrink-0',
                 savedFlash
                   ? 'bg-emerald-600/80 text-white'
                   : 'bg-white/8 border border-white/15 text-white hover:bg-white/12 disabled:opacity-40'
@@ -274,10 +278,6 @@ export default function BookInsights({
               {savedFlash ? 'Saved!' : 'Save'}
             </button>
           )}
-
-          <button onClick={handleClose} className="rounded-lg p-1.5 text-slate-500 hover:text-white hover:bg-white/10 transition-colors">
-            <X className="h-4 w-4" />
-          </button>
         </div>
       </div>
 
