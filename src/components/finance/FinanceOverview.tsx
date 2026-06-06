@@ -99,10 +99,17 @@ export default function FinanceOverview() {
     )
   }
 
-  const income   = Number(profile?.monthly_income ?? 0)
   const savings  = Number(profile?.total_savings ?? 0)
   const debt     = Number(profile?.total_debt ?? 0)
   const score    = profile?.financial_score ?? null
+
+  // Monthly income: from actual transactions + profile fallback
+  const incomeTxnTotal = txns
+    .filter(t => t.type === 'income')
+    .reduce((s, t) => s + Number(t.amount), 0)
+  const income = incomeTxnTotal > 0
+    ? incomeTxnTotal
+    : Number(profile?.monthly_income ?? 0)
 
   // Monthly expenses: from actual transactions + JSONB fallback
   const expenseTxnTotal = txns
