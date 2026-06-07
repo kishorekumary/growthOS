@@ -5,13 +5,13 @@ import { useRouter } from 'next/navigation'
 import {
   Plus, X, Utensils, Dumbbell, CheckSquare, CreditCard, BookOpen,
   Loader2, Check, Camera, Image as ImageIcon, Zap, Sparkles, AlertCircle, CheckCircle2,
-  Mic, MicOff, RefreshCw,
+  Mic, MicOff, RefreshCw, ClipboardList,
 } from 'lucide-react'
 import { createSupabaseBrowserClient } from '@/lib/supabase'
 import { cn } from '@/lib/utils'
 import RichTextEditor from './RichTextEditor'
 
-type Panel = 'voice' | 'meal' | 'workout' | 'habit' | 'finance' | 'journal'
+type Panel = 'voice' | 'meal' | 'workout' | 'habit' | 'finance' | 'journal' | 'task'
 type MealType    = 'breakfast' | 'lunch' | 'dinner' | 'snack' | 'drink'
 type WorkoutType = 'cardio' | 'strength' | 'yoga' | 'sports' | 'rest'
 type TxnType     = 'expense' | 'income' | 'savings'
@@ -1234,6 +1234,78 @@ function VoicePanel({ onDone }: { onDone: () => void }) {
   )
 }
 
+// ─── Task Panel ───────────────────────────────────────────────────
+
+function TaskPanel({ onDone }: { onDone: () => void }) {
+  const [title, setTitle]   = useState('')
+  const [notes, setNotes]   = useState('')
+  const [dueDate, setDue]   = useState(todayStr())
+  const [saving, setSaving] = useState(false)
+  const [saved, setSaved]   = useState(false)
+
+  async function handleSave() {
+    if (!title.trim()) return
+    setSaving(true)
+    const supabase = createSupabaseBrowserClient()
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) { setSaving(false); return }
+    await supabase.from('user_todos').insert({
+      user_id:  user.id,
+      title:    title.trim(),
+      notes:    notes.trim() || null,
+      due_date: dueDate || null,
+    })
+    setSaving(false); setSaved(true)
+    setTimeout(onDone, 900)
+  }
+
+  if (saved) return (
+    <div className="flex flex-col items-center gap-3 py-8">
+      <div className="flex h-12 w-12 items-center justify-center rounded-full bg-orange-500/20 border border-orange-500/30">
+        <Check className="h-6 w-6 text-orange-400" />
+      </div>
+      <p className="text-sm text-slate-300">Task added!</p>
+    </div>
+  )
+
+  return (
+    <div className="space-y-3.5">
+      <input
+        autoFocus
+        placeholder="What needs to be done?"
+        value={title}
+        onChange={e => setTitle(e.target.value)}
+        onKeyDown={e => { if (e.key === 'Enter' && title.trim()) handleSave() }}
+        className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2.5 text-sm text-white placeholder:text-slate-600 focus:outline-none focus:border-orange-500"
+      />
+      <div className="space-y-1.5">
+        <label className="text-xs text-slate-500">Due date</label>
+        <input
+          type="date"
+          value={dueDate}
+          onChange={e => setDue(e.target.value)}
+          className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-white focus:outline-none focus:border-orange-500 [color-scheme:dark]"
+        />
+      </div>
+      <textarea
+        placeholder="Notes (optional)"
+        value={notes}
+        onChange={e => setNotes(e.target.value)}
+        rows={2}
+        className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2.5 text-sm text-white placeholder:text-slate-600 resize-none focus:outline-none focus:border-orange-500"
+      />
+      <button
+        onClick={handleSave}
+        disabled={saving || !title.trim()}
+        className="w-full flex items-center justify-center gap-2 rounded-xl bg-orange-600 hover:bg-orange-700 disabled:opacity-50 disabled:cursor-not-allowed px-4 py-3 text-sm font-semibold text-white transition-all"
+      >
+        {saving && <Loader2 className="h-4 w-4 animate-spin" />}
+        Add Task
+      </button>
+    </div>
+  )
+}
+
 // ─── Tab config ───────────────────────────────────────────────────
 
 const TABS: {
@@ -1275,6 +1347,12 @@ const TABS: {
     activeClass:   'border-rose-500 bg-rose-500/20 text-white',
     inactiveClass: 'border-rose-500/20 bg-rose-500/8 text-rose-400/80 hover:opacity-100',
     route: '/personality/journal',
+  },
+  {
+    id: 'task', label: 'Task', Icon: ClipboardList,
+    activeClass:   'border-orange-500 bg-orange-500/20 text-white',
+    inactiveClass: 'border-orange-500/20 bg-orange-500/8 text-orange-400/80 hover:opacity-100',
+    route: '/focus',
   },
 ]
 
@@ -1352,6 +1430,7 @@ export default function QuickLog() {
               {panel === 'habit'   && <HabitPanel />}
               {panel === 'finance' && <FinancePanel onDone={handleDone} />}
               {panel === 'journal' && <JournalPanel onDone={handleDone} />}
+              {panel === 'task'    && <TaskPanel    onDone={handleDone} />}
             </div>
 
           </div>
