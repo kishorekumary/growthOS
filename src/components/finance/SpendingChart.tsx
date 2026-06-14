@@ -27,6 +27,7 @@ const CATEGORY_COLORS: Record<string, string> = {
   Healthcare:    '#f87171',
   Shopping:      '#fbbf24',
   Utilities:     '#34d399',
+  Savings:       '#10b981',
   Other:         '#6b7280',
 }
 
@@ -72,9 +73,10 @@ function CustomTooltip({ active, payload }: { active?: boolean; payload?: { name
 // ─── Main component ───────────────────────────────────────────
 
 export default function SpendingChart({ start, end }: { start: string; end: string }) {
-  const [catTotals, setCatTotals] = useState<Record<string, number>>({})
-  const [budget, setBudget]       = useState<Budget | null>(null)
-  const [loading, setLoading]     = useState(true)
+  const [catTotals, setCatTotals]   = useState<Record<string, number>>({})
+  const [totalIncome, setTotalIncome] = useState(0)
+  const [budget, setBudget]         = useState<Budget | null>(null)
+  const [loading, setLoading]       = useState(true)
 
   const fetchData = useCallback(async () => {
     setLoading(true)
@@ -82,12 +84,19 @@ export default function SpendingChart({ start, end }: { start: string; end: stri
     const { data: { session } } = await supabase.auth.getSession()
     if (!session?.user) { setLoading(false); return }
 
-    const [{ data: txns }, { data: budgetRow }] = await Promise.all([
+    const [{ data: txns }, { data: incomeTxns }, { data: budgetRow }] = await Promise.all([
       supabase
         .from('transactions')
         .select('category, amount')
         .eq('user_id', session.user.id)
         .eq('type', 'expense')
+        .gte('txn_date', start)
+        .lte('txn_date', end),
+      supabase
+        .from('transactions')
+        .select('amount')
+        .eq('user_id', session.user.id)
+        .eq('type', 'income')
         .gte('txn_date', start)
         .lte('txn_date', end),
       supabase
@@ -103,7 +112,9 @@ export default function SpendingChart({ start, end }: { start: string; end: stri
     ;(txns ?? []).forEach(t => {
       totals[t.category] = (totals[t.category] ?? 0) + Number(t.amount)
     })
+    const income = (incomeTxns ?? []).reduce((s, t) => s + Number(t.amount), 0)
     setCatTotals(totals)
+    setTotalIncome(income)
     setBudget(budgetRow?.budget as Budget ?? null)
     setLoading(false)
   }, [start, end])
@@ -111,10 +122,16 @@ export default function SpendingChart({ start, end }: { start: string; end: stri
   useEffect(() => { fetchData() }, [fetchData])
 
   const totalSpent = Object.values(catTotals).reduce((s, v) => s + v, 0)
+  const savings    = Math.max(0, totalIncome - totalSpent)
+  const pieTotal   = savings > 0 ? totalIncome : totalSpent
 
-  const pieData = Object.entries(catTotals)
+  const expenseEntries = Object.entries(catTotals)
     .sort(([, a], [, b]) => b - a)
     .map(([name, value]) => ({ name, value }))
+
+  const pieData = savings > 0
+    ? [...expenseEntries, { name: 'Savings', value: savings }]
+    : expenseEntries
 
   return (
     <div className="space-y-4">
@@ -133,10 +150,18 @@ export default function SpendingChart({ start, end }: { start: string; end: stri
         </div>
       ) : (
         <>
-          {/* Total */}
-          <div className="rounded-xl border border-white/10 bg-white/5 px-4 py-3 flex items-center justify-between">
-            <p className="text-sm text-slate-400">Total spent</p>
-            <p className="text-lg font-bold text-red-400">₹{totalSpent.toLocaleString()}</p>
+          {/* Totals */}
+          <div className="rounded-xl border border-white/10 bg-white/5 px-4 py-3 grid grid-cols-2 gap-3">
+            <div>
+              <p className="text-xs text-slate-400">Total spent</p>
+              <p className="text-base font-bold text-red-400">₹{totalSpent.toLocaleString()}</p>
+            </div>
+            {savings > 0 && (
+              <div className="text-right">
+                <p className="text-xs text-slate-400">Saved</p>
+                <p className="text-base font-bold text-emerald-400">₹{savings.toLocaleString()}</p>
+              </div>
+            )}
           </div>
 
           {/* Pie chart */}
@@ -163,14 +188,17 @@ export default function SpendingChart({ start, end }: { start: string; end: stri
             {/* Legend */}
             <div className="grid grid-cols-2 gap-x-4 gap-y-1.5 mt-2">
               {pieData.map(entry => {
-                const pct = Math.round((entry.value / totalSpent) * 100)
+                const pct = pieTotal > 0 ? Math.round((entry.value / pieTotal) * 100) : 0
                 return (
                   <div key={entry.name} className="flex items-center gap-2">
                     <span
                       className="h-2.5 w-2.5 shrink-0 rounded-full"
                       style={{ backgroundColor: catColor(entry.name) }}
                     />
-                    <span className="text-xs text-slate-400 flex-1 truncate">{entry.name}</span>
+                    <span className={cn(
+                      'text-xs flex-1 truncate',
+                      entry.name === 'Savings' ? 'text-emerald-400 font-medium' : 'text-slate-400'
+                    )}>{entry.name}</span>
                     <span className="text-xs font-medium text-white">{pct}%</span>
                   </div>
                 )
