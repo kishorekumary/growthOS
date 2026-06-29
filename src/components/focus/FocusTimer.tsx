@@ -84,8 +84,9 @@ const QUICK_MINS = [1, 2, 3, 5, 10]
 function SubTimerPanel() {
   const [sub, setSub]           = useState<SubTimerState | null>(null)
   const [showCustom, setShowCustom] = useState(false)
-  // Custom picker state — minutes only, type-able
+  // Custom picker state
   const [customMins, setCustomMins] = useState(1)
+  const [customSecs, setCustomSecs] = useState(0)
   const [customLabel, setCustomLabel] = useState('')
   const intervalRef    = useRef<ReturnType<typeof setInterval> | null>(null)
   const doneTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -209,28 +210,58 @@ function SubTimerPanel() {
           </button>
         </div>
 
-        {/* Big [-] [MM] [+] row */}
-        <div className="flex items-center justify-center gap-3">
+        {/* [-] [MM] [+] : [-] [SS] [+] */}
+        <div className="flex items-center justify-center gap-2">
+          {/* Minutes */}
           <button
-            onClick={() => setCustomMins(m => Math.max(1, m - 1))}
-            className="flex h-10 w-10 items-center justify-center rounded-full border border-white/15 bg-white/5 text-xl text-slate-300 hover:bg-white/10 hover:text-white transition-all active:scale-95">
+            onClick={() => setCustomMins(m => Math.max(0, m - 1))}
+            disabled={customMins === 0}
+            className="flex h-10 w-10 items-center justify-center rounded-full border border-white/15 bg-white/5 text-xl text-slate-300 hover:bg-white/10 hover:text-white transition-all active:scale-95 disabled:opacity-30 disabled:cursor-not-allowed">
             −
           </button>
           <div className="flex flex-col items-center">
             <input
               type="number"
-              min={1} max={99}
+              min={0} max={99}
               value={customMins}
-              onChange={e => setCustomMins(Math.max(1, parseInt(e.target.value) || 1))}
+              onChange={e => setCustomMins(Math.max(0, Math.min(99, parseInt(e.target.value) || 0)))}
               className={cn(
-                'w-16 bg-transparent text-center text-3xl font-bold text-white focus:outline-none',
+                'w-14 bg-transparent text-center text-3xl font-bold text-white focus:outline-none',
                 '[appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none',
               )}
             />
-            <span className="text-[11px] text-slate-500 -mt-1">minutes</span>
+            <span className="text-[11px] text-slate-500 -mt-1">min</span>
           </div>
           <button
             onClick={() => setCustomMins(m => Math.min(99, m + 1))}
+            className="flex h-10 w-10 items-center justify-center rounded-full border border-white/15 bg-white/5 text-xl text-slate-300 hover:bg-white/10 hover:text-white transition-all active:scale-95">
+            +
+          </button>
+
+          <span className="text-2xl font-bold text-slate-600 mx-1">:</span>
+
+          {/* Seconds */}
+          <button
+            onClick={() => setCustomSecs(s => s === 0 ? 59 : s - 1)}
+            disabled={customMins === 0 && customSecs === 0}
+            className="flex h-10 w-10 items-center justify-center rounded-full border border-white/15 bg-white/5 text-xl text-slate-300 hover:bg-white/10 hover:text-white transition-all active:scale-95 disabled:opacity-30 disabled:cursor-not-allowed">
+            −
+          </button>
+          <div className="flex flex-col items-center">
+            <input
+              type="number"
+              min={0} max={59}
+              value={customSecs}
+              onChange={e => setCustomSecs(Math.max(0, Math.min(59, parseInt(e.target.value) || 0)))}
+              className={cn(
+                'w-14 bg-transparent text-center text-3xl font-bold text-white focus:outline-none',
+                '[appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none',
+              )}
+            />
+            <span className="text-[11px] text-slate-500 -mt-1">sec</span>
+          </div>
+          <button
+            onClick={() => setCustomSecs(s => s === 59 ? 0 : s + 1)}
             className="flex h-10 w-10 items-center justify-center rounded-full border border-white/15 bg-white/5 text-xl text-slate-300 hover:bg-white/10 hover:text-white transition-all active:scale-95">
             +
           </button>
@@ -240,15 +271,21 @@ function SubTimerPanel() {
         <input
           value={customLabel}
           onChange={e => setCustomLabel(e.target.value)}
-          onKeyDown={e => { if (e.key === 'Enter') launch(customMins * 60, customLabel.trim()) }}
+          onKeyDown={e => {
+            if (e.key === 'Enter') launch(customMins * 60 + customSecs, customLabel.trim())
+          }}
           placeholder="Label (optional)"
           className="w-full bg-transparent text-xs text-slate-300 placeholder:text-slate-600 focus:outline-none border-b border-white/10 pb-1 text-center"
         />
 
         <button
-          onClick={() => launch(customMins * 60, customLabel.trim())}
-          className="w-full flex items-center justify-center gap-1.5 rounded-lg bg-amber-500 hover:bg-amber-400 py-2 text-xs font-semibold text-black transition-colors active:scale-[0.98]">
-          <Play className="h-3 w-3" /> Start {customMins}m timer
+          onClick={() => launch(customMins * 60 + customSecs, customLabel.trim())}
+          disabled={customMins === 0 && customSecs === 0}
+          className="w-full flex items-center justify-center gap-1.5 rounded-lg bg-amber-500 hover:bg-amber-400 disabled:opacity-40 disabled:cursor-not-allowed py-2 text-xs font-semibold text-black transition-colors active:scale-[0.98]">
+          <Play className="h-3 w-3" />
+          Start {customMins > 0 && customSecs > 0
+            ? `${customMins}m ${customSecs}s`
+            : customMins > 0 ? `${customMins}m` : `${customSecs}s`} timer
         </button>
       </div>
     )
