@@ -35,10 +35,34 @@ export function playAlarm() {
 export async function showNotification(title: string, body: string) {
   if (!('Notification' in window)) return
   if (Notification.permission === 'default') await Notification.requestPermission()
-  if (Notification.permission === 'granted') {
-    const n = new Notification(title, { body, icon: '/icon-192.png', silent: false })
-    setTimeout(() => n.close(), 3000)
+  if (Notification.permission !== 'granted') return
+
+  // Prefer ServiceWorker notification — more reliable on mobile when app is backgrounded
+  if ('serviceWorker' in navigator) {
+    try {
+      const reg = await navigator.serviceWorker.ready
+      await reg.showNotification(title, {
+        body,
+        icon: '/icon-192.png',
+        badge: '/icon-96.png',
+        silent: false,
+        // @ts-expect-error — vibrate is valid on Android but not in all TS lib typings
+        vibrate: [200, 100, 200, 100, 200],
+      })
+    } catch {
+      // Fallback: basic browser notification
+      try { new Notification(title, { body, icon: '/icon-192.png' }) } catch { /* blocked */ }
+    }
+  } else {
+    try { new Notification(title, { body, icon: '/icon-192.png' }) } catch { /* blocked */ }
   }
+
+  // Fire-and-forget push to ALL of the user's devices (including phone when screen is off)
+  fetch('/api/push/notify', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ title, body, url: '/focus' }),
+  }).catch(() => { /* best-effort */ })
 }
 
 // Speak text after the alarm tones finish (~2.6s)

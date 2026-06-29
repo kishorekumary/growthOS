@@ -72,10 +72,13 @@ self.addEventListener('push', event => {
   const data = event.data?.json() ?? {}
   event.waitUntil(
     self.registration.showNotification(data.title ?? 'Zenith Reminder', {
-      body:  data.body  ?? 'Time to check your tasks!',
-      icon:  '/icon-192.png',
-      badge: '/icon-96.png',
-      data:  { url: data.url ?? '/dashboard' },
+      body:    data.body  ?? 'Time to check your tasks!',
+      icon:    '/icon-192.png',
+      badge:   '/icon-96.png',
+      vibrate: [200, 100, 200, 100, 200],
+      renotify: true,
+      tag:     data.tag ?? 'zenith-timer',
+      data:    { url: data.url ?? '/dashboard' },
     })
   )
 })
