@@ -10,7 +10,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { cn } from '@/lib/utils'
-import { useTimer, type Sequence } from '@/contexts/TimerContext'
+import { useTimer, playAlarm, showNotification, type Sequence } from '@/contexts/TimerContext'
 
 // ─── Types ────────────────────────────────────────────────────
 
@@ -79,16 +79,18 @@ interface SubTimerState {
   done: boolean
 }
 
+const QUICK_MINS = [1, 2, 3, 5, 10]
+
 function SubTimerPanel() {
-  const [sub, setSub] = useState<SubTimerState | null>(null)
-  const [open, setOpen] = useState(false)
-  const [label, setLabel] = useState('')
-  const [mins, setMins] = useState('5')
-  const [secs, setSecs] = useState('0')
-  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  const [sub, setSub]           = useState<SubTimerState | null>(null)
+  const [showCustom, setShowCustom] = useState(false)
+  // Custom picker state — minutes only, type-able
+  const [customMins, setCustomMins] = useState(1)
+  const [customLabel, setCustomLabel] = useState('')
+  const intervalRef    = useRef<ReturnType<typeof setInterval> | null>(null)
   const doneTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
-  // Countdown tick — independent of the main timer
+  // Countdown tick
   useEffect(() => {
     if (!sub?.running) return
     intervalRef.current = setInterval(() => {
@@ -96,10 +98,11 @@ function SubTimerPanel() {
         if (!prev?.running) return prev
         const next = prev.left - 1
         if (next <= 0) {
-          // Notify
-          if ('Notification' in window && Notification.permission === 'granted') {
-            new Notification(`⏱ Sub-timer done${prev.label ? ': ' + prev.label : ''}`)
-          }
+          playAlarm()
+          showNotification(
+            `⏱ Sub-timer done${prev.label ? ': ' + prev.label : ''}`,
+            'Your sub-timer has finished.'
+          )
           doneTimeoutRef.current = setTimeout(() => setSub(null), 4000)
           return { ...prev, left: 0, running: false, done: true }
         }
@@ -109,28 +112,24 @@ function SubTimerPanel() {
     return () => { if (intervalRef.current) clearInterval(intervalRef.current) }
   }, [sub?.running])
 
-  // Cleanup on unmount
   useEffect(() => () => {
     if (intervalRef.current) clearInterval(intervalRef.current)
     if (doneTimeoutRef.current) clearTimeout(doneTimeoutRef.current)
   }, [])
 
-  function startSub() {
-    const m = Math.max(0, parseInt(mins) || 0)
-    const s = Math.max(0, Math.min(59, parseInt(secs) || 0))
-    const total = m * 60 + s
-    if (total === 0) return
+  function launch(totalSecs: number, label = '') {
+    if (totalSecs <= 0) return
     if (intervalRef.current) clearInterval(intervalRef.current)
     if (doneTimeoutRef.current) clearTimeout(doneTimeoutRef.current)
-    setSub({ label: label.trim(), total, left: total, running: true, done: false })
-    setOpen(false)
+    setSub({ label, total: totalSecs, left: totalSecs, running: true, done: false })
+    setShowCustom(false)
   }
 
   function stopSub() {
     if (intervalRef.current) clearInterval(intervalRef.current)
     if (doneTimeoutRef.current) clearTimeout(doneTimeoutRef.current)
     setSub(null)
-    setOpen(false)
+    setShowCustom(false)
   }
 
   function togglePauseSub() {
@@ -148,14 +147,13 @@ function SubTimerPanel() {
         'w-full rounded-xl border px-4 py-3 transition-all',
         sub.done
           ? 'border-emerald-500/40 bg-emerald-500/10 animate-pulse'
-          : 'border-amber-500/20 bg-amber-500/5',
+          : 'border-amber-500/25 bg-amber-500/5',
       )}>
         <div className="flex items-center gap-3">
-          {/* Mini ring */}
           <div className="relative shrink-0">
-            <svg width="52" height="52" className="-rotate-90">
-              <circle cx="26" cy="26" r={r} fill="none" stroke="rgba(255,255,255,0.06)" strokeWidth="4" />
-              <circle cx="26" cy="26" r={r} fill="none"
+            <svg width="50" height="50" className="-rotate-90">
+              <circle cx="25" cy="25" r={r} fill="none" stroke="rgba(255,255,255,0.06)" strokeWidth="4" />
+              <circle cx="25" cy="25" r={r} fill="none"
                 stroke={sub.done ? '#10b981' : sub.running ? '#f59e0b' : '#64748b'}
                 strokeWidth="4" strokeLinecap="round"
                 strokeDasharray={circ}
@@ -166,16 +164,18 @@ function SubTimerPanel() {
             <div className="absolute inset-0 flex items-center justify-center">
               {sub.done
                 ? <Check className="h-4 w-4 text-emerald-400" />
-                : <AlarmClock className="h-3.5 w-3.5 text-amber-400" />
+                : <AlarmClock className="h-3 w-3 text-amber-400" />
               }
             </div>
           </div>
 
           <div className="flex-1 min-w-0">
-            {sub.label && <p className="text-xs text-slate-300 truncate mb-0.5">{sub.label}</p>}
+            <p className="text-[11px] text-amber-400/70 font-medium mb-0.5">
+              {sub.label || 'Sub-timer'}
+            </p>
             {sub.done
               ? <p className="text-sm font-bold text-emerald-400">Done!</p>
-              : <p className="text-xl font-bold tabular-nums text-white">{fmtCountdown(sub.left)}</p>
+              : <p className="text-2xl font-bold tabular-nums text-white leading-none">{fmtCountdown(sub.left)}</p>
             }
           </div>
 
@@ -196,58 +196,81 @@ function SubTimerPanel() {
     )
   }
 
-  // ── Input form (collapsed → expanded)
-  return (
-    <div className="w-full">
-      {!open ? (
-        <button onClick={() => setOpen(true)}
-          className="flex w-full items-center gap-2 rounded-xl border border-dashed border-white/10 px-4 py-2.5 text-xs text-slate-500 hover:border-amber-500/30 hover:text-amber-400 transition-all">
-          <AlarmClock className="h-3.5 w-3.5" />
-          Set a sub-timer
-        </button>
-      ) : (
-        <div className="rounded-xl border border-amber-500/20 bg-amber-500/5 px-4 py-3 space-y-3">
-          <div className="flex items-center justify-between">
-            <p className="text-xs font-medium text-amber-400 flex items-center gap-1.5">
-              <AlarmClock className="h-3.5 w-3.5" /> Sub-timer
-            </p>
-            <button onClick={() => setOpen(false)} className="text-slate-600 hover:text-slate-400 transition-colors">
-              <X className="h-3.5 w-3.5" />
-            </button>
-          </div>
-
-          <input
-            value={label}
-            onChange={e => setLabel(e.target.value)}
-            placeholder="Label (optional)"
-            className="w-full bg-transparent text-sm text-white placeholder:text-slate-600 focus:outline-none border-b border-white/10 pb-1"
-          />
-
-          <div className="flex items-center gap-2">
-            <div className="flex flex-col items-center gap-0.5">
-              <input type="number" min={0} max={99} value={mins}
-                onChange={e => setMins(e.target.value)}
-                onKeyDown={e => { if (e.key === 'Enter') startSub() }}
-                className={cn('w-14 rounded border border-white/15 bg-slate-800 px-2 py-1 text-center text-sm font-medium text-white focus:outline-none focus:border-amber-500',
-                  '[appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none')} />
-              <span className="text-[10px] text-slate-600">min</span>
-            </div>
-            <span className="text-slate-500 font-medium text-base pb-3">:</span>
-            <div className="flex flex-col items-center gap-0.5">
-              <input type="number" min={0} max={59} value={secs}
-                onChange={e => setSecs(e.target.value)}
-                onKeyDown={e => { if (e.key === 'Enter') startSub() }}
-                className={cn('w-14 rounded border border-white/15 bg-slate-800 px-2 py-1 text-center text-sm font-medium text-white focus:outline-none focus:border-amber-500',
-                  '[appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none')} />
-              <span className="text-[10px] text-slate-600">sec</span>
-            </div>
-            <button onClick={startSub}
-              className="ml-auto flex items-center gap-1.5 rounded-lg bg-amber-500 hover:bg-amber-400 px-3 py-1.5 text-xs font-semibold text-black transition-colors">
-              <Play className="h-3 w-3" /> Start
-            </button>
-          </div>
+  // ── Custom picker (when ✏ is open)
+  if (showCustom) {
+    return (
+      <div className="w-full rounded-xl border border-amber-500/25 bg-amber-500/5 px-4 py-3 space-y-3">
+        <div className="flex items-center justify-between">
+          <p className="text-xs font-medium text-amber-400 flex items-center gap-1.5">
+            <AlarmClock className="h-3.5 w-3.5" /> Custom sub-timer
+          </p>
+          <button onClick={() => setShowCustom(false)} className="text-slate-600 hover:text-slate-400 transition-colors">
+            <X className="h-3.5 w-3.5" />
+          </button>
         </div>
-      )}
+
+        {/* Big [-] [MM] [+] row */}
+        <div className="flex items-center justify-center gap-3">
+          <button
+            onClick={() => setCustomMins(m => Math.max(1, m - 1))}
+            className="flex h-10 w-10 items-center justify-center rounded-full border border-white/15 bg-white/5 text-xl text-slate-300 hover:bg-white/10 hover:text-white transition-all active:scale-95">
+            −
+          </button>
+          <div className="flex flex-col items-center">
+            <input
+              type="number"
+              min={1} max={99}
+              value={customMins}
+              onChange={e => setCustomMins(Math.max(1, parseInt(e.target.value) || 1))}
+              className={cn(
+                'w-16 bg-transparent text-center text-3xl font-bold text-white focus:outline-none',
+                '[appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none',
+              )}
+            />
+            <span className="text-[11px] text-slate-500 -mt-1">minutes</span>
+          </div>
+          <button
+            onClick={() => setCustomMins(m => Math.min(99, m + 1))}
+            className="flex h-10 w-10 items-center justify-center rounded-full border border-white/15 bg-white/5 text-xl text-slate-300 hover:bg-white/10 hover:text-white transition-all active:scale-95">
+            +
+          </button>
+        </div>
+
+        {/* Optional label */}
+        <input
+          value={customLabel}
+          onChange={e => setCustomLabel(e.target.value)}
+          onKeyDown={e => { if (e.key === 'Enter') launch(customMins * 60, customLabel.trim()) }}
+          placeholder="Label (optional)"
+          className="w-full bg-transparent text-xs text-slate-300 placeholder:text-slate-600 focus:outline-none border-b border-white/10 pb-1 text-center"
+        />
+
+        <button
+          onClick={() => launch(customMins * 60, customLabel.trim())}
+          className="w-full flex items-center justify-center gap-1.5 rounded-lg bg-amber-500 hover:bg-amber-400 py-2 text-xs font-semibold text-black transition-colors active:scale-[0.98]">
+          <Play className="h-3 w-3" /> Start {customMins}m timer
+        </button>
+      </div>
+    )
+  }
+
+  // ── Quick-start chips (default idle state)
+  return (
+    <div className="w-full flex items-center gap-1.5 flex-wrap">
+      <AlarmClock className="h-3.5 w-3.5 text-slate-600 shrink-0" />
+      {QUICK_MINS.map(m => (
+        <button
+          key={m}
+          onClick={() => launch(m * 60)}
+          className="flex items-center gap-1 rounded-full border border-white/10 bg-white/5 px-2.5 py-1 text-xs text-slate-400 hover:border-amber-500/40 hover:bg-amber-500/10 hover:text-amber-300 transition-all active:scale-95">
+          +{m}m
+        </button>
+      ))}
+      <button
+        onClick={() => setShowCustom(true)}
+        className="flex items-center gap-1 rounded-full border border-white/10 bg-white/5 px-2.5 py-1 text-xs text-slate-500 hover:border-white/20 hover:text-slate-300 transition-all ml-auto">
+        <Plus className="h-3 w-3" /> custom
+      </button>
     </div>
   )
 }

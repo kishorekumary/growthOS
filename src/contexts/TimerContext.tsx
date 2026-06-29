@@ -7,7 +7,7 @@ export interface Sequence { id: string; name: string; steps: Step[]; created_at:
 
 // ─── Audio / notification helpers ────────────────────────────────────────────
 
-function playAlarm() {
+export function playAlarm() {
   try {
     const AudioCtx = window.AudioContext ||
       (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext
@@ -32,7 +32,7 @@ function playAlarm() {
   } catch { /* autoplay policy */ }
 }
 
-async function showNotification(title: string, body: string) {
+export async function showNotification(title: string, body: string) {
   if (!('Notification' in window)) return
   if (Notification.permission === 'default') await Notification.requestPermission()
   if (Notification.permission === 'granted') {
