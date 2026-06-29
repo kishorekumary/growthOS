@@ -1,9 +1,9 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import {
   Timer, Play, Pause, Square, Plus, Trash2, ChevronLeft, ChevronUp, ChevronDown,
-  Loader2, Check, RotateCcw, Bell, Pencil, Copy, SkipForward,
+  Loader2, Check, RotateCcw, Bell, Pencil, Copy, SkipForward, AlarmClock, X,
 } from 'lucide-react'
 import { createSupabaseBrowserClient } from '@/lib/supabase'
 import { Button } from '@/components/ui/button'
@@ -65,6 +65,189 @@ function CircularTimer({ progress, label, seconds, color }: {
           {label}
         </span>
       </div>
+    </div>
+  )
+}
+
+// ─── Sub-timer ────────────────────────────────────────────────
+
+interface SubTimerState {
+  label: string
+  total: number
+  left: number
+  running: boolean
+  done: boolean
+}
+
+function SubTimerPanel() {
+  const [sub, setSub] = useState<SubTimerState | null>(null)
+  const [open, setOpen] = useState(false)
+  const [label, setLabel] = useState('')
+  const [mins, setMins] = useState('5')
+  const [secs, setSecs] = useState('0')
+  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  const doneTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  // Countdown tick — independent of the main timer
+  useEffect(() => {
+    if (!sub?.running) return
+    intervalRef.current = setInterval(() => {
+      setSub(prev => {
+        if (!prev?.running) return prev
+        const next = prev.left - 1
+        if (next <= 0) {
+          // Notify
+          if ('Notification' in window && Notification.permission === 'granted') {
+            new Notification(`⏱ Sub-timer done${prev.label ? ': ' + prev.label : ''}`)
+          }
+          doneTimeoutRef.current = setTimeout(() => setSub(null), 4000)
+          return { ...prev, left: 0, running: false, done: true }
+        }
+        return { ...prev, left: next }
+      })
+    }, 1000)
+    return () => { if (intervalRef.current) clearInterval(intervalRef.current) }
+  }, [sub?.running])
+
+  // Cleanup on unmount
+  useEffect(() => () => {
+    if (intervalRef.current) clearInterval(intervalRef.current)
+    if (doneTimeoutRef.current) clearTimeout(doneTimeoutRef.current)
+  }, [])
+
+  function startSub() {
+    const m = Math.max(0, parseInt(mins) || 0)
+    const s = Math.max(0, Math.min(59, parseInt(secs) || 0))
+    const total = m * 60 + s
+    if (total === 0) return
+    if (intervalRef.current) clearInterval(intervalRef.current)
+    if (doneTimeoutRef.current) clearTimeout(doneTimeoutRef.current)
+    setSub({ label: label.trim(), total, left: total, running: true, done: false })
+    setOpen(false)
+  }
+
+  function stopSub() {
+    if (intervalRef.current) clearInterval(intervalRef.current)
+    if (doneTimeoutRef.current) clearTimeout(doneTimeoutRef.current)
+    setSub(null)
+    setOpen(false)
+  }
+
+  function togglePauseSub() {
+    setSub(prev => prev ? { ...prev, running: !prev.running } : prev)
+  }
+
+  // ── Active sub-timer display
+  if (sub) {
+    const progress = sub.total > 0 ? sub.left / sub.total : 0
+    const r = 22
+    const circ = 2 * Math.PI * r
+
+    return (
+      <div className={cn(
+        'w-full rounded-xl border px-4 py-3 transition-all',
+        sub.done
+          ? 'border-emerald-500/40 bg-emerald-500/10 animate-pulse'
+          : 'border-amber-500/20 bg-amber-500/5',
+      )}>
+        <div className="flex items-center gap-3">
+          {/* Mini ring */}
+          <div className="relative shrink-0">
+            <svg width="52" height="52" className="-rotate-90">
+              <circle cx="26" cy="26" r={r} fill="none" stroke="rgba(255,255,255,0.06)" strokeWidth="4" />
+              <circle cx="26" cy="26" r={r} fill="none"
+                stroke={sub.done ? '#10b981' : sub.running ? '#f59e0b' : '#64748b'}
+                strokeWidth="4" strokeLinecap="round"
+                strokeDasharray={circ}
+                strokeDashoffset={circ * (1 - progress)}
+                className="transition-[stroke-dashoffset] duration-500"
+              />
+            </svg>
+            <div className="absolute inset-0 flex items-center justify-center">
+              {sub.done
+                ? <Check className="h-4 w-4 text-emerald-400" />
+                : <AlarmClock className="h-3.5 w-3.5 text-amber-400" />
+              }
+            </div>
+          </div>
+
+          <div className="flex-1 min-w-0">
+            {sub.label && <p className="text-xs text-slate-300 truncate mb-0.5">{sub.label}</p>}
+            {sub.done
+              ? <p className="text-sm font-bold text-emerald-400">Done!</p>
+              : <p className="text-xl font-bold tabular-nums text-white">{fmtCountdown(sub.left)}</p>
+            }
+          </div>
+
+          <div className="flex items-center gap-1.5 shrink-0">
+            {!sub.done && (
+              <button onClick={togglePauseSub}
+                className="flex h-8 w-8 items-center justify-center rounded-lg border border-white/10 bg-white/5 text-slate-400 hover:text-white hover:bg-white/10 transition-all">
+                {sub.running ? <Pause className="h-3.5 w-3.5" /> : <Play className="h-3.5 w-3.5" />}
+              </button>
+            )}
+            <button onClick={stopSub}
+              className="flex h-8 w-8 items-center justify-center rounded-lg border border-white/10 bg-white/5 text-slate-400 hover:text-red-400 hover:bg-red-500/10 transition-all">
+              <X className="h-3.5 w-3.5" />
+            </button>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  // ── Input form (collapsed → expanded)
+  return (
+    <div className="w-full">
+      {!open ? (
+        <button onClick={() => setOpen(true)}
+          className="flex w-full items-center gap-2 rounded-xl border border-dashed border-white/10 px-4 py-2.5 text-xs text-slate-500 hover:border-amber-500/30 hover:text-amber-400 transition-all">
+          <AlarmClock className="h-3.5 w-3.5" />
+          Set a sub-timer
+        </button>
+      ) : (
+        <div className="rounded-xl border border-amber-500/20 bg-amber-500/5 px-4 py-3 space-y-3">
+          <div className="flex items-center justify-between">
+            <p className="text-xs font-medium text-amber-400 flex items-center gap-1.5">
+              <AlarmClock className="h-3.5 w-3.5" /> Sub-timer
+            </p>
+            <button onClick={() => setOpen(false)} className="text-slate-600 hover:text-slate-400 transition-colors">
+              <X className="h-3.5 w-3.5" />
+            </button>
+          </div>
+
+          <input
+            value={label}
+            onChange={e => setLabel(e.target.value)}
+            placeholder="Label (optional)"
+            className="w-full bg-transparent text-sm text-white placeholder:text-slate-600 focus:outline-none border-b border-white/10 pb-1"
+          />
+
+          <div className="flex items-center gap-2">
+            <div className="flex flex-col items-center gap-0.5">
+              <input type="number" min={0} max={99} value={mins}
+                onChange={e => setMins(e.target.value)}
+                onKeyDown={e => { if (e.key === 'Enter') startSub() }}
+                className={cn('w-14 rounded border border-white/15 bg-slate-800 px-2 py-1 text-center text-sm font-medium text-white focus:outline-none focus:border-amber-500',
+                  '[appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none')} />
+              <span className="text-[10px] text-slate-600">min</span>
+            </div>
+            <span className="text-slate-500 font-medium text-base pb-3">:</span>
+            <div className="flex flex-col items-center gap-0.5">
+              <input type="number" min={0} max={59} value={secs}
+                onChange={e => setSecs(e.target.value)}
+                onKeyDown={e => { if (e.key === 'Enter') startSub() }}
+                className={cn('w-14 rounded border border-white/15 bg-slate-800 px-2 py-1 text-center text-sm font-medium text-white focus:outline-none focus:border-amber-500',
+                  '[appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none')} />
+              <span className="text-[10px] text-slate-600">sec</span>
+            </div>
+            <button onClick={startSub}
+              className="ml-auto flex items-center gap-1.5 rounded-lg bg-amber-500 hover:bg-amber-400 px-3 py-1.5 text-xs font-semibold text-black transition-colors">
+              <Play className="h-3 w-3" /> Start
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
@@ -354,6 +537,8 @@ export default function FocusTimer() {
                 Enable browser notifications to receive step alerts.
               </div>
             )}
+
+            <SubTimerPanel />
 
             <div className="w-full space-y-1.5 pt-2">
               {runSeq.steps.map((s, i) => (
