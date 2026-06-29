@@ -1,12 +1,16 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
-import { Loader2, TrendingDown, PiggyBank, X, Calendar, FileText } from 'lucide-react'
+import {
+  Loader2, TrendingDown, PiggyBank, X, Calendar, FileText, Settings2,
+  Plus, Trash2, Check, Pencil,
+} from 'lucide-react'
 import { createSupabaseBrowserClient } from '@/lib/supabase'
 import { cn } from '@/lib/utils'
 import {
   PieChart, Pie, Cell, Tooltip, ResponsiveContainer,
 } from 'recharts'
+import { useFinanceCategories, type FinanceCategory } from '@/hooks/useFinanceCategories'
 
 // ─── Types ────────────────────────────────────────────────────
 
@@ -33,27 +37,13 @@ interface DrillTarget {
 
 // ─── Constants ───────────────────────────────────────────────
 
-const EXPENSE_COLORS: Record<string, string> = {
-  Food:          '#f97316',
-  Rent:          '#a78bfa',
-  Transport:     '#60a5fa',
-  Entertainment: '#f472b6',
-  Healthcare:    '#f87171',
-  Shopping:      '#fbbf24',
-  Utilities:     '#34d399',
-  Other:         '#6b7280',
-}
-
-const SAVINGS_COLORS: Record<string, string> = {
-  'Emergency Fund': '#10b981',
-  Retirement:       '#a78bfa',
-  Goal:             '#38bdf8',
-  Investment:       '#2dd4bf',
-  Other:            '#6b7280',
-}
-
-function expenseColor(name: string) { return EXPENSE_COLORS[name] ?? '#6b7280' }
-function savingsColor(name: string) { return SAVINGS_COLORS[name] ?? '#10b981' }
+const COLOR_PALETTE = [
+  '#f97316', '#fb923c', '#fbbf24', '#facc15',
+  '#a3e635', '#34d399', '#2dd4bf', '#22d3ee',
+  '#38bdf8', '#60a5fa', '#818cf8', '#a78bfa',
+  '#c084fc', '#f472b6', '#fb7185', '#f87171',
+  '#6b7280', '#10b981', '#0ea5e9', '#8b5cf6',
+]
 
 const TOOLTIP_STYLE = {
   backgroundColor: '#0f172a',
@@ -140,7 +130,7 @@ function DonutChart({
       </ResponsiveContainer>
 
       <div className="grid grid-cols-2 gap-x-4 gap-y-1.5 mt-2">
-        {data.map((entry, i) => {
+        {data.map(entry => {
           const pct = total > 0 ? Math.round((entry.value / total) * 100) : 0
           return (
             <button
@@ -148,15 +138,219 @@ function DonutChart({
               onClick={() => onSliceClick(entry.name)}
               className="flex items-center gap-2 hover:bg-white/5 rounded-lg px-1.5 py-1 -mx-1.5 transition-colors text-left"
             >
-              <span
-                className="h-2.5 w-2.5 shrink-0 rounded-full"
-                style={{ backgroundColor: colorFn(entry.name) }}
-              />
+              <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ backgroundColor: colorFn(entry.name) }} />
               <span className="text-xs text-slate-400 flex-1 truncate">{entry.name}</span>
               <span className="text-xs font-medium text-white">{pct}%</span>
             </button>
           )
         })}
+      </div>
+    </div>
+  )
+}
+
+// ─── Category manager modal ───────────────────────────────────
+
+function CategoryManager({
+  cats,
+  onAdd,
+  onUpdate,
+  onRemove,
+  onClose,
+}: {
+  cats: { expense: FinanceCategory[]; savings: FinanceCategory[] }
+  onAdd: (type: 'expense' | 'savings', cat: FinanceCategory) => void
+  onUpdate: (type: 'expense' | 'savings', oldName: string, updated: Partial<FinanceCategory>) => void
+  onRemove: (type: 'expense' | 'savings', name: string) => void
+  onClose: () => void
+}) {
+  const [tab, setTab] = useState<'expense' | 'savings'>('expense')
+  const [newName, setNewName] = useState('')
+  const [newColor, setNewColor] = useState('#60a5fa')
+  const [editingName, setEditingName] = useState<string | null>(null)
+  const [editDraft, setEditDraft] = useState('')
+  const [editColor, setEditColor] = useState('')
+  const [showNewPalette, setShowNewPalette] = useState(false)
+  const [showEditPalette, setShowEditPalette] = useState<string | null>(null)
+
+  const list = cats[tab]
+
+  function handleAdd() {
+    const name = newName.trim()
+    if (!name) return
+    onAdd(tab, { name, color: newColor })
+    setNewName('')
+    setShowNewPalette(false)
+  }
+
+  function startEdit(cat: FinanceCategory) {
+    setEditingName(cat.name)
+    setEditDraft(cat.name)
+    setEditColor(cat.color)
+    setShowEditPalette(null)
+  }
+
+  function commitEdit(oldName: string) {
+    const name = editDraft.trim()
+    if (name && (name !== oldName || editColor !== cats[tab].find(c => c.name === oldName)?.color)) {
+      onUpdate(tab, oldName, { name, color: editColor })
+    }
+    setEditingName(null)
+    setShowEditPalette(null)
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4">
+      <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} />
+
+      <div className="relative w-full sm:max-w-md bg-slate-900 border border-white/10 rounded-t-2xl sm:rounded-2xl flex flex-col max-h-[85vh]">
+        {/* Header */}
+        <div className="flex items-center justify-between px-5 pt-5 pb-4 border-b border-white/10 shrink-0">
+          <div>
+            <p className="font-semibold text-white">Manage Categories</p>
+            <p className="text-xs text-slate-500 mt-0.5">Add, rename, recolor, or remove</p>
+          </div>
+          <button onClick={onClose}
+            className="p-1.5 rounded-lg hover:bg-white/10 text-slate-400 hover:text-white transition-colors">
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+
+        {/* Tabs */}
+        <div className="flex gap-1 px-5 pt-4 shrink-0">
+          {(['expense', 'savings'] as const).map(t => (
+            <button key={t} onClick={() => { setTab(t); setEditingName(null) }}
+              className={cn(
+                'flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all',
+                tab === t
+                  ? t === 'expense' ? 'bg-red-500/15 text-red-400 border border-red-500/20'
+                                    : 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/20'
+                  : 'text-slate-500 hover:text-slate-300 border border-transparent',
+              )}>
+              {t === 'expense' ? <TrendingDown className="h-3 w-3" /> : <PiggyBank className="h-3 w-3" />}
+              {t === 'expense' ? 'Spending' : 'Savings'}
+            </button>
+          ))}
+        </div>
+
+        {/* Category list */}
+        <div className="flex-1 overflow-y-auto px-5 py-3 space-y-1.5">
+          {list.map(cat => (
+            <div key={cat.name}
+              className="flex items-center gap-3 rounded-xl border border-white/8 bg-white/5 px-3 py-2.5">
+              {/* Color swatch — click to change */}
+              <div className="relative shrink-0">
+                <button
+                  onClick={() => setShowEditPalette(showEditPalette === cat.name ? null : cat.name)}
+                  className="h-7 w-7 rounded-full border-2 border-white/20 hover:border-white/50 transition-all"
+                  style={{ backgroundColor: editingName === cat.name ? editColor : cat.color }}
+                  title="Change color"
+                />
+                {showEditPalette === cat.name && editingName !== cat.name && (
+                  <div className="absolute left-0 top-9 z-10 rounded-xl border border-white/10 bg-slate-900 p-2 shadow-xl grid grid-cols-5 gap-1">
+                    {COLOR_PALETTE.map(c => (
+                      <button key={c} onClick={() => { onUpdate(tab, cat.name, { color: c }); setShowEditPalette(null) }}
+                        className={cn('h-5 w-5 rounded-full border transition-all hover:scale-110',
+                          cat.color === c ? 'border-white' : 'border-transparent')}
+                        style={{ backgroundColor: c }} />
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* Name — click pencil to edit */}
+              {editingName === cat.name ? (
+                <div className="flex-1 flex items-center gap-2">
+                  <input
+                    autoFocus
+                    value={editDraft}
+                    onChange={e => setEditDraft(e.target.value)}
+                    onKeyDown={e => {
+                      if (e.key === 'Enter') commitEdit(cat.name)
+                      if (e.key === 'Escape') setEditingName(null)
+                    }}
+                    className="flex-1 bg-transparent text-sm text-white focus:outline-none border-b border-violet-500 pb-0.5"
+                  />
+                  {/* Inline color picker when editing */}
+                  <div className="relative">
+                    <button
+                      onClick={() => setShowEditPalette(showEditPalette === `edit-${cat.name}` ? null : `edit-${cat.name}`)}
+                      className="h-5 w-5 rounded-full border border-white/30"
+                      style={{ backgroundColor: editColor }}
+                    />
+                    {showEditPalette === `edit-${cat.name}` && (
+                      <div className="absolute right-0 top-7 z-10 rounded-xl border border-white/10 bg-slate-900 p-2 shadow-xl grid grid-cols-5 gap-1">
+                        {COLOR_PALETTE.map(c => (
+                          <button key={c} onClick={() => { setEditColor(c); setShowEditPalette(null) }}
+                            className={cn('h-5 w-5 rounded-full border transition-all hover:scale-110',
+                              editColor === c ? 'border-white' : 'border-transparent')}
+                            style={{ backgroundColor: c }} />
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                  <button onClick={() => commitEdit(cat.name)}
+                    className="p-1 rounded-md bg-violet-500/20 text-violet-400 hover:bg-violet-500/30 transition-colors">
+                    <Check className="h-3.5 w-3.5" />
+                  </button>
+                  <button onClick={() => setEditingName(null)}
+                    className="p-1 rounded-md text-slate-500 hover:text-white transition-colors">
+                    <X className="h-3.5 w-3.5" />
+                  </button>
+                </div>
+              ) : (
+                <>
+                  <span className="flex-1 text-sm text-white truncate">{cat.name}</span>
+                  <button onClick={() => startEdit(cat)}
+                    className="p-1.5 rounded-md text-slate-600 hover:text-slate-300 hover:bg-white/8 transition-all">
+                    <Pencil className="h-3.5 w-3.5" />
+                  </button>
+                  <button onClick={() => onRemove(tab, cat.name)}
+                    disabled={list.length <= 1}
+                    className="p-1.5 rounded-md text-slate-700 hover:text-red-400 hover:bg-red-500/10 transition-all disabled:opacity-30 disabled:cursor-not-allowed">
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </button>
+                </>
+              )}
+            </div>
+          ))}
+        </div>
+
+        {/* Add new category */}
+        <div className="px-5 py-4 border-t border-white/10 shrink-0 space-y-2">
+          <p className="text-xs text-slate-500 font-medium">Add category</p>
+          <div className="flex items-center gap-2">
+            {/* Color picker for new */}
+            <div className="relative shrink-0">
+              <button
+                onClick={() => setShowNewPalette(!showNewPalette)}
+                className="h-8 w-8 rounded-full border-2 border-white/20 hover:border-white/50 transition-all"
+                style={{ backgroundColor: newColor }}
+              />
+              {showNewPalette && (
+                <div className="absolute left-0 bottom-10 z-10 rounded-xl border border-white/10 bg-slate-900 p-2 shadow-xl grid grid-cols-5 gap-1">
+                  {COLOR_PALETTE.map(c => (
+                    <button key={c} onClick={() => { setNewColor(c); setShowNewPalette(false) }}
+                      className={cn('h-5 w-5 rounded-full border transition-all hover:scale-110',
+                        newColor === c ? 'border-white' : 'border-transparent')}
+                      style={{ backgroundColor: c }} />
+                  ))}
+                </div>
+              )}
+            </div>
+            <input
+              value={newName}
+              onChange={e => setNewName(e.target.value)}
+              onKeyDown={e => { if (e.key === 'Enter') handleAdd() }}
+              placeholder="Category name"
+              className="flex-1 rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-white placeholder:text-slate-600 focus:outline-none focus:border-violet-500"
+            />
+            <button onClick={handleAdd} disabled={!newName.trim()}
+              className="flex items-center gap-1.5 rounded-lg bg-violet-600 hover:bg-violet-500 disabled:opacity-40 disabled:cursor-not-allowed px-3 py-2 text-xs font-semibold text-white transition-colors">
+              <Plus className="h-3.5 w-3.5" /> Add
+            </button>
+          </div>
+        </div>
       </div>
     </div>
   )
@@ -184,42 +378,28 @@ function CategoryDrillDown({
 
   return (
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4">
-      {/* Backdrop */}
-      <div
-        className="absolute inset-0 bg-black/60 backdrop-blur-sm"
-        onClick={onClose}
-      />
+      <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} />
 
-      {/* Panel */}
       <div className="relative w-full sm:max-w-md bg-slate-900 border border-white/10 rounded-t-2xl sm:rounded-2xl flex flex-col max-h-[85vh]">
-        {/* Header */}
         <div className="flex items-center justify-between px-5 pt-5 pb-4 border-b border-white/10 shrink-0">
           <div className="flex items-center gap-3">
-            <span
-              className="h-3.5 w-3.5 rounded-full shrink-0"
-              style={{ backgroundColor: color }}
-            />
+            <span className="h-3.5 w-3.5 rounded-full shrink-0" style={{ backgroundColor: color }} />
             <div>
               <p className="font-semibold text-white text-base">{target.name}</p>
               <p className="text-xs text-slate-400">{isExpense ? 'Expenses' : 'Savings'}</p>
             </div>
           </div>
           <div className="flex items-center gap-3">
-            <p
-              className={cn('text-lg font-bold', isExpense ? 'text-red-400' : 'text-emerald-400')}
-            >
+            <p className={cn('text-lg font-bold', isExpense ? 'text-red-400' : 'text-emerald-400')}>
               ₹{total.toLocaleString()}
             </p>
-            <button
-              onClick={onClose}
-              className="p-1.5 rounded-lg hover:bg-white/10 text-slate-400 hover:text-white transition-colors"
-            >
+            <button onClick={onClose}
+              className="p-1.5 rounded-lg hover:bg-white/10 text-slate-400 hover:text-white transition-colors">
               <X className="h-4 w-4" />
             </button>
           </div>
         </div>
 
-        {/* Transaction list */}
         <div className="flex-1 overflow-y-auto px-5 py-3 space-y-2">
           {loading ? (
             <div className="flex items-center justify-center py-10">
@@ -231,10 +411,7 @@ function CategoryDrillDown({
             </div>
           ) : (
             transactions.map(txn => (
-              <div
-                key={txn.id}
-                className="flex items-start gap-3 rounded-xl bg-white/5 border border-white/8 px-4 py-3"
-              >
+              <div key={txn.id} className="flex items-start gap-3 rounded-xl bg-white/5 border border-white/8 px-4 py-3">
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-1.5 text-xs text-slate-400 mb-0.5">
                     <Calendar className="h-3 w-3 shrink-0" />
@@ -257,7 +434,6 @@ function CategoryDrillDown({
           )}
         </div>
 
-        {/* Count footer */}
         {!loading && transactions.length > 0 && (
           <div className="px-5 py-3 border-t border-white/10 shrink-0">
             <p className="text-xs text-slate-500 text-center">
@@ -273,15 +449,17 @@ function CategoryDrillDown({
 // ─── Main component ───────────────────────────────────────────
 
 export default function SpendingChart({ start, end }: { start: string; end: string }) {
+  const { cats, addCategory, removeCategory, updateCategory, colorFor } = useFinanceCategories()
+
   const [expenseTotals, setExpenseTotals] = useState<Record<string, number>>({})
   const [savingsTotals, setSavingsTotals] = useState<Record<string, number>>({})
   const [budget, setBudget]              = useState<Budget | null>(null)
   const [loading, setLoading]            = useState(true)
 
-  // Drill-down state
-  const [drillTarget, setDrillTarget]       = useState<DrillTarget | null>(null)
-  const [drillTxns, setDrillTxns]           = useState<Transaction[]>([])
-  const [drillLoading, setDrillLoading]     = useState(false)
+  const [drillTarget, setDrillTarget]   = useState<DrillTarget | null>(null)
+  const [drillTxns, setDrillTxns]       = useState<Transaction[]>([])
+  const [drillLoading, setDrillLoading] = useState(false)
+  const [showCatMgr, setShowCatMgr]     = useState(false)
 
   const fetchData = useCallback(async () => {
     setLoading(true)
@@ -290,38 +468,16 @@ export default function SpendingChart({ start, end }: { start: string; end: stri
     if (!session?.user) { setLoading(false); return }
 
     const [{ data: expenseTxns }, { data: savingsTxns }, { data: budgetRow }] = await Promise.all([
-      supabase
-        .from('transactions')
-        .select('category, amount')
-        .eq('user_id', session.user.id)
-        .eq('type', 'expense')
-        .gte('txn_date', start)
-        .lte('txn_date', end),
-      supabase
-        .from('transactions')
-        .select('category, amount')
-        .eq('user_id', session.user.id)
-        .eq('type', 'savings')
-        .gte('txn_date', start)
-        .lte('txn_date', end),
-      supabase
-        .from('budgets')
-        .select('budget')
-        .eq('user_id', session.user.id)
-        .order('created_at', { ascending: false })
-        .limit(1)
-        .maybeSingle(),
+      supabase.from('transactions').select('category, amount').eq('user_id', session.user.id).eq('type', 'expense').gte('txn_date', start).lte('txn_date', end),
+      supabase.from('transactions').select('category, amount').eq('user_id', session.user.id).eq('type', 'savings').gte('txn_date', start).lte('txn_date', end),
+      supabase.from('budgets').select('budget').eq('user_id', session.user.id).order('created_at', { ascending: false }).limit(1).maybeSingle(),
     ])
 
     const eTotals: Record<string, number> = {}
-    ;(expenseTxns ?? []).forEach(t => {
-      eTotals[t.category] = (eTotals[t.category] ?? 0) + Number(t.amount)
-    })
+    ;(expenseTxns ?? []).forEach(t => { eTotals[t.category] = (eTotals[t.category] ?? 0) + Number(t.amount) })
 
     const sTotals: Record<string, number> = {}
-    ;(savingsTxns ?? []).forEach(t => {
-      sTotals[t.category] = (sTotals[t.category] ?? 0) + Number(t.amount)
-    })
+    ;(savingsTxns ?? []).forEach(t => { sTotals[t.category] = (sTotals[t.category] ?? 0) + Number(t.amount) })
 
     setExpenseTotals(eTotals)
     setSavingsTotals(sTotals)
@@ -354,24 +510,26 @@ export default function SpendingChart({ start, end }: { start: string; end: stri
     setDrillLoading(false)
   }, [start, end])
 
-  const totalSpent  = Object.values(expenseTotals).reduce((s, v) => s + v, 0)
-  const totalSaved  = Object.values(savingsTotals).reduce((s, v) => s + v, 0)
+  const totalSpent = Object.values(expenseTotals).reduce((s, v) => s + v, 0)
+  const totalSaved = Object.values(savingsTotals).reduce((s, v) => s + v, 0)
 
-  const expensePieData: PieEntry[] = Object.entries(expenseTotals)
-    .sort(([, a], [, b]) => b - a)
-    .map(([name, value]) => ({ name, value }))
+  // Merge known categories + any categories from actual transactions (for legacy data)
+  const knownExpenseNames = cats.expense.map(c => c.name)
+  const allExpenseNames = Array.from(new Set([...knownExpenseNames, ...Object.keys(expenseTotals)]))
+  const expensePieData = allExpenseNames
+    .filter(n => expenseTotals[n] > 0)
+    .sort((a, b) => (expenseTotals[b] ?? 0) - (expenseTotals[a] ?? 0))
+    .map(name => ({ name, value: expenseTotals[name] }))
 
-  const savingsPieData: PieEntry[] = Object.entries(savingsTotals)
-    .sort(([, a], [, b]) => b - a)
-    .map(([name, value]) => ({ name, value }))
-
-  const hasExpenses = totalSpent > 0
-  const hasSavings  = totalSaved > 0
+  const knownSavingsNames = cats.savings.map(c => c.name)
+  const allSavingsNames = Array.from(new Set([...knownSavingsNames, ...Object.keys(savingsTotals)]))
+  const savingsPieData = allSavingsNames
+    .filter(n => savingsTotals[n] > 0)
+    .sort((a, b) => (savingsTotals[b] ?? 0) - (savingsTotals[a] ?? 0))
+    .map(name => ({ name, value: savingsTotals[name] }))
 
   const drillTotal = drillTarget
-    ? drillTarget.type === 'expense'
-      ? (expenseTotals[drillTarget.name] ?? 0)
-      : (savingsTotals[drillTarget.name] ?? 0)
+    ? drillTarget.type === 'expense' ? (expenseTotals[drillTarget.name] ?? 0) : (savingsTotals[drillTarget.name] ?? 0)
     : 0
 
   return (
@@ -385,12 +543,18 @@ export default function SpendingChart({ start, end }: { start: string; end: stri
         <>
           {/* ── Spending chart ── */}
           <div className="space-y-3">
-            <h3 className="font-semibold text-white flex items-center gap-2">
-              <TrendingDown className="h-4 w-4 text-red-400" />
-              Spending Breakdown
-            </h3>
+            <div className="flex items-center justify-between">
+              <h3 className="font-semibold text-white flex items-center gap-2">
+                <TrendingDown className="h-4 w-4 text-red-400" />
+                Spending Breakdown
+              </h3>
+              <button onClick={() => setShowCatMgr(true)}
+                className="flex items-center gap-1 text-xs text-slate-500 hover:text-slate-300 transition-colors">
+                <Settings2 className="h-3.5 w-3.5" /> Categories
+              </button>
+            </div>
 
-            {!hasExpenses ? (
+            {totalSpent === 0 ? (
               <div className="rounded-xl border border-dashed border-white/10 p-6 text-center">
                 <p className="text-slate-400 text-sm">No expenses recorded for this period.</p>
               </div>
@@ -405,7 +569,7 @@ export default function SpendingChart({ start, end }: { start: string; end: stri
                   <DonutChart
                     data={expensePieData}
                     total={totalSpent}
-                    colorFn={expenseColor}
+                    colorFn={name => colorFor('expense', name)}
                     onSliceClick={name => openDrill(name, 'expense')}
                   />
                 </div>
@@ -447,9 +611,7 @@ export default function SpendingChart({ start, end }: { start: string; end: stri
                       })}
                     </div>
                   ) : (
-                    <p className="text-xs text-slate-500">
-                      Generate a budget in the Budget tab to see comparisons.
-                    </p>
+                    <p className="text-xs text-slate-500">Generate a budget in the Budget tab to see comparisons.</p>
                   )}
                 </div>
               </>
@@ -458,12 +620,18 @@ export default function SpendingChart({ start, end }: { start: string; end: stri
 
           {/* ── Savings chart ── */}
           <div className="space-y-3">
-            <h3 className="font-semibold text-white flex items-center gap-2">
-              <PiggyBank className="h-4 w-4 text-emerald-400" />
-              Savings Breakdown
-            </h3>
+            <div className="flex items-center justify-between">
+              <h3 className="font-semibold text-white flex items-center gap-2">
+                <PiggyBank className="h-4 w-4 text-emerald-400" />
+                Savings Breakdown
+              </h3>
+              <button onClick={() => setShowCatMgr(true)}
+                className="flex items-center gap-1 text-xs text-slate-500 hover:text-slate-300 transition-colors">
+                <Settings2 className="h-3.5 w-3.5" /> Categories
+              </button>
+            </div>
 
-            {!hasSavings ? (
+            {totalSaved === 0 ? (
               <div className="rounded-xl border border-dashed border-white/10 p-6 text-center">
                 <p className="text-slate-400 text-sm">No savings recorded for this period.</p>
               </div>
@@ -478,7 +646,7 @@ export default function SpendingChart({ start, end }: { start: string; end: stri
                   <DonutChart
                     data={savingsPieData}
                     total={totalSaved}
-                    colorFn={savingsColor}
+                    colorFn={name => colorFor('savings', name)}
                     onSliceClick={name => openDrill(name, 'savings')}
                   />
                 </div>
@@ -488,6 +656,17 @@ export default function SpendingChart({ start, end }: { start: string; end: stri
         </>
       )}
 
+      {/* ── Category manager modal ── */}
+      {showCatMgr && (
+        <CategoryManager
+          cats={cats}
+          onAdd={addCategory}
+          onUpdate={updateCategory}
+          onRemove={removeCategory}
+          onClose={() => setShowCatMgr(false)}
+        />
+      )}
+
       {/* ── Drill-down panel ── */}
       {drillTarget && (
         <CategoryDrillDown
@@ -495,7 +674,7 @@ export default function SpendingChart({ start, end }: { start: string; end: stri
           transactions={drillTxns}
           loading={drillLoading}
           total={drillTotal}
-          colorFn={drillTarget.type === 'expense' ? expenseColor : savingsColor}
+          colorFn={name => colorFor(drillTarget.type, name)}
           onClose={() => { setDrillTarget(null); setDrillTxns([]) }}
         />
       )}

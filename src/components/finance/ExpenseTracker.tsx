@@ -17,6 +17,7 @@ import {
 } from '@/components/ui/dialog'
 import { cn } from '@/lib/utils'
 import { format } from 'date-fns'
+import { useFinanceCategories } from '@/hooks/useFinanceCategories'
 
 // ─── Types ────────────────────────────────────────────────────
 
@@ -67,6 +68,7 @@ function getCatStyle(type: TxnType, category: string): CatStyle {
   return map[category] ?? { icon: Package, color: 'text-slate-400', bg: 'bg-slate-500/15' }
 }
 
+
 const TYPE_SIGN: Record<TxnType, string> = { income: '+', expense: '-', savings: '→' }
 const TYPE_AMOUNT_COLOR: Record<TxnType, string> = {
   income:  'text-emerald-400',
@@ -87,10 +89,11 @@ function TxnModal({ initial, onSave, trigger }: {
   onSave: () => void
   trigger: React.ReactNode
 }) {
+  const { namesFor } = useFinanceCategories()
   const isEdit = !!initial
   const [open, setOpen]         = useState(false)
   const [type, setType]         = useState<TxnType>(initial?.type ?? 'expense')
-  const [category, setCategory] = useState<string>(initial?.category ?? Object.keys(EXPENSE_CAT)[0])
+  const [category, setCategory] = useState<string>(initial?.category ?? namesFor('expense')[0] ?? Object.keys(EXPENSE_CAT)[0])
   const [amount, setAmount]     = useState(initial ? String(initial.amount) : '')
   const [description, setDesc]  = useState(initial?.description ?? '')
   const [date, setDate]         = useState(initial?.txn_date ?? todayStr())
@@ -109,12 +112,14 @@ function TxnModal({ initial, onSave, trigger }: {
   const catKeys = type === 'income'
     ? Object.keys(INCOME_CAT)
     : type === 'savings'
-      ? Object.keys(SAVINGS_CAT)
-      : Object.keys(EXPENSE_CAT)
+      ? namesFor('savings')
+      : namesFor('expense')
 
   function changeType(t: TxnType) {
     setType(t)
-    const keys = t === 'income' ? Object.keys(INCOME_CAT) : t === 'savings' ? Object.keys(SAVINGS_CAT) : Object.keys(EXPENSE_CAT)
+    const keys = t === 'income'
+      ? Object.keys(INCOME_CAT)
+      : t === 'savings' ? namesFor('savings') : namesFor('expense')
     setCategory(keys[0])
   }
 
