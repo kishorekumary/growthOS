@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import { formatDistanceToNow } from 'date-fns'
-import { Mail, MailCheck, Loader2, CheckCircle, AlertCircle, Unplug } from 'lucide-react'
+import { Mail, MailCheck, Loader2, CheckCircle, AlertCircle, Unplug, RefreshCw } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 
 interface Status {
@@ -10,6 +10,7 @@ interface Status {
   gmailEmail:   string | null
   syncEnabled:  boolean
   lastSyncedAt: string | null
+  stale:        boolean
 }
 
 export default function BankEmailSync() {
@@ -98,19 +99,42 @@ export default function BankEmailSync() {
           </p>
         )}
 
-        {status?.connected ? (
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={disconnect}
-            disabled={disconnecting}
-            className="border-white/10 bg-white/5 text-slate-300 hover:text-red-400 hover:border-red-500/30 text-xs h-8"
-          >
-            {disconnecting
-              ? <><Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> Disconnecting...</>
-              : <><Unplug className="mr-1.5 h-3.5 w-3.5" /> Disconnect Gmail</>}
-          </Button>
-        ) : (
+        {status?.connected && status.stale && (
+          <div className="flex items-start gap-2.5 rounded-lg border border-amber-500/20 bg-amber-500/10 px-3 py-3">
+            <AlertCircle className="h-3.5 w-3.5 text-amber-400 shrink-0 mt-0.5" />
+            <p className="text-xs text-amber-300 leading-snug">
+              This connection hasn&apos;t synced in a while — Google&apos;s access token may have expired.
+              Reconnect to resume auto-importing transactions.
+            </p>
+          </div>
+        )}
+
+        {status?.connected && (
+          <div className="flex items-center gap-2">
+            {status.stale && (
+              <Button
+                size="sm"
+                onClick={() => { window.location.href = '/api/integrations/gmail/connect' }}
+                className="bg-violet-600 hover:bg-violet-700 text-white text-xs h-8"
+              >
+                <RefreshCw className="mr-1.5 h-3.5 w-3.5" /> Reconnect Gmail
+              </Button>
+            )}
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={disconnect}
+              disabled={disconnecting}
+              className="border-white/10 bg-white/5 text-slate-300 hover:text-red-400 hover:border-red-500/30 text-xs h-8"
+            >
+              {disconnecting
+                ? <><Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> Disconnecting...</>
+                : <><Unplug className="mr-1.5 h-3.5 w-3.5" /> Disconnect Gmail</>}
+            </Button>
+          </div>
+        )}
+
+        {!status?.connected && (
           <Button
             size="sm"
             onClick={() => { window.location.href = '/api/integrations/gmail/connect' }}
