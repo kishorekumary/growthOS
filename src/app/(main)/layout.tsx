@@ -12,6 +12,7 @@ import { TimerProvider } from '@/contexts/TimerContext'
 import FloatingTimer from '@/components/focus/FloatingTimer'
 import QuickLog from '@/components/shared/QuickLog'
 import QuickReset from '@/components/shared/QuickReset'
+import OpeningBriefingModal from '@/components/shared/OpeningBriefingModal'
 import GlobalSearch from '@/components/shared/GlobalSearch'
 import AdminMessageBanner from '@/components/layout/AdminMessageBanner'
 import OfflineBanner from '@/components/layout/OfflineBanner'
@@ -63,6 +64,7 @@ export default async function MainLayout({ children }: { children: React.ReactNo
       <FloatingTimer />
       <QuickLog />
       <QuickReset floatingOnly />
+      <OpeningBriefingModal />
       <AdminMessageBanner />
       <OfflineBanner />
       <GlobalSearch />
