@@ -87,7 +87,7 @@ export default function BankEmailSync() {
             <ol className="space-y-1 text-[11px] text-slate-400 list-decimal list-inside">
               <li>Connect the Gmail inbox that receives your Axis Bank alerts</li>
               <li>We only ever read mail from <span className="text-sky-300 font-medium">alerts@axis.bank.in</span> (read-only access)</li>
-              <li>New debit/credit alerts are parsed and added to your transactions automatically, every 30 minutes</li>
+              <li>New debit/credit alerts are parsed and added to your transactions automatically, once a day</li>
             </ol>
           </div>
         )}

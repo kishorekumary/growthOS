@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from 'next/server'
 import { createSupabaseAdminClient } from '@/lib/supabase-admin'
 import { createSupabaseServerClient } from '@/lib/supabase-server'
+import { runBankEmailSync } from '@/lib/bank-email-sync'
 
 // Returns the previous calendar date (YYYY-MM-DD) in the given IANA timezone.
 // Example: at 01:00 UTC on 2026-05-30, a UTC+5:30 user's yesterday = 2026-05-29.
@@ -98,5 +99,12 @@ export async function GET(req: NextRequest) {
     if (!insertErr) totalInserted += missing.length
   }
 
-  return NextResponse.json({ ok: true, inserted: totalInserted })
+  // Piggybacks on this once-daily cron rather than its own entry — Vercel Hobby
+  // caps projects at 2 cron jobs run at most once a day.
+  const bankSync = await runBankEmailSync(admin).catch(err => {
+    console.error('[cron/daily-habit-close] bank email sync failed', err)
+    return { processed: 0, imported: 0 }
+  })
+
+  return NextResponse.json({ ok: true, inserted: totalInserted, bankSync })
 }
