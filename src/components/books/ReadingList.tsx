@@ -1,8 +1,9 @@
 'use client'
 
-import { useState, useEffect, useCallback, useRef } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { Loader2, Plus, Star, Sparkles, BookOpen, AlertCircle, GitBranch, Trash2, Quote, Scroll, Globe } from 'lucide-react'
 import { createSupabaseBrowserClient } from '@/lib/supabase'
+import { useCachedQuery } from '@/hooks/useCachedQuery'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -387,9 +388,47 @@ function BookDetailDialog({ book, onUpdate, onClose, readonly = false }: { book:
 // ─── Main component ───────────────────────────────────────────
 
 export default function ReadingList() {
-  const [books, setBooks]               = useState<Book[]>([])
-  const [loading, setLoading]           = useState(true)
-  const [fetchError, setFetchError]     = useState<string | null>(null)
+  const {
+    data: books,
+    loading,
+    isOffline,
+    setData: setBooks,
+    refetch: refetchBooks,
+  } = useCachedQuery<Book[]>(
+    'reading_log',
+    async (supabase, userId) => {
+      const primary = await supabase
+        .from('reading_log')
+        .select('id, user_id, book_title, author, genre, status, rating, ai_summary, key_lessons, quotes, stories, is_global')
+        .or(`user_id.eq.${userId},is_global.eq.true`)
+        .order('is_global', { ascending: false }) // global books first
+        .order('updated_at', { ascending: false })
+      if (!primary.error) return primary
+
+      // Fallback: is_global column may not exist yet
+      const fallback = await supabase
+        .from('reading_log')
+        .select('id, user_id, book_title, author, genre, status, rating, ai_summary, key_lessons, quotes, stories')
+        .eq('user_id', userId)
+        .order('updated_at', { ascending: false })
+      if (fallback.error) return fallback
+      return {
+        data: ((fallback.data ?? []) as Omit<Book, 'is_global'>[]).map(b => ({ ...b, is_global: false })),
+        error: null,
+      }
+    },
+    [],
+    []
+  )
+
+  const { data: profile } = useCachedQuery<{ is_admin: boolean } | null>(
+    'reading-list:profile',
+    (supabase, userId) => supabase.from('user_profiles').select('is_admin').eq('id', userId).single(),
+    null,
+    []
+  )
+  const isAdmin = profile?.is_admin ?? false
+
   const [activeStatus, setActiveStatus] = useState<Status>('reading')
   const [selected, setSelected]         = useState<Book | null>(null)
   const [mindMapBook, setMindMapBook]         = useState<Book | null>(null)
@@ -399,8 +438,15 @@ export default function ReadingList() {
   const [deleteTarget, setDeleteTarget]       = useState<Book | null>(null)
   const [deleting, setDeleting]         = useState(false)
   const [currentUserId, setCurrentUserId]     = useState<string | null>(null)
-  const [isAdmin, setIsAdmin]                 = useState(false)
   const [togglingGlobalId, setTogglingGlobalId] = useState<string | null>(null)
+
+  // Resolve current user id for ownership checks (books/globals may include other users' rows)
+  useEffect(() => {
+    const supabase = createSupabaseBrowserClient()
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setCurrentUserId(session?.user?.id ?? null)
+    })
+  }, [])
 
   async function toggleGlobal(book: Book) {
     if (togglingGlobalId) return
@@ -418,53 +464,8 @@ export default function ReadingList() {
     await supabase.from('reading_log').delete().eq('id', deleteTarget.id)
     setDeleting(false)
     setDeleteTarget(null)
-    fetchBooks()
+    refetchBooks()
   }
-
-  const fetchBooks = useCallback(async () => {
-    setFetchError(null)
-    try {
-      const supabase = createSupabaseBrowserClient()
-      const { data: { session } } = await supabase.auth.getSession()
-      if (!session?.user) { setLoading(false); return }
-      const uid = session.user.id
-      setCurrentUserId(uid)
-
-      const [booksRes, profileRes] = await Promise.all([
-        supabase
-          .from('reading_log')
-          .select('id, user_id, book_title, author, genre, status, rating, ai_summary, key_lessons, quotes, stories, is_global')
-          .or(`user_id.eq.${uid},is_global.eq.true`)
-          .order('is_global', { ascending: false }) // global books first
-          .order('updated_at', { ascending: false }),
-        supabase.from('user_profiles').select('is_admin').eq('id', uid).single(),
-      ])
-
-      setIsAdmin(profileRes.data?.is_admin ?? false)
-
-      if (booksRes.error) {
-        // Fallback: is_global column may not exist yet
-        const { data: fallback, error: fallbackError } = await supabase
-          .from('reading_log')
-          .select('id, user_id, book_title, author, genre, status, rating, ai_summary, key_lessons, quotes, stories')
-          .eq('user_id', uid)
-          .order('updated_at', { ascending: false })
-        if (fallbackError) {
-          setFetchError(fallbackError.message)
-        } else {
-          setBooks(((fallback ?? []) as Book[]).map(b => ({ ...b, is_global: false })))
-        }
-      } else {
-        setBooks((booksRes.data as Book[]) ?? [])
-      }
-    } catch (err) {
-      setFetchError(err instanceof Error ? err.message : 'Failed to load books')
-    } finally {
-      setLoading(false)
-    }
-  }, [])
-
-  useEffect(() => { fetchBooks() }, [fetchBooks])
 
   // Highlight a specific book when navigated from search
   const highlightRef = useRef<string | null>(null)
@@ -494,19 +495,6 @@ export default function ReadingList() {
     )
   }
 
-  if (fetchError) {
-    return (
-      <div className="rounded-xl border border-red-500/20 bg-red-500/10 p-6 text-center space-y-2">
-        <AlertCircle className="h-6 w-6 text-red-400 mx-auto" />
-        <p className="text-sm text-red-400">Failed to load books</p>
-        <p className="text-xs text-red-400/70">{fetchError}</p>
-        <button onClick={fetchBooks} className="text-xs text-slate-400 hover:text-white underline">
-          Retry
-        </button>
-      </div>
-    )
-  }
-
   const isOwner = (book: Book) => book.user_id === currentUserId
   const filtered = books.filter(b => b.status === activeStatus)
   const globalCount = books.filter(b => b.is_global && !isOwner(b)).length
@@ -528,7 +516,7 @@ export default function ReadingList() {
             </p>
           )}
         </div>
-        <AddBookModal onAdd={fetchBooks} />
+        <AddBookModal onAdd={refetchBooks} />
       </div>
 
       {/* Status tabs */}
@@ -557,10 +545,16 @@ export default function ReadingList() {
       {filtered.length === 0 ? (
         <div className="rounded-xl border border-dashed border-white/10 p-8 text-center">
           <BookOpen className="h-8 w-8 text-violet-400/30 mx-auto mb-2" />
-          <p className="text-slate-400 text-sm">No books here yet.</p>
-          <p className="text-slate-500 text-xs mt-1">
-            {activeStatus === 'want_to_read' ? 'Click "Add Book" to add one manually.' : 'Move a book to this status to see it here.'}
-          </p>
+          {books.length === 0 && isOffline ? (
+            <p className="text-slate-400 text-sm">Can&apos;t load — you&apos;re offline.</p>
+          ) : (
+            <>
+              <p className="text-slate-400 text-sm">No books here yet.</p>
+              <p className="text-slate-500 text-xs mt-1">
+                {activeStatus === 'want_to_read' ? 'Click "Add Book" to add one manually.' : 'Move a book to this status to see it here.'}
+              </p>
+            </>
+          )}
         </div>
       ) : (
         <div className="space-y-2">
@@ -723,7 +717,7 @@ export default function ReadingList() {
         <Dialog open={!!selected} onOpenChange={open => !open && setSelected(null)}>
           <BookDetailDialog
             book={selected}
-            onUpdate={fetchBooks}
+            onUpdate={refetchBooks}
             onClose={() => setSelected(null)}
             readonly={selected.is_global && !isOwner(selected)}
           />
@@ -769,7 +763,7 @@ export default function ReadingList() {
           readonly={mindMapReadonly}
           onClose={() => {
             setMindMapBook(null)
-            fetchBooks()
+            refetchBooks()
           }}
         />
       )}
@@ -784,7 +778,7 @@ export default function ReadingList() {
           initialTab={insightsTab}
           onClose={() => {
             setInsightsBook(null)
-            fetchBooks()
+            refetchBooks()
           }}
         />
       )}

@@ -1,8 +1,9 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import { Bell, X } from 'lucide-react'
 import { createSupabaseBrowserClient } from '@/lib/supabase'
+import { useCachedQuery } from '@/hooks/useCachedQuery'
 
 interface AdminMessage {
   id: string
@@ -12,50 +13,42 @@ interface AdminMessage {
 }
 
 export default function AdminMessageBanner() {
-  const [messages, setMessages] = useState<AdminMessage[]>([])
-  const [visible, setVisible] = useState<string[]>([])
+  const { data: messages } = useCachedQuery<AdminMessage[]>(
+    'admin-messages',
+    (supabase, userId) => supabase
+      .from('admin_messages')
+      .select('id, title, body, created_at')
+      .or(`user_id.is.null,user_id.eq.${userId}`)
+      .order('created_at', { ascending: false })
+      .limit(5),
+    [],
+    []
+  )
 
-  useEffect(() => {
-    async function load() {
-      const sb = createSupabaseBrowserClient()
-      const { data: { user } } = await sb.auth.getUser()
-      if (!user) return
-
-      // Fetch unread messages (broadcast or addressed to this user)
-      const { data: msgs } = await sb
-        .from('admin_messages')
-        .select('id, title, body, created_at')
-        .or(`user_id.is.null,user_id.eq.${user.id}`)
-        .order('created_at', { ascending: false })
-        .limit(5)
-
-      if (!msgs?.length) return
-
-      // Filter out already-read ones
-      const { data: reads } = await sb
+  const { data: readIds } = useCachedQuery<string[]>(
+    'admin-message-reads',
+    async (supabase, userId) => {
+      const { data, error } = await supabase
         .from('admin_message_reads')
         .select('message_id')
-        .eq('user_id', user.id)
+        .eq('user_id', userId)
+      return { data: data ? data.map((r: any) => r.message_id) : data, error }
+    },
+    [],
+    []
+  )
 
-      const readIds = new Set((reads ?? []).map((r: any) => r.message_id))
-      const unread = msgs.filter(m => !readIds.has(m.id))
-      if (unread.length) {
-        setMessages(unread)
-        setVisible(unread.map(m => m.id))
-      }
-    }
-    load()
-  }, [])
+  const [dismissed, setDismissed] = useState<string[]>([])
 
   async function dismiss(id: string) {
-    setVisible(v => v.filter(x => x !== id))
+    setDismissed(d => [...d, id])
     const sb = createSupabaseBrowserClient()
     const { data: { user } } = await sb.auth.getUser()
     if (!user) return
     await sb.from('admin_message_reads').upsert({ message_id: id, user_id: user.id })
   }
 
-  const shown = messages.filter(m => visible.includes(m.id))
+  const shown = messages.filter(m => !readIds.includes(m.id) && !dismissed.includes(m.id))
   if (!shown.length) return null
 
   return (

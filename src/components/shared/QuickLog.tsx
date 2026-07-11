@@ -8,6 +8,7 @@ import {
   Mic, MicOff, RefreshCw, ClipboardList,
 } from 'lucide-react'
 import { createSupabaseBrowserClient } from '@/lib/supabase'
+import { useCachedQuery } from '@/hooks/useCachedQuery'
 import { cn } from '@/lib/utils'
 import RichTextEditor from './RichTextEditor'
 
@@ -454,57 +455,57 @@ const CAT_BADGE: Record<string, string> = {
 }
 
 function HabitPanel() {
-  const [habits, setHabits]       = useState<Habit[]>([])
+  const today = todayStr()
+
+  const { data: habits, loading: habitsLoading, isOffline, setData: setHabits } = useCachedQuery<Habit[]>(
+    'habits:quicklog',
+    (supabase, userId) => supabase.from('personality_habits')
+      .select('id, habit_name, category, streak_count, longest_streak, last_done_at, frequency, is_keystone')
+      .eq('user_id', userId)
+      .order('created_at', { ascending: true }),
+    [],
+  )
+
+  const { data: logs, loading: logsLoading } = useCachedQuery<{ habit_id: string; status: string }[]>(
+    `habit_logs:${today}`,
+    (supabase, userId) => supabase.from('habit_logs')
+      .select('habit_id, status')
+      .eq('user_id', userId)
+      .eq('log_date', today),
+    [],
+    [today]
+  )
+
   const [doneIds, setDoneIds]     = useState<Set<string>>(new Set())
   const [missedIds, setMissedIds] = useState<Set<string>>(new Set())
-  const [loading, setLoading]     = useState(true)
   const [markingId, setMarkingId] = useState<string | null>(null)
   const [userId, setUserId]       = useState<string | null>(null)
 
+  const loading = habitsLoading || logsLoading
+
   useEffect(() => {
-    async function load() {
-      const supabase = createSupabaseBrowserClient()
-      const { data: { session } } = await supabase.auth.getSession()
-      if (!session?.user) { setLoading(false); return }
-      setUserId(session.user.id)
-      const today = todayStr()
-
-      const [habitsRes, logsRes] = await Promise.all([
-        supabase.from('personality_habits')
-          .select('id, habit_name, category, streak_count, longest_streak, last_done_at, frequency, is_keystone')
-          .eq('user_id', session.user.id)
-          .order('created_at', { ascending: true }),
-        supabase.from('habit_logs')
-          .select('habit_id, status')
-          .eq('user_id', session.user.id)
-          .eq('log_date', today),
-      ])
-
-      const fetchedHabits = (habitsRes.data as Habit[]) ?? []
-      setHabits(fetchedHabits)
-
-      const done   = new Set<string>()
-      const missed = new Set<string>()
-      if (!logsRes.error && logsRes.data) {
-        for (const row of logsRes.data as { habit_id: string; status: string }[]) {
-          if (row.status === 'done')   done.add(row.habit_id)
-          if (row.status === 'missed') missed.add(row.habit_id)
-        }
-      }
-      // Fallback: check last_done_at for today
-      for (const h of fetchedHabits) {
-        if (h.last_done_at) {
-          const d = new Date(h.last_done_at)
-          const ds = [d.getFullYear(), String(d.getMonth() + 1).padStart(2, '0'), String(d.getDate()).padStart(2, '0')].join('-')
-          if (ds === today) done.add(h.id)
-        }
-      }
-      setDoneIds(done)
-      setMissedIds(missed)
-      setLoading(false)
-    }
-    load()
+    createSupabaseBrowserClient().auth.getSession()
+      .then(({ data: { session } }) => setUserId(session?.user?.id ?? null))
   }, [])
+
+  useEffect(() => {
+    const done   = new Set<string>()
+    const missed = new Set<string>()
+    for (const row of logs) {
+      if (row.status === 'done')   done.add(row.habit_id)
+      if (row.status === 'missed') missed.add(row.habit_id)
+    }
+    // Fallback: check last_done_at for today
+    for (const h of habits) {
+      if (h.last_done_at) {
+        const d = new Date(h.last_done_at)
+        const ds = [d.getFullYear(), String(d.getMonth() + 1).padStart(2, '0'), String(d.getDate()).padStart(2, '0')].join('-')
+        if (ds === today) done.add(h.id)
+      }
+    }
+    setDoneIds(done)
+    setMissedIds(missed)
+  }, [habits, logs, today])
 
   async function markDone(habit: Habit) {
     if (doneIds.has(habit.id) || !!markingId || !userId) return
@@ -536,6 +537,12 @@ function HabitPanel() {
   }
 
   if (loading) return <div className="flex justify-center py-8"><Loader2 className="h-5 w-5 animate-spin text-slate-500" /></div>
+
+  if (habits.length === 0 && isOffline) return (
+    <div className="text-center py-8 space-y-1">
+      <p className="text-sm text-slate-400">Can&apos;t load — you&apos;re offline.</p>
+    </div>
+  )
 
   if (habits.length === 0) return (
     <div className="text-center py-8 space-y-1">

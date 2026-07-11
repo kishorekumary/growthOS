@@ -1,11 +1,11 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState } from 'react'
 import { Loader2, Sparkles, Dumbbell, RefreshCw } from 'lucide-react'
-import { createSupabaseBrowserClient } from '@/lib/supabase'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import { format } from 'date-fns'
+import { useCachedQuery } from '@/hooks/useCachedQuery'
 
 type WorkoutType = 'strength' | 'cardio' | 'yoga' | 'sports' | 'rest'
 
@@ -89,31 +89,29 @@ function DayCard({ day, plan }: { day: string; plan: DayPlan }) {
   )
 }
 
+interface WorkoutPlanRow {
+  plan: WeekPlan
+  created_at: string
+}
+
 export default function WorkoutPlan() {
-  const [plan, setPlan] = useState<WeekPlan | null>(null)
-  const [planDate, setPlanDate] = useState<string | null>(null)
-  const [loading, setLoading] = useState(true)
   const [generating, setGenerating] = useState(false)
 
-  const fetchPlan = useCallback(async () => {
-    const supabase = createSupabaseBrowserClient()
-    const { data: { session } } = await supabase.auth.getSession()
-    if (!session?.user) { setLoading(false); return }
-    const { data } = await supabase
+  const { data: planRow, loading, isOffline, setData: setPlanRow, refetch } = useCachedQuery<WorkoutPlanRow | null>(
+    'workout-plan',
+    (supabase, userId) => supabase
       .from('workout_plans')
       .select('plan, created_at')
-      .eq('user_id', session.user.id)
+      .eq('user_id', userId)
       .order('created_at', { ascending: false })
       .limit(1)
-      .maybeSingle()
-    if (data) {
-      setPlan(data.plan as WeekPlan)
-      setPlanDate(data.created_at)
-    }
-    setLoading(false)
-  }, [])
+      .maybeSingle(),
+    null,
+    []
+  )
 
-  useEffect(() => { fetchPlan() }, [fetchPlan])
+  const plan = planRow?.plan ?? null
+  const planDate = planRow?.created_at ?? null
 
   async function generatePlan() {
     setGenerating(true)
@@ -121,8 +119,8 @@ export default function WorkoutPlan() {
       const res = await fetch('/api/ai/fitness-plan', { method: 'POST' })
       const data = await res.json()
       if (data.plan) {
-        setPlan(data.plan)
-        fetchPlan()
+        setPlanRow(prev => ({ plan: data.plan, created_at: prev?.created_at ?? new Date().toISOString() }))
+        refetch()
       }
     } finally {
       setGenerating(false)
@@ -169,7 +167,12 @@ export default function WorkoutPlan() {
         </Button>
       </div>
 
-      {!plan ? (
+      {!plan && isOffline ? (
+        <div className="rounded-xl border border-dashed border-white/10 p-12 text-center">
+          <Dumbbell className="h-10 w-10 text-violet-400/30 mx-auto mb-3" />
+          <p className="text-slate-400 text-sm">Can&apos;t load — you&apos;re offline.</p>
+        </div>
+      ) : !plan ? (
         <div className="rounded-xl border border-dashed border-white/10 p-12 text-center">
           <Dumbbell className="h-10 w-10 text-violet-400/30 mx-auto mb-3" />
           <p className="text-slate-400 text-sm">No plan yet.</p>

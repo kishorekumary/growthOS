@@ -1,11 +1,12 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect } from 'react'
 import {
   Flame, Plus, Trash2, Check, Loader2, AlertCircle,
-  RefreshCw, RotateCcw, XCircle, Trophy, Pencil, Crown, Globe,
+  RotateCcw, XCircle, Trophy, Pencil, Crown, Globe,
 } from 'lucide-react'
 import { createSupabaseBrowserClient } from '@/lib/supabase'
+import { useCachedQuery } from '@/hooks/useCachedQuery'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -337,66 +338,50 @@ function WeeklyScoreCard({
 // ─── Main component ───────────────────────────────────────────
 
 export default function HabitTracker() {
-  const [habits, setHabits]               = useState<Habit[]>([])
-  const [weekLogs, setWeekLogs]           = useState<HabitLog[]>([])
   const [logsUnavailable, setLogsUnavail] = useState(false)
   const [userId, setUserId]               = useState<string | null>(null)
-  const [loading, setLoading]             = useState(true)
-  const [fetchError, setFetchError]       = useState<string | null>(null)
   const [markingId, setMarkingId]         = useState<string | null>(null)
   const [keystoneId, setKeystoneId]       = useState<string | null>(null)
   const [editTarget, setEditTarget]       = useState<Habit | null>(null)
 
-  const fetchData = useCallback(async () => {
-    setFetchError(null)
-    const supabase = createSupabaseBrowserClient()
-    const { data: { session } } = await supabase.auth.getSession()
-    if (!session?.user) {
-      setFetchError('No active session — please sign out and sign in again.')
-      setLoading(false)
-      return
-    }
-
-    setUserId(session.user.id)
-    const weekStart = getWeekStart()
-
-    const [habitsRes, logsRes] = await Promise.all([
-      supabase
-        .from('personality_habits')
-        .select('id, habit_name, category, frequency, streak_count, longest_streak, last_done_at, is_keystone, is_global')
-        .or(`user_id.eq.${session.user.id},is_global.eq.true`)
-        .order('is_global', { ascending: true })
-        .order('created_at', { ascending: true }),
-      supabase
-        .from('habit_logs')
-        .select('habit_id, log_date, status')
-        .eq('user_id', session.user.id)
-        .gte('log_date', weekStart),
-    ])
-
-    if (habitsRes.error) { setFetchError(habitsRes.error.message); setLoading(false); return }
-    setHabits((habitsRes.data as Habit[]) ?? [])
-
-    if (logsRes.error) {
-      // habit_logs table not yet created (migration pending) — fall back to last_done_at + localStorage
-      setLogsUnavail(true)
-      const today = todayStr()
-      const missedIds = readTodayMissed()
-      const missedLogs: HabitLog[] = missedIds.map(id => ({ habit_id: id, log_date: today, status: 'missed' }))
-      // Reconstruct done entries for today from personality_habits.last_done_at so that
-      // weekDone (WeeklyScoreCard "completed" count) and getStatus both reflect reality after refresh.
-      const doneLogs: HabitLog[] = (habitsRes.data as Habit[])
-        .filter(h => h.last_done_at && localDateStr(new Date(h.last_done_at)) === today)
-        .map(h => ({ habit_id: h.id, log_date: today, status: 'done' }))
-      setWeekLogs([...missedLogs, ...doneLogs])
-    } else {
-      setLogsUnavail(false)
-      setWeekLogs((logsRes.data as HabitLog[]) ?? [])
-    }
-    setLoading(false)
+  // Mutations below need the user id; the cached queries resolve it internally
+  // but don't expose it, so we resolve it once here for write call-sites.
+  useEffect(() => {
+    createSupabaseBrowserClient().auth.getSession().then(({ data: { session } }) => {
+      setUserId(session?.user?.id ?? null)
+    })
   }, [])
 
-  useEffect(() => { fetchData() }, [fetchData])
+  const {
+    data: habits, loading: habitsLoading, isOffline: habitsOffline,
+    refetch: fetchData, setData: setHabits,
+  } = useCachedQuery<Habit[]>(
+    'personality-habits',
+    (supabase, userId) => supabase
+      .from('personality_habits')
+      .select('id, habit_name, category, frequency, streak_count, longest_streak, last_done_at, is_keystone, is_global')
+      .or(`user_id.eq.${userId},is_global.eq.true`)
+      .order('is_global', { ascending: true })
+      .order('created_at', { ascending: true }),
+    []
+  )
+
+  const weekStart = getWeekStart()
+  const {
+    data: weekLogs, loading: logsLoading, isOffline: logsOffline, setData: setWeekLogs,
+  } = useCachedQuery<HabitLog[]>(
+    `habit-logs:${weekStart}`,
+    (supabase, userId) => supabase
+      .from('habit_logs')
+      .select('habit_id, log_date, status')
+      .eq('user_id', userId)
+      .gte('log_date', weekStart),
+    [],
+    [weekStart]
+  )
+
+  const loading   = habitsLoading || logsLoading
+  const isOffline = habitsOffline || logsOffline
 
   function getStatus(habitId: string): LogStatus {
     const today = todayStr()
@@ -526,17 +511,6 @@ export default function HabitTracker() {
     </div>
   )
 
-  if (fetchError) return (
-    <div className="rounded-xl border border-red-500/20 bg-red-500/10 p-6 text-center space-y-3">
-      <AlertCircle className="h-8 w-8 text-red-400 mx-auto" />
-      <p className="text-sm text-red-400">{fetchError}</p>
-      <button onClick={fetchData}
-        className="inline-flex items-center gap-1.5 text-xs text-slate-400 hover:text-white transition-colors">
-        <RefreshCw className="h-3.5 w-3.5" /> Retry
-      </button>
-    </div>
-  )
-
   // Keystone first, then pending, then done — skipped habits shown below
   const pending = habits.filter(h => getStatus(h.id) === 'pending')
   const done    = habits.filter(h => getStatus(h.id) === 'done')
@@ -594,7 +568,14 @@ export default function HabitTracker() {
       <WeeklyScoreCard done={weekDone} missed={weekMissed} weightedDone={weightedDone} weightedTotal={weightedTotal} avgCompletedStreak={avgCompletedStreak} />
 
       {/* Empty state */}
-      {habits.length === 0 && (
+      {habits.length === 0 && isOffline && (
+        <div className="rounded-xl border border-dashed border-white/10 p-10 text-center">
+          <Flame className="h-10 w-10 text-orange-400/40 mx-auto mb-3" />
+          <p className="text-slate-400 text-sm">Can&apos;t load — you&apos;re offline.</p>
+        </div>
+      )}
+
+      {habits.length === 0 && !isOffline && (
         <div className="rounded-xl border border-dashed border-white/10 p-10 text-center">
           <Flame className="h-10 w-10 text-orange-400/40 mx-auto mb-3" />
           <p className="text-slate-400 text-sm">No habits yet.</p>

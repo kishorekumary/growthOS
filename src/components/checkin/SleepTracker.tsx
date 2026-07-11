@@ -1,8 +1,9 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect } from 'react'
 import { Loader2, Moon, CheckCircle, RefreshCw, TrendingUp } from 'lucide-react'
 import { createSupabaseBrowserClient } from '@/lib/supabase'
+import { useCachedQuery } from '@/hooks/useCachedQuery'
 import { cn } from '@/lib/utils'
 import { format, subDays } from 'date-fns'
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts'
@@ -29,9 +30,7 @@ function sleepHours(bedtime: string, wakeTime: string): number {
 
 export default function SleepTracker() {
   const today = format(new Date(), 'yyyy-MM-dd')
-  const [existing, setExisting]   = useState<SleepLog | null>(null)
-  const [history, setHistory]     = useState<SleepLog[]>([])
-  const [loading, setLoading]     = useState(true)
+  const since = format(subDays(new Date(), 13), 'yyyy-MM-dd')
   const [saving, setSaving]       = useState(false)
   const [editing, setEditing]     = useState(false)
 
@@ -40,30 +39,51 @@ export default function SleepTracker() {
   const [quality,  setQuality]  = useState(0)
   const [notes,    setNotes]    = useState('')
 
-  const load = useCallback(async () => {
-    setLoading(true)
-    const supabase = createSupabaseBrowserClient()
-    const since = format(subDays(new Date(), 13), 'yyyy-MM-dd')
-    const { data } = await supabase
+  const {
+    data: existing,
+    loading: loadingExisting,
+    isOffline: existingOffline,
+    refetch: refetchExisting,
+  } = useCachedQuery<SleepLog | null>(
+    `sleep-today:${today}`,
+    (supabase, userId) => supabase
       .from('sleep_logs')
       .select('*')
+      .eq('user_id', userId)
+      .eq('sleep_date', today)
+      .maybeSingle(),
+    null,
+    [today]
+  )
+
+  const {
+    data: history,
+    loading: loadingHistory,
+    isOffline: historyOffline,
+    refetch: refetchHistory,
+  } = useCachedQuery<SleepLog[]>(
+    `sleep-history:${since}`,
+    (supabase, userId) => supabase
+      .from('sleep_logs')
+      .select('*')
+      .eq('user_id', userId)
       .gte('sleep_date', since)
-      .order('sleep_date', { ascending: true })
+      .order('sleep_date', { ascending: true }),
+    [],
+    [since]
+  )
 
-    const logs = (data ?? []) as SleepLog[]
-    setHistory(logs)
-    const todayLog = logs.find(l => l.sleep_date === today)
-    if (todayLog) {
-      setExisting(todayLog)
-      setBedtime(todayLog.bedtime.slice(0, 5))
-      setWakeTime(todayLog.wake_time.slice(0, 5))
-      setQuality(todayLog.quality ?? 0)
-      setNotes(todayLog.notes ?? '')
+  const loading = loadingExisting || loadingHistory
+  const isOffline = existingOffline || historyOffline
+
+  useEffect(() => {
+    if (existing) {
+      setBedtime(existing.bedtime.slice(0, 5))
+      setWakeTime(existing.wake_time.slice(0, 5))
+      setQuality(existing.quality ?? 0)
+      setNotes(existing.notes ?? '')
     }
-    setLoading(false)
-  }, [today])
-
-  useEffect(() => { load() }, [load])
+  }, [existing])
 
   async function submit() {
     setSaving(true)
@@ -80,7 +100,8 @@ export default function SleepTracker() {
     }, { onConflict: 'user_id,sleep_date' })
     setSaving(false)
     setEditing(false)
-    load()
+    refetchExisting()
+    refetchHistory()
   }
 
   const chartData = history.map(l => ({
@@ -201,7 +222,9 @@ export default function SleepTracker() {
       )}
 
       {/* 14-day chart */}
-      {chartData.length > 1 && (
+      {history.length === 0 && isOffline ? (
+        <p className="text-xs text-slate-500 text-center py-4">Can&apos;t load sleep history — you&apos;re offline.</p>
+      ) : chartData.length > 1 && (
         <div className="rounded-2xl border border-white/8 bg-white/3 p-5 space-y-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">

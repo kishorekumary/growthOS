@@ -14,6 +14,7 @@ import QuickLog from '@/components/shared/QuickLog'
 import QuickReset from '@/components/shared/QuickReset'
 import GlobalSearch from '@/components/shared/GlobalSearch'
 import AdminMessageBanner from '@/components/layout/AdminMessageBanner'
+import OfflineBanner from '@/components/layout/OfflineBanner'
 
 export default async function MainLayout({ children }: { children: React.ReactNode }) {
   const supabase = createSupabaseServerClient()
@@ -63,6 +64,7 @@ export default async function MainLayout({ children }: { children: React.ReactNo
       <QuickLog />
       <QuickReset floatingOnly />
       <AdminMessageBanner />
+      <OfflineBanner />
       <GlobalSearch />
       <ServiceWorkerRegister />
       <div className="fixed bottom-1.5 right-2 text-[9px] text-slate-800 font-mono select-none pointer-events-none z-50 hidden md:block">

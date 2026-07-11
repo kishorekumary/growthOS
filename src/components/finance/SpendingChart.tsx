@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useCallback } from 'react'
 import {
   Loader2, TrendingDown, PiggyBank, X, Calendar, FileText, Settings2,
   Plus, Trash2, Check, Pencil,
@@ -11,6 +11,7 @@ import {
   PieChart, Pie, Cell, Tooltip, ResponsiveContainer,
 } from 'recharts'
 import { useFinanceCategories, type FinanceCategory } from '@/hooks/useFinanceCategories'
+import { useCachedQuery } from '@/hooks/useCachedQuery'
 
 // ─── Types ────────────────────────────────────────────────────
 
@@ -28,6 +29,16 @@ interface Transaction {
   description: string | null
   category: string
   type: string
+}
+
+interface SpendingTxn {
+  category: string
+  amount: number
+  type: string
+}
+
+interface BudgetRow {
+  budget: Budget
 }
 
 interface DrillTarget {
@@ -451,41 +462,55 @@ function CategoryDrillDown({
 export default function SpendingChart({ start, end }: { start: string; end: string }) {
   const { cats, addCategory, removeCategory, updateCategory, colorFor } = useFinanceCategories()
 
-  const [expenseTotals, setExpenseTotals] = useState<Record<string, number>>({})
-  const [savingsTotals, setSavingsTotals] = useState<Record<string, number>>({})
-  const [budget, setBudget]              = useState<Budget | null>(null)
-  const [loading, setLoading]            = useState(true)
+  const {
+    data: spendingTxns,
+    loading: txnsLoading,
+    isOffline: txnsOffline,
+  } = useCachedQuery<SpendingTxn[]>(
+    `spending:${start}:${end}`,
+    (supabase, userId) => supabase
+      .from('transactions')
+      .select('category, amount, type')
+      .eq('user_id', userId)
+      .gte('txn_date', start)
+      .lte('txn_date', end),
+    [],
+    [start, end]
+  )
+
+  const {
+    data: budgetRow,
+    loading: budgetLoading,
+  } = useCachedQuery<BudgetRow | null>(
+    `budget:${start}:${end}`,
+    (supabase, userId) => supabase
+      .from('budgets')
+      .select('budget')
+      .eq('user_id', userId)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle(),
+    null,
+    [start, end]
+  )
+
+  const budget = budgetRow?.budget ?? null
+  const loading = txnsLoading || budgetLoading
+
+  const expenseTotals: Record<string, number> = {}
+  spendingTxns.filter(t => t.type === 'expense').forEach(t => {
+    expenseTotals[t.category] = (expenseTotals[t.category] ?? 0) + Number(t.amount)
+  })
+
+  const savingsTotals: Record<string, number> = {}
+  spendingTxns.filter(t => t.type === 'savings').forEach(t => {
+    savingsTotals[t.category] = (savingsTotals[t.category] ?? 0) + Number(t.amount)
+  })
 
   const [drillTarget, setDrillTarget]   = useState<DrillTarget | null>(null)
   const [drillTxns, setDrillTxns]       = useState<Transaction[]>([])
   const [drillLoading, setDrillLoading] = useState(false)
   const [showCatMgr, setShowCatMgr]     = useState(false)
-
-  const fetchData = useCallback(async () => {
-    setLoading(true)
-    const supabase = createSupabaseBrowserClient()
-    const { data: { session } } = await supabase.auth.getSession()
-    if (!session?.user) { setLoading(false); return }
-
-    const [{ data: expenseTxns }, { data: savingsTxns }, { data: budgetRow }] = await Promise.all([
-      supabase.from('transactions').select('category, amount').eq('user_id', session.user.id).eq('type', 'expense').gte('txn_date', start).lte('txn_date', end),
-      supabase.from('transactions').select('category, amount').eq('user_id', session.user.id).eq('type', 'savings').gte('txn_date', start).lte('txn_date', end),
-      supabase.from('budgets').select('budget').eq('user_id', session.user.id).order('created_at', { ascending: false }).limit(1).maybeSingle(),
-    ])
-
-    const eTotals: Record<string, number> = {}
-    ;(expenseTxns ?? []).forEach(t => { eTotals[t.category] = (eTotals[t.category] ?? 0) + Number(t.amount) })
-
-    const sTotals: Record<string, number> = {}
-    ;(savingsTxns ?? []).forEach(t => { sTotals[t.category] = (sTotals[t.category] ?? 0) + Number(t.amount) })
-
-    setExpenseTotals(eTotals)
-    setSavingsTotals(sTotals)
-    setBudget(budgetRow?.budget as Budget ?? null)
-    setLoading(false)
-  }, [start, end])
-
-  useEffect(() => { fetchData() }, [fetchData])
 
   const openDrill = useCallback(async (name: string, type: 'expense' | 'savings') => {
     setDrillTarget({ name, type })
@@ -554,7 +579,11 @@ export default function SpendingChart({ start, end }: { start: string; end: stri
               </button>
             </div>
 
-            {totalSpent === 0 ? (
+            {totalSpent === 0 && txnsOffline ? (
+              <div className="rounded-xl border border-dashed border-white/10 p-6 text-center">
+                <p className="text-slate-400 text-sm">Can&apos;t load — you&apos;re offline.</p>
+              </div>
+            ) : totalSpent === 0 ? (
               <div className="rounded-xl border border-dashed border-white/10 p-6 text-center">
                 <p className="text-slate-400 text-sm">No expenses recorded for this period.</p>
               </div>
@@ -631,7 +660,11 @@ export default function SpendingChart({ start, end }: { start: string; end: stri
               </button>
             </div>
 
-            {totalSaved === 0 ? (
+            {totalSaved === 0 && txnsOffline ? (
+              <div className="rounded-xl border border-dashed border-white/10 p-6 text-center">
+                <p className="text-slate-400 text-sm">Can&apos;t load — you&apos;re offline.</p>
+              </div>
+            ) : totalSaved === 0 ? (
               <div className="rounded-xl border border-dashed border-white/10 p-6 text-center">
                 <p className="text-slate-400 text-sm">No savings recorded for this period.</p>
               </div>

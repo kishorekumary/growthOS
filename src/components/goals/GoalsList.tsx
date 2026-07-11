@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState } from 'react'
 import {
   Target, Plus, Check, Trash2, Loader2, AlertCircle,
   Dumbbell, Wallet, BookOpen, Sparkles, Briefcase,
@@ -9,6 +9,7 @@ import {
 } from 'lucide-react'
 import GoalsFocusModal from './GoalsFocusModal'
 import { createSupabaseBrowserClient } from '@/lib/supabase'
+import { useCachedQuery } from '@/hooks/useCachedQuery'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -976,29 +977,22 @@ function CompletedList({
 type TabView = 'timeframe' | 'category'
 
 export default function GoalsList() {
-  const [goals, setGoals]               = useState<Goal[]>([])
-  const [loading, setLoading]           = useState(true)
+  const { data: goals, loading, isOffline, refetch: fetchGoals, setData: setGoals } = useCachedQuery<Goal[]>(
+    'goals:all',
+    (supabase, userId) => supabase
+      .from('user_goals')
+      .select('*')
+      .eq('user_id', userId)
+      .order('is_completed', { ascending: true })
+      .order('created_at', { ascending: false }),
+    [],
+    []
+  )
   const [markingId, setMarkingId]       = useState<string | null>(null)
   const [deletingId, setDeletingId]     = useState<string | null>(null)
   const [tab, setTab]                   = useState<TabView>('timeframe')
   const [activeCategory, setActiveCat]  = useState<Category>('fitness')
   const [focusOpen, setFocusOpen]       = useState(false)
-
-  const fetchGoals = useCallback(async () => {
-    const supabase = createSupabaseBrowserClient()
-    const { data: { session } } = await supabase.auth.getSession()
-    if (!session?.user) { setLoading(false); return }
-    const { data } = await supabase
-      .from('user_goals')
-      .select('*')
-      .eq('user_id', session.user.id)
-      .order('is_completed', { ascending: true })
-      .order('created_at', { ascending: false })
-    setGoals((data as Goal[]) ?? [])
-    setLoading(false)
-  }, [])
-
-  useEffect(() => { fetchGoals() }, [fetchGoals])
 
   async function markComplete(id: string) {
     setMarkingId(id)
@@ -1112,7 +1106,13 @@ export default function GoalsList() {
           {customGoals.length > 0 && (
             <GoalSection timeframe="custom" goals={customGoals} onAdd={fetchGoals} onComplete={markComplete} onDelete={deleteGoal} onEdit={fetchGoals} onImageSaved={handleImageSaved} markingId={markingId} deletingId={deletingId} />
           )}
-          {active.length === 0 && (
+          {active.length === 0 && isOffline && (
+            <div className="rounded-xl border border-dashed border-white/10 p-12 text-center">
+              <Target className="h-10 w-10 text-violet-400/30 mx-auto mb-3" />
+              <p className="text-slate-400 text-sm">Can&apos;t load — you&apos;re offline.</p>
+            </div>
+          )}
+          {active.length === 0 && !isOffline && (
             <div className="rounded-xl border border-dashed border-white/10 p-12 text-center">
               <Target className="h-10 w-10 text-violet-400/30 mx-auto mb-3" />
               <p className="text-slate-400 text-sm">No active goals yet.</p>

@@ -1,11 +1,12 @@
 'use client'
 
-import { useState, useEffect, useCallback, useRef } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import {
   Timer, Play, Pause, Square, Plus, Trash2, ChevronLeft, ChevronUp, ChevronDown,
   Loader2, Check, RotateCcw, Bell, Pencil, Copy, SkipForward, AlarmClock, X,
 } from 'lucide-react'
 import { createSupabaseBrowserClient } from '@/lib/supabase'
+import { useCachedQuery } from '@/hooks/useCachedQuery'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -415,8 +416,6 @@ export default function FocusTimer() {
   // Timer engine lives in context — persists across navigation
   const { runSeq, stepIdx, secondsLeft, paused, done, startSequence, togglePause, stopTimer, skipStep, restartStep } = useTimer()
 
-  const [sequences, setSequences] = useState<Sequence[]>([])
-  const [loading, setLoading]     = useState(true)
   const [mode, setMode]           = useState<LocalMode>('list')
 
   // Build / edit state
@@ -425,20 +424,24 @@ export default function FocusTimer() {
   const [steps, setSteps]         = useState<Step[]>(DEFAULT_STEPS)
   const [saving, setSaving]       = useState(false)
 
-  const fetchSeqs = useCallback(async () => {
-    const supabase = createSupabaseBrowserClient()
-    const { data: { session } } = await supabase.auth.getSession()
-    if (!session?.user) { setLoading(false); return }
-    const { data } = await supabase
-      .from('focus_sequences')
-      .select('*')
-      .eq('user_id', session.user.id)
-      .order('created_at', { ascending: false })
-    setSequences(applyStoredOrder((data as Sequence[]) ?? []))
-    setLoading(false)
-  }, [])
-
-  useEffect(() => { fetchSeqs() }, [fetchSeqs])
+  const {
+    data: sequences,
+    loading,
+    isOffline,
+    refetch: fetchSeqs,
+    setData: setSequences,
+  } = useCachedQuery<Sequence[]>(
+    'focus_sequences',
+    (supabase, userId) =>
+      supabase
+        .from('focus_sequences')
+        .select('*')
+        .eq('user_id', userId)
+        .order('created_at', { ascending: false })
+        .then(({ data, error }) => ({ data: data ? applyStoredOrder(data as Sequence[]) : data, error })),
+    [],
+    []
+  )
 
   // Move the completed sequence to the bottom of the list
   useEffect(() => {
@@ -704,7 +707,12 @@ export default function FocusTimer() {
         </button>
       )}
 
-      {sequences.length === 0 ? (
+      {sequences.length === 0 && isOffline ? (
+        <div className="rounded-xl border border-dashed border-white/10 p-12 text-center">
+          <Timer className="h-10 w-10 text-violet-400/30 mx-auto mb-3" />
+          <p className="text-slate-400 text-sm">Can&apos;t load — you&apos;re offline.</p>
+        </div>
+      ) : sequences.length === 0 ? (
         <div className="rounded-xl border border-dashed border-white/10 p-12 text-center">
           <Timer className="h-10 w-10 text-violet-400/30 mx-auto mb-3" />
           <p className="text-slate-400 text-sm">No sequences yet.</p>

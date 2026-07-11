@@ -1,8 +1,8 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState } from 'react'
 import { Loader2, Sparkles, TrendingUp, TrendingDown, RefreshCw } from 'lucide-react'
-import { createSupabaseBrowserClient } from '@/lib/supabase'
+import { useCachedQuery } from '@/hooks/useCachedQuery'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import {
@@ -50,37 +50,39 @@ const TOOLTIP_STYLE = {
 const BAR_COLORS = ['#a78bfa', '#818cf8', '#6366f1', '#4f46e5', '#4338ca', '#3730a3']
 
 export default function FinanceOverview() {
-  const [profile, setProfile]     = useState<FinancialProfile | null>(null)
-  const [txns, setTxns]           = useState<Transaction[]>([])
-  const [loading, setLoading]     = useState(true)
   const [scoring, setScoring]     = useState(false)
   const [scoreInfo, setScoreInfo] = useState<{ explanation: string; tips: string[] } | null>(null)
 
-  const fetchData = useCallback(async () => {
-    const supabase = createSupabaseBrowserClient()
-    const { data: { session } } = await supabase.auth.getSession()
-    if (!session?.user) { setLoading(false); return }
+  const monthStart = new Date()
+  monthStart.setDate(1)
+  const monthStartStr = monthStart.toISOString().split('T')[0]
 
-    const monthStart = new Date()
-    monthStart.setDate(1)
-    const monthStartStr = monthStart.toISOString().split('T')[0]
+  const {
+    data: profile, loading: profileLoading, isOffline: profileOffline, setData: setProfile,
+  } = useCachedQuery<FinancialProfile | null>(
+    'financial-profile',
+    (supabase, userId) => supabase.from('financial_profile')
+      .select('monthly_income, monthly_expenses, total_savings, total_debt, financial_score')
+      .eq('user_id', userId)
+      .maybeSingle(),
+    null,
+    []
+  )
 
-    const [{ data: p }, { data: t }] = await Promise.all([
-      supabase.from('financial_profile')
-        .select('monthly_income, monthly_expenses, total_savings, total_debt, financial_score')
-        .eq('user_id', session.user.id)
-        .maybeSingle(),
-      supabase.from('transactions')
-        .select('amount, category, type')
-        .eq('user_id', session.user.id)
-        .gte('txn_date', monthStartStr),
-    ])
-    setProfile(p as FinancialProfile ?? null)
-    setTxns(t ?? [])
-    setLoading(false)
-  }, [])
+  const {
+    data: txns, loading: txnsLoading, isOffline: txnsOffline,
+  } = useCachedQuery<Transaction[]>(
+    `transactions:month:${monthStartStr}`,
+    (supabase, userId) => supabase.from('transactions')
+      .select('amount, category, type')
+      .eq('user_id', userId)
+      .gte('txn_date', monthStartStr),
+    [],
+    [monthStartStr]
+  )
 
-  useEffect(() => { fetchData() }, [fetchData])
+  const loading = profileLoading || txnsLoading
+  const isOffline = profileOffline || txnsOffline
 
   async function refreshScore() {
     setScoring(true)
@@ -96,6 +98,14 @@ export default function FinanceOverview() {
       <div className="flex items-center justify-center py-12">
         <Loader2 className="h-5 w-5 animate-spin text-slate-500" />
       </div>
+    )
+  }
+
+  if (isOffline && !profile && txns.length === 0) {
+    return (
+      <p className="text-sm text-slate-500 py-12 text-center">
+        Can&apos;t load — you&apos;re offline.
+      </p>
     )
   }
 

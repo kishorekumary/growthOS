@@ -1,8 +1,9 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState } from 'react'
 import { Plus, Flame, ChevronRight, X, Loader2 } from 'lucide-react'
 import { createSupabaseBrowserClient } from '@/lib/supabase'
+import { useCachedQuery } from '@/hooks/useCachedQuery'
 import { format, parseISO, differenceInDays, addDays } from 'date-fns'
 import ChallengeDetail from './ChallengeDetail'
 
@@ -88,8 +89,6 @@ function ChallengeCard({ challenge, onClick }: { challenge: Challenge; onClick: 
 }
 
 export default function ChallengeApp() {
-  const supabase = createSupabaseBrowserClient()
-  const [challenges, setChallenges] = useState<Challenge[]>([])
   const [view, setView] = useState<'list' | 'create' | 'detail'>('list')
   const [selected, setSelected] = useState<Challenge | null>(null)
   const [saving, setSaving] = useState(false)
@@ -102,22 +101,20 @@ export default function ChallengeApp() {
   const [whyMatters, setWhyMatters] = useState('')
   const [description, setDescription] = useState('')
 
-  const load = useCallback(async () => {
-    const { data: { session } } = await supabase.auth.getSession()
-    if (!session?.user) return
-    const { data } = await supabase
+  const { data: challenges, loading, isOffline, refetch: load, setData: setChallenges } = useCachedQuery<Challenge[]>(
+    'ninety-day-challenges',
+    (supabase, userId) => supabase
       .from('ninety_day_challenges')
       .select('*')
-      .eq('user_id', session.user.id)
-      .order('created_at', { ascending: false })
-    if (data) setChallenges(data)
-  }, [supabase])
-
-  useEffect(() => { load() }, [load])
+      .eq('user_id', userId)
+      .order('created_at', { ascending: false }),
+    []
+  )
 
   async function createChallenge() {
     if (!title.trim()) return
     setSaving(true)
+    const supabase = createSupabaseBrowserClient()
     const { data: { session } } = await supabase.auth.getSession()
     if (!session?.user) { setSaving(false); return }
     const { data } = await supabase
@@ -135,7 +132,7 @@ export default function ChallengeApp() {
       .single()
     setSaving(false)
     if (data) {
-      await load()
+      load()
       setSelected(data)
       setView('detail')
       resetForm()
@@ -287,7 +284,14 @@ export default function ChallengeApp() {
       )}
 
       {/* Empty state */}
-      {challenges.length === 0 && (
+      {challenges.length === 0 && isOffline && (
+        <div className="rounded-2xl border border-white/8 bg-white/3 p-10 text-center space-y-2">
+          <div className="text-4xl">📡</div>
+          <p className="text-sm text-slate-500">Can&apos;t load challenges — you&apos;re offline.</p>
+        </div>
+      )}
+
+      {challenges.length === 0 && !isOffline && (
         <div className="rounded-2xl border border-white/8 bg-white/3 p-10 text-center space-y-3">
           <div className="text-4xl">🔥</div>
           <p className="text-base font-semibold text-white">Transform your life in 90 days</p>

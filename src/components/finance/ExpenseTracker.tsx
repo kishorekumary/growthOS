@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect } from 'react'
 import {
   Loader2, Plus, Trash2, Pencil,
   UtensilsCrossed, Home, Car, Tv, Heart, ShoppingBag, Zap, Package,
@@ -9,6 +9,7 @@ import {
 } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import { createSupabaseBrowserClient } from '@/lib/supabase'
+import { useCachedQuery } from '@/hooks/useCachedQuery'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -228,28 +229,21 @@ function TxnModal({ initial, onSave, trigger }: {
 // ─── Main component ───────────────────────────────────────────
 
 export default function ExpenseTracker({ start, end }: { start: string; end: string }) {
-  const [txns, setTxns]       = useState<Transaction[]>([])
-  const [loading, setLoading] = useState(true)
   const [deletingId, setDeletingId] = useState<string | null>(null)
 
-  const fetchTxns = useCallback(async () => {
-    setLoading(true)
-    const supabase = createSupabaseBrowserClient()
-    const { data: { session } } = await supabase.auth.getSession()
-    if (!session?.user) { setLoading(false); return }
-    const { data } = await supabase
+  const { data: txns, loading, isOffline, refetch: fetchTxns, setData: setTxns } = useCachedQuery<Transaction[]>(
+    `transactions:${start}:${end}`,
+    (supabase, userId) => supabase
       .from('transactions')
       .select('*')
-      .eq('user_id', session.user.id)
+      .eq('user_id', userId)
       .gte('txn_date', start)
       .lte('txn_date', end)
       .order('txn_date', { ascending: false })
-      .order('created_at', { ascending: false })
-    setTxns((data as Transaction[]) ?? [])
-    setLoading(false)
-  }, [start, end])
-
-  useEffect(() => { fetchTxns() }, [fetchTxns])
+      .order('created_at', { ascending: false }),
+    [],
+    [start, end]
+  )
 
   async function deleteTxn(id: string) {
     setDeletingId(id)
@@ -288,7 +282,14 @@ export default function ExpenseTracker({ start, end }: { start: string; end: str
         } />
       </div>
 
-      {txns.length === 0 && (
+      {txns.length === 0 && isOffline && (
+        <div className="rounded-xl border border-dashed border-white/10 p-10 text-center">
+          <PiggyBank className="h-10 w-10 text-violet-400/30 mx-auto mb-3" />
+          <p className="text-slate-400 text-sm">Can&apos;t load — you&apos;re offline.</p>
+        </div>
+      )}
+
+      {txns.length === 0 && !isOffline && (
         <div className="rounded-xl border border-dashed border-white/10 p-10 text-center">
           <PiggyBank className="h-10 w-10 text-violet-400/30 mx-auto mb-3" />
           <p className="text-slate-400 text-sm">No transactions yet.</p>

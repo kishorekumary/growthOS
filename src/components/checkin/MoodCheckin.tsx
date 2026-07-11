@@ -1,8 +1,9 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect } from 'react'
 import { Loader2, CheckCircle, Smile, Zap, RefreshCw } from 'lucide-react'
 import { createSupabaseBrowserClient } from '@/lib/supabase'
+import { useCachedQuery } from '@/hooks/useCachedQuery'
 import { cn } from '@/lib/utils'
 import { format } from 'date-fns'
 
@@ -65,8 +66,6 @@ function ScalePicker({
 
 export default function MoodCheckin() {
   const today = format(new Date(), 'yyyy-MM-dd')
-  const [existing, setExisting]   = useState<Checkin | null>(null)
-  const [loading, setLoading]     = useState(true)
   const [saving, setSaving]       = useState(false)
   const [saved, setSaved]         = useState(false)
   const [editing, setEditing]     = useState(false)
@@ -76,23 +75,24 @@ export default function MoodCheckin() {
   const [word,   setWord]   = useState('')
   const [note,   setNote]   = useState('')
 
-  const load = useCallback(async () => {
-    setLoading(true)
-    const supabase = createSupabaseBrowserClient()
-    const { data } = await supabase
+  const { data: existing, loading, isOffline, refetch } = useCachedQuery<Checkin | null>(
+    `mood-checkin:${today}`,
+    (supabase, userId) => supabase
       .from('mood_checkins')
       .select('*')
+      .eq('user_id', userId)
       .eq('checked_at', today)
-      .maybeSingle()
-    if (data) {
-      setExisting(data as Checkin)
-      setMood(data.mood); setEnergy(data.energy)
-      setWord(data.word ?? ''); setNote(data.note ?? '')
-    }
-    setLoading(false)
-  }, [today])
+      .maybeSingle(),
+    null,
+    [today]
+  )
 
-  useEffect(() => { load() }, [load])
+  useEffect(() => {
+    if (existing) {
+      setMood(existing.mood); setEnergy(existing.energy)
+      setWord(existing.word ?? ''); setNote(existing.note ?? '')
+    }
+  }, [existing])
 
   async function submit() {
     if (!mood || !energy) return
@@ -112,7 +112,7 @@ export default function MoodCheckin() {
     setSaving(false)
     setSaved(true)
     setEditing(false)
-    load()
+    refetch()
     setTimeout(() => setSaved(false), 3000)
   }
 
@@ -166,6 +166,10 @@ export default function MoodCheckin() {
           <p className="text-xs text-slate-500">How are you feeling today?</p>
         </div>
       </div>
+
+      {isOffline && (
+        <p className="text-xs text-amber-400">Can't confirm today's check-in — you're offline.</p>
+      )}
 
       <ScalePicker label="Mood"   icon={Smile} value={mood}   onChange={setMood}   labels={MOOD_LABELS}   colors={MOOD_COLORS} />
       <ScalePicker label="Energy" icon={Zap}   value={energy} onChange={setEnergy} labels={ENERGY_LABELS} colors={MOOD_COLORS} />

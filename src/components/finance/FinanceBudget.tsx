@@ -1,11 +1,11 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState } from 'react'
 import { Loader2, Sparkles, RefreshCw, Check, X } from 'lucide-react'
-import { createSupabaseBrowserClient } from '@/lib/supabase'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import { format } from 'date-fns'
+import { useCachedQuery } from '@/hooks/useCachedQuery'
 
 interface BudgetItem {
   name: string
@@ -23,6 +23,11 @@ interface Budget {
   needs: BudgetCategory
   wants: BudgetCategory
   savings: BudgetCategory
+}
+
+interface BudgetRow {
+  budget: Budget
+  created_at: string
 }
 
 const CATEGORY_STYLES = {
@@ -83,38 +88,31 @@ function EditableAmount({
 }
 
 export default function FinanceBudget() {
-  const [budget, setBudget]       = useState<Budget | null>(null)
-  const [budgetDate, setBudgetDate] = useState<string | null>(null)
-  const [loading, setLoading]     = useState(true)
   const [generating, setGenerating] = useState(false)
 
-  const fetchBudget = useCallback(async () => {
-    const supabase = createSupabaseBrowserClient()
-    const { data: { session } } = await supabase.auth.getSession()
-    if (!session?.user) { setLoading(false); return }
-    const { data } = await supabase
+  const { data: budgetRow, loading, isOffline, setData: setBudgetRow, refetch: refetchBudget } = useCachedQuery<BudgetRow | null>(
+    'finance-budget',
+    (supabase, userId) => supabase
       .from('budgets')
       .select('budget, created_at')
-      .eq('user_id', session.user.id)
+      .eq('user_id', userId)
       .order('created_at', { ascending: false })
       .limit(1)
-      .maybeSingle()
-    if (data) {
-      setBudget(data.budget as Budget)
-      setBudgetDate(data.created_at)
-    }
-    setLoading(false)
-  }, [])
+      .maybeSingle(),
+    null,
+    []
+  )
 
-  useEffect(() => { fetchBudget() }, [fetchBudget])
+  const budget = budgetRow?.budget ?? null
+  const budgetDate = budgetRow?.created_at ?? null
 
   async function createBudget() {
     setGenerating(true)
     const res = await fetch('/api/ai/finance-budget', { method: 'POST' })
     const data = await res.json()
     if (data.budget) {
-      setBudget(data.budget)
-      fetchBudget()
+      setBudgetRow(prev => ({ budget: data.budget, created_at: prev?.created_at ?? new Date().toISOString() }))
+      refetchBudget()
     }
     setGenerating(false)
   }
@@ -130,7 +128,7 @@ export default function FinanceBudget() {
         ),
       },
     }
-    setBudget(updated)
+    setBudgetRow(prev => prev ? { ...prev, budget: updated } : prev)
   }
 
   if (loading) {
@@ -173,7 +171,11 @@ export default function FinanceBudget() {
         </Button>
       </div>
 
-      {!budget ? (
+      {!budget && isOffline ? (
+        <div className="rounded-xl border border-dashed border-white/10 p-12 text-center">
+          <p className="text-slate-400 text-sm">Can&apos;t load — you&apos;re offline.</p>
+        </div>
+      ) : !budget ? (
         <div className="rounded-xl border border-dashed border-white/10 p-12 text-center">
           <Sparkles className="h-10 w-10 text-violet-400/30 mx-auto mb-3" />
           <p className="text-slate-400 text-sm">No budget yet.</p>

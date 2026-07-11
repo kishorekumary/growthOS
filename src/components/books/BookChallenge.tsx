@@ -1,8 +1,9 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import { Loader2, Trophy, BookOpen, ChevronUp, ChevronDown } from 'lucide-react'
 import { createSupabaseBrowserClient } from '@/lib/supabase'
+import { useCachedQuery } from '@/hooks/useCachedQuery'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import { format } from 'date-fns'
@@ -26,26 +27,20 @@ const COMMUNITY_NOTES = [
 ]
 
 export default function BookChallenge() {
-  const [challenge, setChallenge] = useState<Challenge | null>(null)
-  const [loading, setLoading]     = useState(true)
+  const monthStart = format(new Date(), 'yyyy-MM-01')
+  const { data: challenge, loading, isOffline, setData: setChallenge } = useCachedQuery<Challenge | null>(
+    `book-challenge:${monthStart}`,
+    (supabase, _userId) => supabase
+      .from('book_challenges')
+      .select('*')
+      .eq('challenge_month', monthStart)
+      .maybeSingle(),
+    null,
+    [monthStart]
+  )
   const [starting, setStarting]   = useState(false)
   const [updating, setUpdating]   = useState(false)
   const [error, setError]         = useState<string | null>(null)
-  const supabase = createSupabaseBrowserClient()
-
-  useEffect(() => {
-    async function fetchChallenge() {
-      const monthStart = format(new Date(), 'yyyy-MM-01')
-      const { data } = await supabase
-        .from('book_challenges')
-        .select('*')
-        .eq('challenge_month', monthStart)
-        .maybeSingle()
-      setChallenge(data as Challenge ?? null)
-      setLoading(false)
-    }
-    fetchChallenge()
-  }, [])
 
   async function startChallenge() {
     setStarting(true)
@@ -69,6 +64,7 @@ export default function BookChallenge() {
     const next = Math.max(0, Math.min(challenge.total_chapters, challenge.chapters_read + delta))
     if (next === challenge.chapters_read) return
     setUpdating(true)
+    const supabase = createSupabaseBrowserClient()
     await supabase
       .from('book_challenges')
       .update({ chapters_read: next })
@@ -102,10 +98,16 @@ export default function BookChallenge() {
         <div className="space-y-4">
           <div className="rounded-xl border border-dashed border-white/10 p-12 text-center">
             <BookOpen className="h-10 w-10 text-amber-400/30 mx-auto mb-3" />
-            <p className="text-slate-400 text-sm">No challenge for this month yet.</p>
-            <p className="text-slate-600 text-xs mt-1">
-              Let AI pick the perfect book for {monthLabel}.
-            </p>
+            {isOffline ? (
+              <p className="text-slate-400 text-sm">Can&apos;t load — you&apos;re offline.</p>
+            ) : (
+              <>
+                <p className="text-slate-400 text-sm">No challenge for this month yet.</p>
+                <p className="text-slate-600 text-xs mt-1">
+                  Let AI pick the perfect book for {monthLabel}.
+                </p>
+              </>
+            )}
           </div>
           {error && (
             <div className="rounded-lg border border-red-500/20 bg-red-500/10 px-4 py-3 text-sm text-red-300">

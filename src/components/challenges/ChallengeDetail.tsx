@@ -1,8 +1,9 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState } from 'react'
 import { Flame, CheckCircle2, ChevronLeft, Sparkles, Loader2, Trophy, Lock } from 'lucide-react'
 import { createSupabaseBrowserClient } from '@/lib/supabase'
+import { useCachedQuery } from '@/hooks/useCachedQuery'
 import { format, parseISO, differenceInDays, addDays, subDays } from 'date-fns'
 
 interface Challenge {
@@ -62,13 +63,26 @@ function ProgressRing({ day }: { day: number }) {
 
 export default function ChallengeDetail({ challenge, onBack, onComplete }: Props) {
   const supabase = createSupabaseBrowserClient()
-  const [checkins, setCheckins] = useState<Record<string, Checkin>>({})
   const [reflection, setReflection] = useState('')
   const [saving, setSaving] = useState(false)
   const [aiMessage, setAiMessage] = useState<string | null>(null)
   const [aiLoading, setAiLoading] = useState(false)
   const [milestoneMsg, setMilestoneMsg] = useState<string | null>(null)
   const [milestoneLoading, setMilestoneLoading] = useState(false)
+
+  const { data: checkins, isOffline, refetch: load } = useCachedQuery<Record<string, Checkin>>(
+    `challenge-checkins:${challenge.id}`,
+    (supabase, userId) => supabase
+      .from('challenge_checkins')
+      .select('checkin_date,completed,reflection')
+      .eq('challenge_id', challenge.id)
+      .then(({ data, error }) => ({
+        data: data ? Object.fromEntries(data.map(c => [c.checkin_date, c])) : null,
+        error,
+      })),
+    {},
+    [challenge.id]
+  )
 
   const today      = format(new Date(), 'yyyy-MM-dd')
   const startDate  = parseISO(challenge.start_date)
@@ -79,18 +93,6 @@ export default function ChallengeDetail({ challenge, onBack, onComplete }: Props
   const phase = dayNumber <= 30 ? 'Foundation' : dayNumber <= 60 ? 'Momentum' : 'Mastery'
 
   const catColor = CATEGORY_COLOR[challenge.category] ?? '#818cf8'
-
-  const load = useCallback(async () => {
-    const { data } = await supabase
-      .from('challenge_checkins')
-      .select('checkin_date,completed,reflection')
-      .eq('challenge_id', challenge.id)
-    if (data) {
-      setCheckins(Object.fromEntries(data.map(c => [c.checkin_date, c])))
-    }
-  }, [supabase, challenge.id])
-
-  useEffect(() => { load() }, [load])
 
   const completedCount = Object.values(checkins).filter(c => c.completed).length
 
@@ -179,6 +181,10 @@ export default function ChallengeDetail({ challenge, onBack, onComplete }: Props
         </span>
         <span className="text-xs text-slate-500">{phase} Phase</span>
       </div>
+
+      {isOffline && (
+        <p className="text-xs text-amber-400">Can&apos;t sync check-ins — you&apos;re offline.</p>
+      )}
 
       {/* Hero card */}
       <div className="rounded-2xl border border-white/8 bg-white/3 p-5">

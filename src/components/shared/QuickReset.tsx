@@ -4,6 +4,7 @@ import { useState, useEffect, useRef, useCallback, type TouchEvent } from 'react
 import { Wind, Sparkles, Brain, X, ChevronLeft, ChevronRight, Loader2, RefreshCw, Zap, Target, CheckSquare, Circle, ScrollText, Leaf } from 'lucide-react'
 import { differenceInDays, isBefore, parseISO, startOfDay } from 'date-fns'
 import { createSupabaseBrowserClient } from '@/lib/supabase'
+import { useCachedQuery } from '@/hooks/useCachedQuery'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 
@@ -124,27 +125,20 @@ function BreathingExercise() {
 
 // ─── Affirmations flash ───────────────────────────────────────────
 function AffirmationsFlash() {
-  const [affirmations, setAffirmations] = useState<string[]>([])
+  const { data: affirmationsRow, loading, isOffline } = useCachedQuery<{ affirmations: string[] | null } | null>(
+    'daily-practice:affirmations',
+    (supabase, userId) => supabase
+      .from('daily_practice')
+      .select('affirmations')
+      .eq('user_id', userId)
+      .maybeSingle(),
+    null,
+    []
+  )
+  const affirmations = affirmationsRow?.affirmations ?? []
   const [index, setIndex]   = useState(0)
-  const [loading, setLoading] = useState(true)
   const [fading, setFading]   = useState(false)
   const touchStartX = useRef<number | null>(null)
-
-  useEffect(() => {
-    async function load() {
-      const supabase = createSupabaseBrowserClient()
-      const { data: { session } } = await supabase.auth.getSession()
-      if (!session?.user) { setLoading(false); return }
-      const { data } = await supabase
-        .from('daily_practice')
-        .select('affirmations')
-        .eq('user_id', session.user.id)
-        .maybeSingle()
-      setAffirmations((data?.affirmations as string[] | null) ?? [])
-      setLoading(false)
-    }
-    load()
-  }, [])
 
   function go(dir: 1 | -1) {
     setFading(true)
@@ -161,6 +155,15 @@ function AffirmationsFlash() {
 
   if (loading) {
     return <div className="flex justify-center py-14"><Loader2 className="h-5 w-5 animate-spin text-slate-500" /></div>
+  }
+
+  if (affirmations.length === 0 && isOffline) {
+    return (
+      <div className="text-center py-10 space-y-3">
+        <Sparkles className="h-8 w-8 text-violet-400/40 mx-auto" />
+        <p className="text-slate-400 text-sm">Can&rsquo;t load — you&rsquo;re offline.</p>
+      </div>
+    )
   }
 
   if (affirmations.length === 0) {
@@ -322,28 +325,29 @@ const CATEGORY_DOT: Record<GoalCategory, string> = {
 }
 
 function GoalsView() {
-  const [goals, setGoals]     = useState<Goal[]>([])
-  const [loading, setLoading] = useState(true)
-
-  useEffect(() => {
-    async function load() {
-      const supabase = createSupabaseBrowserClient()
-      const { data: { session } } = await supabase.auth.getSession()
-      if (!session?.user) { setLoading(false); return }
-      const { data } = await supabase
-        .from('user_goals')
-        .select('id, title, category, target_date')
-        .eq('user_id', session.user.id)
-        .eq('is_completed', false)
-        .order('target_date', { ascending: true, nullsFirst: false })
-      setGoals((data as Goal[] | null) ?? [])
-      setLoading(false)
-    }
-    load()
-  }, [])
+  const { data: goals, loading, isOffline } = useCachedQuery<Goal[]>(
+    'quick-reset:goals',
+    (supabase, userId) => supabase
+      .from('user_goals')
+      .select('id, title, category, target_date')
+      .eq('user_id', userId)
+      .eq('is_completed', false)
+      .order('target_date', { ascending: true, nullsFirst: false }),
+    [],
+    []
+  )
 
   if (loading) {
     return <div className="flex justify-center py-14"><Loader2 className="h-5 w-5 animate-spin text-slate-500" /></div>
+  }
+
+  if (goals.length === 0 && isOffline) {
+    return (
+      <div className="text-center py-10 space-y-3">
+        <Target className="h-8 w-8 text-amber-400/40 mx-auto" />
+        <p className="text-slate-400 text-sm">Can&rsquo;t load — you&rsquo;re offline.</p>
+      </div>
+    )
   }
 
   if (goals.length === 0) {
@@ -396,26 +400,18 @@ interface Todo {
 }
 
 function TasksView() {
-  const [todos, setTodos]     = useState<Todo[]>([])
-  const [loading, setLoading] = useState(true)
-
-  useEffect(() => {
-    async function load() {
-      const supabase = createSupabaseBrowserClient()
-      const { data: { session } } = await supabase.auth.getSession()
-      if (!session?.user) { setLoading(false); return }
-      const { data } = await supabase
-        .from('user_todos')
-        .select('id, title, due_date, is_completed')
-        .eq('user_id', session.user.id)
-        .eq('is_completed', false)
-        .order('due_date', { ascending: true, nullsFirst: false })
-        .order('created_at', { ascending: false })
-      setTodos((data as Todo[] | null) ?? [])
-      setLoading(false)
-    }
-    load()
-  }, [])
+  const { data: todos, loading, isOffline, setData: setTodos } = useCachedQuery<Todo[]>(
+    'quick-reset:todos',
+    (supabase, userId) => supabase
+      .from('user_todos')
+      .select('id, title, due_date, is_completed')
+      .eq('user_id', userId)
+      .eq('is_completed', false)
+      .order('due_date', { ascending: true, nullsFirst: false })
+      .order('created_at', { ascending: false }),
+    [],
+    []
+  )
 
   async function complete(id: string) {
     setTodos(prev => prev.filter(t => t.id !== id))
@@ -429,6 +425,15 @@ function TasksView() {
 
   if (loading) {
     return <div className="flex justify-center py-14"><Loader2 className="h-5 w-5 animate-spin text-slate-500" /></div>
+  }
+
+  if (todos.length === 0 && isOffline) {
+    return (
+      <div className="text-center py-10 space-y-3">
+        <CheckSquare className="h-8 w-8 text-sky-400/40 mx-auto" />
+        <p className="text-slate-400 text-sm">Can&rsquo;t load — you&rsquo;re offline.</p>
+      </div>
+    )
   }
 
   if (todos.length === 0) {
@@ -474,27 +479,29 @@ function TasksView() {
 
 // ─── My Identity view ─────────────────────────────────────────────
 function IdentityView() {
-  const [pledge, setPledge] = useState<string | null>(null)
-  const [loading, setLoading] = useState(true)
-
-  useEffect(() => {
-    async function load() {
-      const supabase = createSupabaseBrowserClient()
-      const { data: { session } } = await supabase.auth.getSession()
-      if (!session?.user) { setLoading(false); return }
-      const { data } = await supabase
-        .from('daily_practice')
-        .select('pledge')
-        .eq('user_id', session.user.id)
-        .maybeSingle()
-      setPledge(data?.pledge ?? null)
-      setLoading(false)
-    }
-    load()
-  }, [])
+  const { data: identityRow, loading, isOffline } = useCachedQuery<{ pledge: string | null } | null>(
+    'daily-practice:pledge',
+    (supabase, userId) => supabase
+      .from('daily_practice')
+      .select('pledge')
+      .eq('user_id', userId)
+      .maybeSingle(),
+    null,
+    []
+  )
+  const pledge = identityRow?.pledge ?? null
 
   if (loading) {
     return <div className="flex justify-center py-14"><Loader2 className="h-5 w-5 animate-spin text-slate-500" /></div>
+  }
+
+  if (!pledge && isOffline) {
+    return (
+      <div className="text-center py-10 space-y-3">
+        <ScrollText className="h-8 w-8 text-amber-400/40 mx-auto" />
+        <p className="text-slate-400 text-sm">Can&rsquo;t load — you&rsquo;re offline.</p>
+      </div>
+    )
   }
 
   if (!pledge) {

@@ -1,8 +1,9 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState } from 'react'
 import { Loader2, TrendingUp, Flame, Clock, Dumbbell } from 'lucide-react'
 import { createSupabaseBrowserClient } from '@/lib/supabase'
+import { useCachedQuery } from '@/hooks/useCachedQuery'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import {
@@ -72,36 +73,42 @@ const TOOLTIP_STYLE = {
 }
 
 export default function FitnessProgress() {
-  const [weightLogs, setWeightLogs]   = useState<WeightLog[]>([])
-  const [workoutLogs, setWorkoutLogs] = useState<WorkoutLog[]>([])
-  const [loading, setLoading]         = useState(true)
   const [newWeight, setNewWeight]     = useState('')
   const [savingWeight, setSavingWeight] = useState(false)
 
-  const fetchData = useCallback(async () => {
-    const supabase = createSupabaseBrowserClient()
-    const { data: { session } } = await supabase.auth.getSession()
-    if (!session?.user) { setLoading(false); return }
-    const [{ data: wl }, { data: wkl }] = await Promise.all([
-      supabase
-        .from('weight_logs')
-        .select('id, log_date, weight_kg')
-        .eq('user_id', session.user.id)
-        .order('log_date', { ascending: true })
-        .limit(30),
-      supabase
-        .from('workout_logs')
-        .select('id, log_date, workout_type, duration_mins')
-        .eq('user_id', session.user.id)
-        .order('log_date', { ascending: false })
-        .limit(200),
-    ])
-    setWeightLogs(wl ?? [])
-    setWorkoutLogs(wkl ?? [])
-    setLoading(false)
-  }, [])
+  const {
+    data: weightLogs,
+    loading: weightLoading,
+    isOffline: weightOffline,
+    refetch: refetchWeightLogs,
+  } = useCachedQuery<WeightLog[]>(
+    'fitness:weight_logs',
+    (supabase, userId) => supabase
+      .from('weight_logs')
+      .select('id, log_date, weight_kg')
+      .eq('user_id', userId)
+      .order('log_date', { ascending: true })
+      .limit(30),
+    []
+  )
 
-  useEffect(() => { fetchData() }, [fetchData])
+  const {
+    data: workoutLogs,
+    loading: workoutLoading,
+    isOffline: workoutOffline,
+  } = useCachedQuery<WorkoutLog[]>(
+    'fitness:workout_logs',
+    (supabase, userId) => supabase
+      .from('workout_logs')
+      .select('id, log_date, workout_type, duration_mins')
+      .eq('user_id', userId)
+      .order('log_date', { ascending: false })
+      .limit(200),
+    []
+  )
+
+  const loading   = weightLoading || workoutLoading
+  const isOffline = weightOffline || workoutOffline
 
   async function logWeight() {
     const w = parseFloat(newWeight)
@@ -116,7 +123,7 @@ export default function FitnessProgress() {
       .upsert({ user_id: session.user.id, log_date: today, weight_kg: w }, { onConflict: 'user_id,log_date' })
     setNewWeight('')
     setSavingWeight(false)
-    fetchData()
+    refetchWeightLogs()
   }
 
   if (loading) {
@@ -205,6 +212,10 @@ export default function FitnessProgress() {
               />
             </LineChart>
           </ResponsiveContainer>
+        ) : weightData.length === 0 && isOffline ? (
+          <p className="text-sm text-slate-500 text-center py-4">
+            Can&apos;t load — you&apos;re offline.
+          </p>
         ) : (
           <p className="text-sm text-slate-500 text-center py-4">
             Log at least 2 entries to see your chart.

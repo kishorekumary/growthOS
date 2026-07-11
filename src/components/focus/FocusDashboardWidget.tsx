@@ -1,34 +1,38 @@
 'use client'
 
-import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { Timer, ArrowRight, Zap } from 'lucide-react'
-import { createSupabaseBrowserClient } from '@/lib/supabase'
 import { format } from 'date-fns'
+import { useCachedQuery } from '@/hooks/useCachedQuery'
+
+interface FocusSummary {
+  sessions:  number
+  totalMins: number
+}
 
 export default function FocusDashboardWidget() {
-  const [sessions, setSessions]     = useState(0)
-  const [totalMins, setTotalMins]   = useState(0)
-  const [loading, setLoading]       = useState(true)
-
-  useEffect(() => {
-    async function load() {
-      const supabase = createSupabaseBrowserClient()
-      const { data: { user } } = await supabase.auth.getUser()
-      if (!user) { setLoading(false); return }
+  const { data, loading, isOffline } = useCachedQuery<FocusSummary>(
+    'focus:today',
+    async (supabase, userId) => {
       const today = format(new Date(), 'yyyy-MM-dd')
-      const { data } = await supabase
+      const { data, error } = await supabase
         .from('focus_sessions')
         .select('duration_minutes')
-        .eq('user_id', user.id)
+        .eq('user_id', userId)
         .gte('created_at', today)
+      if (error) return { data: null, error }
       const list = data ?? []
-      setSessions(list.length)
-      setTotalMins(list.reduce((s, f) => s + (f.duration_minutes ?? 25), 0))
-      setLoading(false)
-    }
-    load()
-  }, [])
+      return {
+        data: {
+          sessions:  list.length,
+          totalMins: list.reduce((s, f) => s + (f.duration_minutes ?? 25), 0),
+        },
+        error: null,
+      }
+    },
+    { sessions: 0, totalMins: 0 }
+  )
+  const { sessions, totalMins } = data
 
   const hrs  = Math.floor(totalMins / 60)
   const mins = totalMins % 60
@@ -51,6 +55,8 @@ export default function FocusDashboardWidget() {
 
       {loading ? (
         <div className="h-12 rounded-lg bg-white/5 animate-pulse" />
+      ) : sessions === 0 && isOffline ? (
+        <p className="text-sm text-slate-400">Can&apos;t load — you&apos;re offline.</p>
       ) : sessions === 0 ? (
         <div className="flex flex-col gap-3">
           <p className="text-sm text-slate-400">No focus sessions today yet.</p>

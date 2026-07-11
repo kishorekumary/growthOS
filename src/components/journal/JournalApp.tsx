@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { Mic, Square, Save, Plus, Trash2, Pencil, X, ChevronLeft } from 'lucide-react'
 import { createSupabaseBrowserClient } from '@/lib/supabase'
+import { useCachedQuery } from '@/hooks/useCachedQuery'
 import { format, parseISO } from 'date-fns'
 
 interface Entry {
@@ -26,7 +27,18 @@ const MOOD_META = [
 
 export default function JournalApp() {
   const supabase = createSupabaseBrowserClient()
-  const [entries, setEntries] = useState<Entry[]>([])
+  const { data: entries, isOffline, refetch: loadEntries, setData: setEntries } = useCachedQuery<Entry[]>(
+    'journal:entries',
+    (supabase, userId) => supabase
+      .from('journal_entries')
+      .select('id,entry_date,title,content,mood,tags,created_at')
+      .eq('user_id', userId)
+      .order('entry_date', { ascending: false })
+      .order('created_at', { ascending: false })
+      .limit(60),
+    [],
+    []
+  )
   const [view, setView] = useState<'list' | 'editor'>('list')
   const [editing, setEditing] = useState<Entry | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null)
@@ -49,18 +61,7 @@ export default function JournalApp() {
     setVoiceSupported(!!(
       (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition
     ))
-    loadEntries()
   }, [])
-
-  async function loadEntries() {
-    const { data } = await supabase
-      .from('journal_entries')
-      .select('id,entry_date,title,content,mood,tags,created_at')
-      .order('entry_date', { ascending: false })
-      .order('created_at', { ascending: false })
-      .limit(60)
-    if (data) setEntries(data)
-  }
 
   function openNew() {
     setEditing(null)
@@ -97,7 +98,7 @@ export default function JournalApp() {
       })
     }
     setSaving(false)
-    await loadEntries()
+    loadEntries()
     setView('list')
   }
 
@@ -282,7 +283,11 @@ export default function JournalApp() {
       </button>
 
       {/* Entries grouped by month */}
-      {Object.keys(grouped).length === 0 ? (
+      {Object.keys(grouped).length === 0 && isOffline ? (
+        <div className="rounded-2xl border border-white/8 bg-white/3 p-8 text-center">
+          <p className="text-sm text-slate-500">Can't load entries — you're offline.</p>
+        </div>
+      ) : Object.keys(grouped).length === 0 ? (
         <div className="rounded-2xl border border-white/8 bg-white/3 p-8 text-center">
           <p className="text-sm text-slate-500">No journal entries yet.</p>
           <p className="text-xs text-slate-600 mt-1">Write your first entry above — voice or text.</p>

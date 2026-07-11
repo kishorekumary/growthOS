@@ -1,12 +1,13 @@
 'use client'
 
-import { useState, useEffect, useCallback, useRef } from 'react'
+import { useState, useRef } from 'react'
 import {
   Pencil, Save, X, Plus, Trash2, Loader2, Sparkles, Heart,
   ScrollText, ChevronLeft, ChevronRight, Maximize2, Target,
 } from 'lucide-react'
 import { differenceInDays, parseISO } from 'date-fns'
 import { createSupabaseBrowserClient } from '@/lib/supabase'
+import { useCachedQuery } from '@/hooks/useCachedQuery'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import RichTextEditor from './RichTextEditor'
@@ -109,8 +110,15 @@ function ListEditor({
 
 // ─── Goals list (read-only) ───────────────────────────────────────
 
-function GoalsList({ goals, loading }: { goals: Goal[]; loading: boolean }) {
+function GoalsList({ goals, loading, isOffline }: { goals: Goal[]; loading: boolean; isOffline: boolean }) {
   if (loading) return <div className="flex justify-center py-6"><Loader2 className="h-4 w-4 animate-spin text-slate-500" /></div>
+
+  if (goals.length === 0 && isOffline) return (
+    <div className="text-center py-6 space-y-1">
+      <Target className="h-6 w-6 text-sky-400/30 mx-auto" />
+      <p className="text-xs text-slate-500">Can&apos;t load goals — you&apos;re offline.</p>
+    </div>
+  )
 
   if (goals.length === 0) return (
     <div className="text-center py-6 space-y-1">
@@ -148,10 +156,40 @@ function GoalsList({ goals, loading }: { goals: Goal[]; loading: boolean }) {
 // ─── Main component ───────────────────────────────────────────────
 
 export default function DailyPractice() {
-  const [practice, setPractice]     = useState<Practice | null>(null)
-  const [goals, setGoals]           = useState<Goal[]>([])
-  const [goalsLoading, setGoalsLoading] = useState(true)
-  const [loading, setLoading]       = useState(true)
+  const todayStr = new Date().toISOString().slice(0, 10)
+
+  const {
+    data: practice, loading, isOffline: practiceOffline, setData: setPractice,
+  } = useCachedQuery<Practice | null>(
+    `daily_practice:${todayStr}`,
+    (supabase, userId) => supabase.from('daily_practice')
+      .select('pledge, affirmations, gratitude')
+      .eq('user_id', userId)
+      .maybeSingle()
+      .then(({ data, error }) => ({
+        data: data ? {
+          pledge:       data.pledge       ?? '',
+          affirmations: data.affirmations ?? [],
+          gratitude:    data.gratitude    ?? [],
+        } : null,
+        error,
+      })),
+    null,
+    [todayStr]
+  )
+
+  const {
+    data: goals, loading: goalsLoading, isOffline: goalsOffline,
+  } = useCachedQuery<Goal[]>(
+    'daily_practice:active_goals',
+    (supabase, userId) => supabase.from('user_goals')
+      .select('id, title, category, target_date')
+      .eq('user_id', userId)
+      .eq('is_completed', false)
+      .order('target_date', { ascending: true, nullsFirst: false }),
+    []
+  )
+
   const [editing, setEditing]       = useState(false)
   const [draft, setDraft]           = useState<Practice>(EMPTY)
   const [saving, setSaving]         = useState(false)
@@ -159,37 +197,6 @@ export default function DailyPractice() {
   const [fullscreen, setFullscreen] = useState(false)
   const [fading, setFading]         = useState(false)
   const swipedRef                   = useRef(false)
-
-  const fetchPractice = useCallback(async () => {
-    const supabase = createSupabaseBrowserClient()
-    const { data: { session } } = await supabase.auth.getSession()
-    if (!session?.user) { setLoading(false); setGoalsLoading(false); return }
-
-    const [practiceRes, goalsRes] = await Promise.all([
-      supabase.from('daily_practice')
-        .select('pledge, affirmations, gratitude')
-        .eq('user_id', session.user.id)
-        .maybeSingle(),
-      supabase.from('user_goals')
-        .select('id, title, category, target_date')
-        .eq('user_id', session.user.id)
-        .eq('is_completed', false)
-        .order('target_date', { ascending: true, nullsFirst: false }),
-    ])
-
-    if (practiceRes.data) {
-      setPractice({
-        pledge:       practiceRes.data.pledge       ?? '',
-        affirmations: practiceRes.data.affirmations ?? [],
-        gratitude:    practiceRes.data.gratitude    ?? [],
-      })
-    }
-    setGoals((goalsRes.data as Goal[]) ?? [])
-    setLoading(false)
-    setGoalsLoading(false)
-  }, [])
-
-  useEffect(() => { fetchPractice() }, [fetchPractice])
 
   function openEdit() { setDraft(practice ?? EMPTY); setEditing(true) }
   function cancelEdit() { setEditing(false) }
@@ -236,6 +243,14 @@ export default function DailyPractice() {
   }
 
   // ── Empty state ─────────────────────────────────────────────────
+  if (!hasContent && !editing && practiceOffline) {
+    return (
+      <div className="rounded-2xl border border-dashed border-white/10 bg-white/3 p-7 text-center">
+        <p className="text-slate-500 text-sm">Can&apos;t load your daily practice — you&apos;re offline.</p>
+      </div>
+    )
+  }
+
   if (!hasContent && !editing) {
     return (
       <div className="rounded-2xl border border-dashed border-violet-500/30 bg-violet-500/5 p-7 text-center space-y-3">
@@ -413,7 +428,7 @@ export default function DailyPractice() {
                 : <p className="text-slate-500 text-sm text-center pt-6">No gratitude entries set yet.</p>
             )}
             {activeTab === 'goals' && (
-              <GoalsList goals={goals} loading={goalsLoading} />
+              <GoalsList goals={goals} loading={goalsLoading} isOffline={goalsOffline} />
             )}
           </div>
 
@@ -495,7 +510,7 @@ export default function DailyPractice() {
             : <p className="text-xs text-slate-600 pt-1">No gratitude entries — click Edit to add some.</p>
         )}
         {activeTab === 'goals' && (
-          <GoalsList goals={goals} loading={goalsLoading} />
+          <GoalsList goals={goals} loading={goalsLoading} isOffline={goalsOffline} />
         )}
       </div>
 

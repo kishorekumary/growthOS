@@ -1,9 +1,10 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState } from 'react'
 import Link from 'next/link'
 import { Target, Plus, Check, Loader2, ChevronDown, ChevronUp, Maximize2 } from 'lucide-react'
 import { createSupabaseBrowserClient } from '@/lib/supabase'
+import { useCachedQuery } from '@/hooks/useCachedQuery'
 import { cn } from '@/lib/utils'
 import { differenceInDays, isPast, parseISO } from 'date-fns'
 import GoalsFocusModal from './GoalsFocusModal'
@@ -44,28 +45,21 @@ function DateBadge({ targetDate }: { targetDate: string }) {
 }
 
 export default function GoalsWidget({ category }: { category: Category }) {
-  const [goals, setGoals]     = useState<Goal[]>([])
-  const [loading, setLoading] = useState(true)
+  const { data: goals, loading, isOffline, setData: setGoals } = useCachedQuery<Goal[]>(
+    `goals:${category}`,
+    (supabase, userId) => supabase
+      .from('user_goals')
+      .select('id, title, description, category, target_date, is_completed')
+      .eq('user_id', userId)
+      .eq('category', category)
+      .eq('is_completed', false)
+      .order('target_date', { ascending: true, nullsFirst: false }),
+    [],
+    [category]
+  )
   const [open, setOpen]       = useState(true)
   const [focusOpen, setFocusOpen] = useState(false)
   const [markingId, setMarkingId] = useState<string | null>(null)
-
-  const fetchGoals = useCallback(async () => {
-    const supabase = createSupabaseBrowserClient()
-    const { data: { session } } = await supabase.auth.getSession()
-    if (!session?.user) { setLoading(false); return }
-    const { data } = await supabase
-      .from('user_goals')
-      .select('id, title, description, category, target_date, is_completed')
-      .eq('user_id', session.user.id)
-      .eq('category', category)
-      .eq('is_completed', false)
-      .order('target_date', { ascending: true, nullsFirst: false })
-    setGoals((data as Goal[]) ?? [])
-    setLoading(false)
-  }, [category])
-
-  useEffect(() => { fetchGoals() }, [fetchGoals])
 
   async function markComplete(id: string) {
     setMarkingId(id)
@@ -136,6 +130,8 @@ export default function GoalsWidget({ category }: { category: Category }) {
             <div className="flex justify-center py-3">
               <Loader2 className="h-4 w-4 animate-spin text-slate-500" />
             </div>
+          ) : goals.length === 0 && isOffline ? (
+            <p className="text-xs text-slate-500 py-1">Can&apos;t load — you&apos;re offline.</p>
           ) : goals.length === 0 ? (
             <div className="flex items-center justify-between py-1">
               <p className="text-xs text-slate-500">No {label.toLowerCase()} goals yet.</p>

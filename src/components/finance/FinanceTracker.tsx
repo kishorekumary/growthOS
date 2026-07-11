@@ -1,8 +1,9 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect } from 'react'
 import { Loader2, Plus, Trash2, Pencil, ArrowUpRight, ArrowDownRight, PiggyBank } from 'lucide-react'
 import { createSupabaseBrowserClient } from '@/lib/supabase'
+import { useCachedQuery } from '@/hooks/useCachedQuery'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -151,23 +152,18 @@ function TxnModal({ initial, onSave, trigger }: {
 }
 
 export default function FinanceTracker() {
-  const [txns, setTxns]         = useState<Transaction[]>([])
-  const [loading, setLoading]   = useState(true)
   const [deletingId, setDel]    = useState<string | null>(null)
 
-  const fetchTxns = useCallback(async () => {
-    const supabase = createSupabaseBrowserClient()
-    const { data: { session } } = await supabase.auth.getSession()
-    if (!session?.user) { setLoading(false); return }
-    const { data } = await supabase
+  const { data: txns, loading, isOffline, refetch: fetchTxns, setData: setTxns } = useCachedQuery<Transaction[]>(
+    'transactions',
+    (supabase, userId) => supabase
       .from('transactions')
       .select('*')
-      .eq('user_id', session.user.id)
+      .eq('user_id', userId)
       .order('txn_date', { ascending: false })
-      .limit(30)
-    setTxns((data as Transaction[]) ?? [])
-    setLoading(false)
-  }, [])
+      .limit(30),
+    []
+  )
 
   async function deleteTxn(id: string) {
     setDel(id)
@@ -176,8 +172,6 @@ export default function FinanceTracker() {
     setTxns(prev => prev.filter(t => t.id !== id))
     setDel(null)
   }
-
-  useEffect(() => { fetchTxns() }, [fetchTxns])
 
   if (loading) {
     return (
@@ -208,7 +202,14 @@ export default function FinanceTracker() {
         } />
       </div>
 
-      {txns.length === 0 && (
+      {txns.length === 0 && isOffline && (
+        <div className="rounded-xl border border-dashed border-white/10 p-10 text-center">
+          <PiggyBank className="h-10 w-10 text-violet-400/30 mx-auto mb-3" />
+          <p className="text-slate-400 text-sm">Can&apos;t load — you&apos;re offline.</p>
+        </div>
+      )}
+
+      {txns.length === 0 && !isOffline && (
         <div className="rounded-xl border border-dashed border-white/10 p-10 text-center">
           <PiggyBank className="h-10 w-10 text-violet-400/30 mx-auto mb-3" />
           <p className="text-slate-400 text-sm">No transactions yet.</p>

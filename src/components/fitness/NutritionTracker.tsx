@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback, useRef } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import {
   Camera, Loader2, Plus, Trash2, Flame, Trophy, Zap,
   CheckCircle2, AlertCircle, Save, RefreshCw, ChevronDown, ChevronUp, Sparkles,
@@ -10,6 +10,7 @@ import {
   LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, ReferenceLine,
 } from 'recharts'
 import { createSupabaseBrowserClient } from '@/lib/supabase'
+import { useCachedQuery } from '@/hooks/useCachedQuery'
 import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
 import { cn } from '@/lib/utils'
@@ -226,24 +227,19 @@ function computeBadges(streak: number, totalDays: number, totals: Macros, goals:
 // ─── Water Tracker ────────────────────────────────────────────
 
 function WaterTracker({ userId }: { userId: string }) {
-  const [logs, setLogs]   = useState<WaterLog[]>([])
-  const [loading, setLoading] = useState(true)
+  const today = todayStr()
+  const { data: logs, loading, setData: setLogs } = useCachedQuery<WaterLog[]>(
+    `water_logs:${today}`,
+    (supabase, userId) => supabase
+      .from('water_logs')
+      .select('id, amount_ml, logged_at')
+      .eq('user_id', userId)
+      .eq('log_date', today)
+      .order('logged_at', { ascending: true }),
+    [],
+    [today]
+  )
   const [adding, setAdding]   = useState<number | null>(null)
-
-  useEffect(() => {
-    async function load() {
-      const supabase = createSupabaseBrowserClient()
-      const { data } = await supabase
-        .from('water_logs')
-        .select('id, amount_ml, logged_at')
-        .eq('user_id', userId)
-        .eq('log_date', todayStr())
-        .order('logged_at', { ascending: true })
-      setLogs((data as WaterLog[]) ?? [])
-      setLoading(false)
-    }
-    load()
-  }, [userId])
 
   async function addWater(ml: number) {
     setAdding(ml)
@@ -682,25 +678,28 @@ function AddMealModal({ onSave, onClose }: {
 function BodyTab({ userId }: { userId: string }) {
   const [stats, setStats]         = useState<BodyStats>({ height_cm: 170, age: 25, target_weight_kg: null })
   const [weightKg, setWeightKg]   = useState('')
-  const [weightLogs, setWeightLogs] = useState<WeightLog[]>([])
-  const [loading, setLoading]     = useState(true)
   const [saving, setSaving]       = useState(false)
   const [saved, setSaved]         = useState(false)
 
+  const { data: statsRow, loading: statsLoading } = useCachedQuery<BodyStats | null>(
+    'body_stats',
+    (supabase, userId) => supabase.from('body_stats').select('*').eq('user_id', userId).maybeSingle(),
+    null
+  )
+  const {
+    data: weightLogs, loading: weightLoading, isOffline: weightOffline, setData: setWeightLogs,
+  } = useCachedQuery<WeightLog[]>(
+    'weight_logs',
+    (supabase, userId) => supabase.from('weight_logs').select('*').eq('user_id', userId)
+      .order('log_date', { ascending: true }).limit(60),
+    []
+  )
+  const loading = statsLoading || weightLoading
+
+  // Seed the editable draft from the fetched row whenever it (re)loads.
   useEffect(() => {
-    async function load() {
-      const supabase = createSupabaseBrowserClient()
-      const [statsRes, wRes] = await Promise.all([
-        supabase.from('body_stats').select('*').eq('user_id', userId).single(),
-        supabase.from('weight_logs').select('*').eq('user_id', userId)
-          .order('log_date', { ascending: true }).limit(60),
-      ])
-      if (statsRes.data) setStats(statsRes.data as BodyStats)
-      setWeightLogs((wRes.data as WeightLog[]) ?? [])
-      setLoading(false)
-    }
-    load()
-  }, [userId])
+    if (statsRow) setStats(statsRow)
+  }, [statsRow])
 
   async function saveStats() {
     setSaving(true)
@@ -813,7 +812,9 @@ function BodyTab({ userId }: { userId: string }) {
         </div>
       )}
 
-      {chartData.length <= 1 && (
+      {chartData.length === 0 && weightOffline ? (
+        <p className="text-xs text-slate-600 text-center py-2">Can't load — you're offline.</p>
+      ) : chartData.length <= 1 && (
         <p className="text-xs text-slate-600 text-center py-2">Log your weight daily to see progress graph</p>
       )}
     </div>
@@ -909,35 +910,50 @@ type SubTab = 'today' | 'body' | 'insights'
 
 export default function NutritionTracker() {
   const [subTab, setSubTab]         = useState<SubTab>('today')
-  const [todayLogs, setTodayLogs]   = useState<NutritionLog[]>([])
-  const [allDates, setAllDates]     = useState<string[]>([])
   const [goals]                     = useState<Goals>(DEFAULT_GOALS)
   const [userId, setUserId]         = useState<string | null>(null)
-  const [loading, setLoading]       = useState(true)
   const [showModal, setShowModal]   = useState(false)
   const [deletingId, setDeletingId] = useState<string | null>(null)
-  const [waterTotal, setWaterTotal] = useState(0)
 
-  const fetchData = useCallback(async () => {
+  const today = todayStr()
+
+  // Resolve the current user id — only needed to pass down to sub-tabs that
+  // manage their own writes; the reads below resolve it internally.
+  useEffect(() => {
     const supabase = createSupabaseBrowserClient()
-    const { data: { session } } = await supabase.auth.getSession()
-    if (!session?.user) { setLoading(false); return }
-    setUserId(session.user.id)
-    const today = todayStr()
-    const [logsRes, datesRes, waterRes] = await Promise.all([
-      supabase.from('nutrition_logs').select('*').eq('user_id', session.user.id)
-        .eq('log_date', today).order('logged_at', { ascending: true, nullsFirst: true }),
-      supabase.from('nutrition_logs').select('log_date').eq('user_id', session.user.id),
-      supabase.from('water_logs').select('amount_ml').eq('user_id', session.user.id).eq('log_date', today),
-    ])
-    setTodayLogs((logsRes.data as NutritionLog[]) ?? [])
-    setAllDates(((datesRes.data ?? []) as { log_date: string }[]).map(r => r.log_date))
-    const wml = ((waterRes.data ?? []) as { amount_ml: number }[]).reduce((s, r) => s + r.amount_ml, 0)
-    setWaterTotal(wml)
-    setLoading(false)
+    supabase.auth.getSession().then(({ data: { session } }) => setUserId(session?.user?.id ?? null))
   }, [])
 
-  useEffect(() => { fetchData() }, [fetchData])
+  const {
+    data: todayLogs, loading: logsLoading, isOffline: logsOffline, setData: setTodayLogs,
+  } = useCachedQuery<NutritionLog[]>(
+    `nutrition_logs:${today}`,
+    (supabase, userId) => supabase.from('nutrition_logs').select('*').eq('user_id', userId)
+      .eq('log_date', today).order('logged_at', { ascending: true, nullsFirst: true }),
+    [],
+    [today]
+  )
+
+  const {
+    data: dateRows, loading: datesLoading, setData: setDateRows,
+  } = useCachedQuery<{ log_date: string }[]>(
+    'nutrition_logs:all_dates',
+    (supabase, userId) => supabase.from('nutrition_logs').select('log_date').eq('user_id', userId),
+    []
+  )
+  const allDates = dateRows.map(r => r.log_date)
+
+  const {
+    data: waterRows, loading: waterLoading,
+  } = useCachedQuery<{ amount_ml: number }[]>(
+    `water_logs_total:${today}`,
+    (supabase, userId) => supabase.from('water_logs').select('amount_ml').eq('user_id', userId).eq('log_date', today),
+    [],
+    [today]
+  )
+  const waterTotal = waterRows.reduce((s, r) => s + r.amount_ml, 0)
+
+  const loading = logsLoading || datesLoading || waterLoading
 
   async function saveLog(entry: Omit<NutritionLog, 'id' | 'log_date'>) {
     const supabase = createSupabaseBrowserClient()
@@ -948,7 +964,7 @@ export default function NutritionTracker() {
       .select().single()
     if (data) {
       setTodayLogs(prev => [...prev, data as NutritionLog])
-      setAllDates(prev => [...prev, todayStr()])
+      setDateRows(prev => [...prev, { log_date: todayStr() }])
     }
   }
 
@@ -1052,7 +1068,11 @@ export default function NutritionTracker() {
           {/* Meals list */}
           <div className="space-y-2">
             <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Today's Intake</p>
-            {todayLogs.length === 0 ? (
+            {todayLogs.length === 0 && logsOffline ? (
+              <div className="rounded-xl border border-dashed border-white/8 p-8 text-center">
+                <p className="text-sm text-slate-500">Can't load — you're offline.</p>
+              </div>
+            ) : todayLogs.length === 0 ? (
               <div className="rounded-xl border border-dashed border-white/8 p-8 text-center">
                 <Camera className="h-8 w-8 text-slate-700 mx-auto mb-2" />
                 <p className="text-sm text-slate-500">Nothing logged yet.</p>

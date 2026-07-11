@@ -1,9 +1,10 @@
 'use client'
 
-import { useState, useEffect, useCallback, useRef } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { format } from 'date-fns'
 import { Sparkles, Loader2, Save, Pencil, ChevronDown, ChevronUp, AlertCircle, BookOpen, Mic, Square } from 'lucide-react'
 import { createSupabaseBrowserClient } from '@/lib/supabase'
+import { useCachedQuery } from '@/hooks/useCachedQuery'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 
@@ -301,44 +302,52 @@ function EntryEditor({
 export default function Journal() {
   const today = new Date().toISOString().split('T')[0]
 
-  const [todayEntry, setTodayEntry] = useState<JournalEntry | null>(null)
-  const [pastEntries, setPastEntries] = useState<JournalEntry[]>([])
-  const [loading, setLoading] = useState(true)
   const [editing, setEditing] = useState(false)
   const [loadingFeedback, setLoadingFeedback] = useState(false)
   const [feedback, setFeedback] = useState<string | null>(null)
 
-  const fetchData = useCallback(async () => {
-    const supabase = createSupabaseBrowserClient()
-    const { data: { session } } = await supabase.auth.getSession()
-    if (!session?.user) { setLoading(false); return }
-    const userId = session.user.id
+  const {
+    data: todayEntry,
+    loading: loadingToday,
+    isOffline: todayOffline,
+    setData: setTodayEntry,
+  } = useCachedQuery<JournalEntry | null>(
+    `journal:today:${today}`,
+    (supabase, userId) => supabase
+      .from('journal_entries')
+      .select('*')
+      .eq('user_id', userId)
+      .eq('entry_date', today)
+      .maybeSingle(),
+    null,
+    [today]
+  )
 
-    const [{ data: todayData }, { data: past }] = await Promise.all([
-      supabase
-        .from('journal_entries')
-        .select('*')
-        .eq('user_id', userId)
-        .eq('entry_date', today)
-        .maybeSingle(),
-      supabase
-        .from('journal_entries')
-        .select('id, entry_date, content, mood, ai_feedback')
-        .eq('user_id', userId)
-        .neq('entry_date', today)
-        .order('entry_date', { ascending: false })
-        .limit(20),
-    ])
+  const {
+    data: pastEntries,
+    loading: loadingPast,
+    isOffline: pastOffline,
+  } = useCachedQuery<JournalEntry[]>(
+    `journal:past:${today}`,
+    (supabase, userId) => supabase
+      .from('journal_entries')
+      .select('id, entry_date, content, mood, ai_feedback')
+      .eq('user_id', userId)
+      .neq('entry_date', today)
+      .order('entry_date', { ascending: false })
+      .limit(20),
+    [],
+    [today]
+  )
 
-    if (todayData) {
-      setTodayEntry(todayData)
-      setFeedback(todayData.ai_feedback ?? null)
-    }
-    setPastEntries(past ?? [])
-    setLoading(false)
-  }, [today])
+  const loading = loadingToday || loadingPast
+  const isOffline = todayOffline || pastOffline
 
-  useEffect(() => { fetchData() }, [fetchData])
+  // Mirror today's entry's ai_feedback into local feedback state, same as the
+  // old fetchData did on load/refetch.
+  useEffect(() => {
+    if (todayEntry) setFeedback(todayEntry.ai_feedback ?? null)
+  }, [todayEntry])
 
   // Called by EntryEditor — returns error string or null on success
   async function handleSave(content: string, mood: number): Promise<string | null> {
@@ -429,7 +438,13 @@ export default function Journal() {
       )}
 
       {/* Prompt to write if nothing exists yet */}
-      {!todayEntry && !editing && totalEntries === 0 && (
+      {!todayEntry && !editing && totalEntries === 0 && isOffline && (
+        <div className="rounded-xl border border-dashed border-white/10 p-10 text-center">
+          <BookOpen className="h-10 w-10 text-violet-400/40 mx-auto mb-3" />
+          <p className="text-slate-400 text-sm">Can&apos;t load — you&apos;re offline.</p>
+        </div>
+      )}
+      {!todayEntry && !editing && totalEntries === 0 && !isOffline && (
         <div className="rounded-xl border border-dashed border-white/10 p-10 text-center">
           <BookOpen className="h-10 w-10 text-violet-400/40 mx-auto mb-3" />
           <p className="text-slate-400 text-sm">No journal entries yet.</p>

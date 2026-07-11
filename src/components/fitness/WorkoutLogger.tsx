@@ -1,8 +1,9 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState } from 'react'
 import { Plus, Trash2, Loader2, Check, Dumbbell, Pencil, X } from 'lucide-react'
 import { createSupabaseBrowserClient } from '@/lib/supabase'
+import { useCachedQuery } from '@/hooks/useCachedQuery'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -56,8 +57,17 @@ export default function WorkoutLogger() {
   const [saved, setSaved]         = useState(false)
   const [error, setError]         = useState<string | null>(null)
 
-  const [recentLogs, setRecentLogs]     = useState<WorkoutLog[]>([])
-  const [loadingLogs, setLoadingLogs]   = useState(true)
+  const { data: recentLogs, loading: loadingLogs, isOffline, setData: setRecentLogs, refetch: fetchRecentLogs } = useCachedQuery<WorkoutLog[]>(
+    'workout_logs:recent',
+    (supabase, userId) => supabase
+      .from('workout_logs')
+      .select('id, log_date, workout_type, duration_mins, exercises, notes')
+      .eq('user_id', userId)
+      .order('log_date', { ascending: false })
+      .order('created_at', { ascending: false })
+      .limit(10),
+    []
+  )
 
   const [editingId, setEditingId]       = useState<string | null>(null)
   const [editDate, setEditDate]         = useState('')
@@ -66,23 +76,6 @@ export default function WorkoutLogger() {
   const [editExercises, setEditExercises] = useState<Exercise[]>([{ name: '', sets: '', reps: '' }])
   const [editNotes, setEditNotes]       = useState('')
   const [editSaving, setEditSaving]     = useState(false)
-
-  const fetchRecentLogs = useCallback(async () => {
-    const supabase = createSupabaseBrowserClient()
-    const { data: { session } } = await supabase.auth.getSession()
-    if (!session?.user) { setLoadingLogs(false); return }
-    const { data } = await supabase
-      .from('workout_logs')
-      .select('id, log_date, workout_type, duration_mins, exercises, notes')
-      .eq('user_id', session.user.id)
-      .order('log_date', { ascending: false })
-      .order('created_at', { ascending: false })
-      .limit(10)
-    setRecentLogs((data as WorkoutLog[]) ?? [])
-    setLoadingLogs(false)
-  }, [])
-
-  useEffect(() => { fetchRecentLogs() }, [fetchRecentLogs])
 
   function addExercise() {
     setExercises(prev => [...prev, { name: '', sets: '', reps: '' }])
@@ -354,6 +347,11 @@ export default function WorkoutLogger() {
         {loadingLogs ? (
           <div className="flex justify-center py-6">
             <Loader2 className="h-5 w-5 animate-spin text-slate-500" />
+          </div>
+        ) : recentLogs.length === 0 && isOffline ? (
+          <div className="rounded-xl border border-dashed border-white/10 p-8 text-center">
+            <Dumbbell className="h-8 w-8 text-violet-400/30 mx-auto mb-2" />
+            <p className="text-slate-400 text-sm">Can&apos;t load — you&apos;re offline.</p>
           </div>
         ) : recentLogs.length === 0 ? (
           <div className="rounded-xl border border-dashed border-white/10 p-8 text-center">

@@ -1,8 +1,9 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState } from 'react'
 import { Loader2, Plus, Target } from 'lucide-react'
 import { createSupabaseBrowserClient } from '@/lib/supabase'
+import { useCachedQuery } from '@/hooks/useCachedQuery'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -210,23 +211,16 @@ function AddMoneyModal({ goal, onUpdate }: { goal: Goal; onUpdate: () => void })
 }
 
 export default function FinanceGoals() {
-  const [goals, setGoals]   = useState<Goal[]>([])
-  const [loading, setLoading] = useState(true)
-
-  const fetchGoals = useCallback(async () => {
-    const supabase = createSupabaseBrowserClient()
-    const { data: { session } } = await supabase.auth.getSession()
-    if (!session?.user) { setLoading(false); return }
-    const { data } = await supabase
+  const { data: goals, loading, isOffline, refetch: fetchGoals } = useCachedQuery<Goal[]>(
+    'finance_goals',
+    (supabase, userId) => supabase
       .from('finance_goals')
       .select('*')
-      .eq('user_id', session.user.id)
-      .order('created_at', { ascending: true })
-    setGoals((data as Goal[]) ?? [])
-    setLoading(false)
-  }, [])
-
-  useEffect(() => { fetchGoals() }, [fetchGoals])
+      .eq('user_id', userId)
+      .order('created_at', { ascending: true }),
+    [],
+    []
+  )
 
   if (loading) {
     return (
@@ -253,7 +247,14 @@ export default function FinanceGoals() {
         <AddGoalModal onAdd={fetchGoals} />
       </div>
 
-      {goals.length === 0 && (
+      {goals.length === 0 && isOffline && (
+        <div className="rounded-xl border border-dashed border-white/10 p-10 text-center">
+          <Target className="h-10 w-10 text-violet-400/30 mx-auto mb-3" />
+          <p className="text-slate-400 text-sm">Can&apos;t load — you&apos;re offline.</p>
+        </div>
+      )}
+
+      {goals.length === 0 && !isOffline && (
         <div className="rounded-xl border border-dashed border-white/10 p-10 text-center">
           <Target className="h-10 w-10 text-violet-400/30 mx-auto mb-3" />
           <p className="text-slate-400 text-sm">No goals yet.</p>

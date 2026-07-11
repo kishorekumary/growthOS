@@ -1,11 +1,12 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import {
   Plus, Trash2, Loader2, CheckCircle, GripVertical, ChevronUp, ChevronDown,
   Edit2, Check, X, Clock, Flame,
 } from 'lucide-react'
 import { createSupabaseBrowserClient } from '@/lib/supabase'
+import { useCachedQuery } from '@/hooks/useCachedQuery'
 import { cn } from '@/lib/utils'
 import { format } from 'date-fns'
 
@@ -14,6 +15,23 @@ interface Step {
   title: string
   duration_minutes: number
   position: number
+}
+
+interface StepRow extends Step {
+  routine_id: string
+}
+
+interface RoutineRow {
+  id: string
+  name: string
+  type: 'morning' | 'evening' | 'custom'
+  is_active: boolean
+}
+
+interface CompletionRow {
+  routine_id: string
+  completed_date: string
+  steps_completed: string[] | null
 }
 
 interface Routine {
@@ -33,8 +51,6 @@ const TYPE_CONFIG = {
 }
 
 export default function RoutineBuilder() {
-  const [routines, setRoutines]     = useState<Routine[]>([])
-  const [loading, setLoading]       = useState(true)
   const [creating, setCreating]     = useState(false)
   const [newName, setNewName]       = useState('')
   const [newType, setNewType]       = useState<'morning'|'evening'|'custom'>('morning')
@@ -43,53 +59,77 @@ export default function RoutineBuilder() {
   const [checkedSteps, setCheckedSteps] = useState<Record<string, Set<string>>>({})
   const today = format(new Date(), 'yyyy-MM-dd')
 
-  const load = useCallback(async () => {
-    setLoading(true)
-    const supabase = createSupabaseBrowserClient()
-    const { data: { user } } = await supabase.auth.getUser()
-    if (!user) { setLoading(false); return }
-
-    const { data: rData } = await supabase
+  const {
+    data: routinesData,
+    loading: routinesLoading,
+    isOffline: routinesOffline,
+    refetch: refetchRoutines,
+  } = useCachedQuery<RoutineRow[]>(
+    'routines:active',
+    (supabase, userId) => supabase
       .from('routines')
       .select('*')
-      .eq('user_id', user.id)
+      .eq('user_id', userId)
       .eq('is_active', true)
-      .order('created_at')
+      .order('created_at'),
+    []
+  )
 
-    const { data: sData } = await supabase
+  const {
+    data: stepsData,
+    loading: stepsLoading,
+    isOffline: stepsOffline,
+    refetch: refetchSteps,
+  } = useCachedQuery<StepRow[]>(
+    'routine-steps',
+    (supabase, userId) => supabase
       .from('routine_steps')
       .select('*')
-      .eq('user_id', user.id)
-      .order('position')
+      .eq('user_id', userId)
+      .order('position'),
+    []
+  )
 
-    const { data: cData } = await supabase
+  const {
+    data: completionsData,
+    loading: completionsLoading,
+    isOffline: completionsOffline,
+    refetch: refetchCompletions,
+  } = useCachedQuery<CompletionRow[]>(
+    `routine-completions:${today}`,
+    (supabase, userId) => supabase
       .from('routine_completions')
       .select('routine_id, completed_date, steps_completed')
-      .eq('user_id', user.id)
+      .eq('user_id', userId)
       .order('completed_date', { ascending: false })
-      .limit(100)
+      .limit(100),
+    [],
+    [today]
+  )
 
+  const loading = routinesLoading || stepsLoading || completionsLoading
+  const isOffline = routinesOffline || stepsOffline || completionsOffline
+
+  const routines = useMemo<Routine[]>(() => {
     const completionMap: Record<string, { dates: string[]; stepsToday: string[] }> = {}
-    for (const c of cData ?? []) {
+    for (const c of completionsData) {
       if (!completionMap[c.routine_id]) completionMap[c.routine_id] = { dates: [], stepsToday: [] }
       completionMap[c.routine_id].dates.push(c.completed_date)
       if (c.completed_date === today) {
-        completionMap[c.routine_id].stepsToday = (c.steps_completed as string[]) ?? []
+        completionMap[c.routine_id].stepsToday = c.steps_completed ?? []
       }
     }
 
     const stepMap: Record<string, Step[]> = {}
-    for (const s of sData ?? []) {
+    for (const s of stepsData) {
       if (!stepMap[s.routine_id]) stepMap[s.routine_id] = []
-      stepMap[s.routine_id].push(s as Step)
+      stepMap[s.routine_id].push(s)
     }
 
-    const initialChecked: Record<string, Set<string>> = {}
-    const built: Routine[] = (rData ?? []).map(r => {
+    return routinesData.map(r => {
       const comp = completionMap[r.id]
       const streak = calcStreak(comp?.dates ?? [])
       const stepsToday = comp?.stepsToday ?? []
-      initialChecked[r.id] = new Set(stepsToday)
       return {
         ...r,
         steps: stepMap[r.id] ?? [],
@@ -97,13 +137,18 @@ export default function RoutineBuilder() {
         completedToday: stepsToday.length > 0 && stepsToday.length >= (stepMap[r.id]?.length ?? 0),
       }
     })
+  }, [routinesData, stepsData, completionsData, today])
 
-    setRoutines(built)
+  // Keep the per-step checkbox state in sync with the latest fetched completions
+  useEffect(() => {
+    const initialChecked: Record<string, Set<string>> = {}
+    for (const c of completionsData) {
+      if (c.completed_date === today) {
+        initialChecked[c.routine_id] = new Set(c.steps_completed ?? [])
+      }
+    }
     setCheckedSteps(initialChecked)
-    setLoading(false)
-  }, [today])
-
-  useEffect(() => { load() }, [load])
+  }, [completionsData, today])
 
   function calcStreak(dates: string[]): number {
     if (!dates.length) return 0
@@ -129,7 +174,7 @@ export default function RoutineBuilder() {
       user_id: user.id, name: newName.trim(), type: newType,
     })
     setNewName(''); setCreating(false)
-    load()
+    refetchRoutines()
   }
 
   async function addStep(routineId: string) {
@@ -142,25 +187,25 @@ export default function RoutineBuilder() {
       routine_id: routineId, user_id: user.id,
       title: 'New step', duration_minutes: 5, position: pos,
     })
-    load()
+    refetchSteps()
   }
 
   async function updateStep(stepId: string, changes: Partial<Step>) {
     const supabase = createSupabaseBrowserClient()
     await supabase.from('routine_steps').update(changes).eq('id', stepId)
-    load()
+    refetchSteps()
   }
 
   async function deleteStep(stepId: string) {
     const supabase = createSupabaseBrowserClient()
     await supabase.from('routine_steps').delete().eq('id', stepId)
-    load()
+    refetchSteps()
   }
 
   async function deleteRoutine(routineId: string) {
     const supabase = createSupabaseBrowserClient()
     await supabase.from('routines').update({ is_active: false }).eq('id', routineId)
-    load()
+    refetchRoutines()
   }
 
   async function toggleStep(routineId: string, stepId: string) {
@@ -185,7 +230,7 @@ export default function RoutineBuilder() {
       steps_completed: stepsArr,
     }, { onConflict: 'user_id,routine_id,completed_date' })
 
-    load()
+    refetchCompletions()
   }
 
   if (loading) return (
@@ -197,7 +242,12 @@ export default function RoutineBuilder() {
   return (
     <div className="space-y-4">
       {/* Existing routines */}
-      {routines.map(routine => {
+      {routines.length === 0 && isOffline ? (
+        <p className="text-sm text-slate-500 text-center py-6">Can&apos;t load routines — you&apos;re offline.</p>
+      ) : routines.length === 0 ? (
+        <p className="text-sm text-slate-500 text-center py-6">No routines yet.</p>
+      ) : (
+        routines.map(routine => {
         const cfg = TYPE_CONFIG[routine.type]
         const checked = checkedSteps[routine.id] ?? new Set()
         const totalTime = routine.steps.reduce((s, st) => s + st.duration_minutes, 0)
@@ -283,7 +333,8 @@ export default function RoutineBuilder() {
             )}
           </div>
         )
-      })}
+        })
+      )}
 
       {/* Create new */}
       {creating ? (
