@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useRef, useEffect, useCallback, useMemo } from 'react'
+import { flushSync } from 'react-dom'
 import { X, Trash2, GitBranch, Loader2, Check, Pencil, Upload, Plus, Undo2, Link2, Eye, EyeOff, Search, ChevronLeft, ChevronRight, ChevronDown, Download, MoreHorizontal, Save, Navigation, ChevronsDown, Sparkles } from 'lucide-react'
 import { createSupabaseBrowserClient } from '@/lib/supabase'
 import { cn } from '@/lib/utils'
@@ -495,14 +496,21 @@ export default function BookMindMap({ bookId, bookTitle, initialJson, onClose, r
     })
   }, [searchMatchIdx, searchMatches])
 
-  // Focus input when search bar opens
-  useEffect(() => {
-    if (showSearch) setTimeout(() => searchInputRef.current?.focus(), 50)
-    else setSearchQuery('')
-  }, [showSearch])
-
-  function openSearch() { setShowSearch(true) }
-  function closeSearch() { setShowSearch(false) }
+  // Toggling search via a deferred focus() (e.g. inside a useEffect/setTimeout) loses
+  // the original tap's "user activation" — mobile browsers then silently refuse to pop
+  // up the on-screen keyboard, so search visually opens but can't actually be typed into.
+  // flushSync forces the search bar's DOM node to exist before we call focus() in the
+  // very same synchronous handler as the tap, which mobile browsers do honor.
+  function toggleSearch() {
+    const next = !showSearch
+    flushSync(() => setShowSearch(next))
+    if (next) searchInputRef.current?.focus()
+  }
+  function openSearch() {
+    flushSync(() => setShowSearch(true))
+    searchInputRef.current?.focus()
+  }
+  function closeSearch() { setShowSearch(false); setSearchQuery('') }
   function nextMatch()   { setSearchMatchIdx(i => (i + 1) % searchMatches.length) }
   function prevMatch()   { setSearchMatchIdx(i => (i - 1 + searchMatches.length) % searchMatches.length) }
 
@@ -1067,7 +1075,7 @@ export default function BookMindMap({ bookId, bookTitle, initialJson, onClose, r
           )}
 
           <button
-            onClick={() => setShowSearch(s => !s)}
+            onClick={toggleSearch}
             title="Search nodes (⌘F)"
             className={cn(
               'flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium border transition-all',
@@ -1141,7 +1149,19 @@ export default function BookMindMap({ bookId, bookTitle, initialJson, onClose, r
             </button>
           )}
 
-          {/* More menu (Undo · Import · Search · Export) */}
+          {/* Search icon-only — direct access, matches desktop toolbar */}
+          <button
+            onClick={toggleSearch}
+            title="Search nodes"
+            className={cn(
+              'rounded-lg p-2 transition-colors',
+              showSearch ? 'text-amber-300 bg-amber-500/15' : 'text-slate-400 hover:text-white hover:bg-white/10'
+            )}
+          >
+            <Search className="h-4 w-4" />
+          </button>
+
+          {/* More menu (Undo · Import · Export) */}
           <div className="relative">
             {showMobileMenu && (
               <div className="fixed inset-0 z-[29]" onClick={() => setShowMobileMenu(false)} />
@@ -1174,15 +1194,6 @@ export default function BookMindMap({ bookId, bookTitle, initialJson, onClose, r
                     <Upload className="h-3.5 w-3.5" /> Import
                   </button>
                 )}
-                <button
-                  onClick={() => { setShowSearch(s => !s); setShowMobileMenu(false) }}
-                  className={cn(
-                    'flex w-full items-center gap-2.5 px-3.5 py-2.5 text-sm hover:bg-white/5 transition-colors',
-                    showSearch ? 'text-amber-300' : 'text-slate-300'
-                  )}
-                >
-                  <Search className="h-3.5 w-3.5" /> Search
-                </button>
                 <button
                   onClick={() => { expandAll(); setShowMobileMenu(false) }}
                   className="flex w-full items-center gap-2.5 px-3.5 py-2.5 text-sm text-slate-300 hover:bg-white/5 transition-colors"
