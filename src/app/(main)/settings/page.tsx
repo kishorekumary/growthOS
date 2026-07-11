@@ -3,11 +3,16 @@
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import dynamic from 'next/dynamic'
-import { Loader2, Bell, ShieldCheck, ChevronRight } from 'lucide-react'
+import { Loader2, Bell, ShieldCheck, ChevronRight, Mail } from 'lucide-react'
 import { createSupabaseBrowserClient } from '@/lib/supabase'
 
 const NotificationSettings = dynamic(
   () => import('@/components/settings/NotificationSettings'),
+  { loading: () => <div className="flex justify-center py-16"><Loader2 className="h-5 w-5 animate-spin text-slate-500" /></div> }
+)
+
+const BankEmailSync = dynamic(
+  () => import('@/components/settings/BankEmailSync'),
   { loading: () => <div className="flex justify-center py-16"><Loader2 className="h-5 w-5 animate-spin text-slate-500" /></div> }
 )
 
@@ -56,12 +61,20 @@ export default function SettingsPage() {
         </div>
       )}
 
-      <div className="mb-2">
+      <div className="mb-6">
         <div className="flex items-center gap-2 mb-4">
           <Bell className="h-4 w-4 text-violet-400" />
           <h2 className="text-base font-semibold text-white">Notifications</h2>
         </div>
         <NotificationSettings />
+      </div>
+
+      <div className="mb-2">
+        <div className="flex items-center gap-2 mb-4">
+          <Mail className="h-4 w-4 text-violet-400" />
+          <h2 className="text-base font-semibold text-white">Finance Integrations</h2>
+        </div>
+        <BankEmailSync />
       </div>
     </div>
   )

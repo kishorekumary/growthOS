@@ -7,6 +7,10 @@
     {
       "path": "/api/cron/daily-habit-close",
       "schedule": "0 0 * * *"
+    },
+    {
+      "path": "/api/cron/bank-email-sync",
+      "schedule": "*/30 * * * *"
     }
   ]
 }
