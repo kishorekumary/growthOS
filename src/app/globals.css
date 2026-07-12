@@ -4,6 +4,11 @@
 
 @layer base {
   :root {
+    /* App is permanently dark-themed — without this, mobile browsers in light
+       mode can apply native light-mode chrome/tinting to form controls (most
+       visible on inputs with very low-opacity custom backgrounds), washing out
+       or hiding custom text colors. */
+    color-scheme: dark;
     --background: 244 30% 4%;
     --foreground: 220 20% 95%;
     --card: 244 25% 6%;

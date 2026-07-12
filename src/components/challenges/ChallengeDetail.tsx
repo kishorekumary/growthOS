@@ -1,10 +1,15 @@
 'use client'
 
 import { useState } from 'react'
-import { Flame, CheckCircle2, ChevronLeft, Sparkles, Loader2, Trophy, Lock } from 'lucide-react'
+import { Flame, CheckCircle2, ChevronLeft, Sparkles, Loader2, Trophy, Lock, Pencil } from 'lucide-react'
 import { createSupabaseBrowserClient } from '@/lib/supabase'
 import { useCachedQuery } from '@/hooks/useCachedQuery'
 import { format, parseISO, differenceInDays, addDays, subDays } from 'date-fns'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { cn } from '@/lib/utils'
 
 interface Challenge {
   id: string
@@ -12,10 +17,22 @@ interface Challenge {
   description: string | null
   category: string
   start_date: string
+  duration_days: number
   daily_commitment: string | null
   why_matters: string | null
   status: 'active' | 'completed' | 'abandoned'
+  created_at: string
 }
+
+const CATEGORIES = [
+  { value: 'fitness',  label: '💪 Fitness'  },
+  { value: 'learning', label: '📚 Learning' },
+  { value: 'habits',   label: '🔁 Habits'   },
+  { value: 'career',   label: '💼 Career'   },
+  { value: 'health',   label: '🌿 Health'   },
+  { value: 'personal', label: '🧠 Personal' },
+  { value: 'creative', label: '🎨 Creative' },
+]
 
 interface Checkin {
   checkin_date: string
@@ -27,6 +44,7 @@ interface Props {
   challenge: Challenge
   onBack: () => void
   onComplete: (id: string) => void
+  onUpdate: (challenge: Challenge) => void
 }
 
 const CATEGORY_COLOR: Record<string, string> = {
@@ -34,12 +52,18 @@ const CATEGORY_COLOR: Record<string, string> = {
   career: '#3b82f6', health: '#22c55e', personal: '#818cf8', creative: '#f472b6',
 }
 
-const MILESTONES = [7, 21, 30, 45, 60, 75, 90]
+// Preserve the original hand-picked milestones for the default 90-day case;
+// derive proportional checkpoints for any other custom duration.
+function computeMilestones(totalDays: number): number[] {
+  if (totalDays === 90) return [7, 21, 30, 45, 60, 75, 90]
+  const days = [0.1, 0.25, 0.5, 0.75, 1].map(f => Math.max(1, Math.round(totalDays * f)))
+  return Array.from(new Set(days)).sort((a, b) => a - b)
+}
 
-function ProgressRing({ day }: { day: number }) {
+function ProgressRing({ day, totalDays }: { day: number; totalDays: number }) {
   const r = 38
   const circ = 2 * Math.PI * r
-  const pct = Math.min(day / 90, 1)
+  const pct = Math.min(day / totalDays, 1)
   const dash = circ * pct
   return (
     <div className="relative flex items-center justify-center w-24 h-24 shrink-0">
@@ -54,14 +78,14 @@ function ProgressRing({ day }: { day: number }) {
         />
       </svg>
       <div className="text-center">
-        <div className="text-2xl font-black text-white leading-none">{Math.min(day, 90)}</div>
-        <div className="text-[10px] text-slate-500 mt-0.5">of 90</div>
+        <div className="text-2xl font-black text-white leading-none">{Math.min(day, totalDays)}</div>
+        <div className="text-[10px] text-slate-500 mt-0.5">of {totalDays}</div>
       </div>
     </div>
   )
 }
 
-export default function ChallengeDetail({ challenge, onBack, onComplete }: Props) {
+export default function ChallengeDetail({ challenge, onBack, onComplete, onUpdate }: Props) {
   const supabase = createSupabaseBrowserClient()
   const [reflection, setReflection] = useState('')
   const [saving, setSaving] = useState(false)
@@ -69,6 +93,7 @@ export default function ChallengeDetail({ challenge, onBack, onComplete }: Props
   const [aiLoading, setAiLoading] = useState(false)
   const [milestoneMsg, setMilestoneMsg] = useState<string | null>(null)
   const [milestoneLoading, setMilestoneLoading] = useState(false)
+  const [editOpen, setEditOpen] = useState(false)
 
   const { data: checkins, isOffline, refetch: load } = useCachedQuery<Record<string, Checkin>>(
     `challenge-checkins:${challenge.id}`,
@@ -84,13 +109,15 @@ export default function ChallengeDetail({ challenge, onBack, onComplete }: Props
     [challenge.id]
   )
 
+  const totalDays  = challenge.duration_days
+  const MILESTONES = computeMilestones(totalDays)
   const today      = format(new Date(), 'yyyy-MM-dd')
   const startDate  = parseISO(challenge.start_date)
-  const dayNumber  = Math.max(1, Math.min(differenceInDays(new Date(), startDate) + 1, 90))
-  const isTodayInRange = dayNumber >= 1 && dayNumber <= 90 && challenge.start_date <= today
+  const dayNumber  = Math.max(1, Math.min(differenceInDays(new Date(), startDate) + 1, totalDays))
+  const isTodayInRange = dayNumber >= 1 && dayNumber <= totalDays && challenge.start_date <= today
   const todayCheckin   = checkins[today]
   const isMilestoneDay = MILESTONES.includes(dayNumber)
-  const phase = dayNumber <= 30 ? 'Foundation' : dayNumber <= 60 ? 'Momentum' : 'Mastery'
+  const phase = dayNumber <= totalDays / 3 ? 'Foundation' : dayNumber <= totalDays * 2 / 3 ? 'Momentum' : 'Mastery'
 
   const catColor = CATEGORY_COLOR[challenge.category] ?? '#818cf8'
 
@@ -118,8 +145,8 @@ export default function ChallengeDetail({ challenge, onBack, onComplete }: Props
       reflection: reflection.trim() || null,
     }, { onConflict: 'challenge_id,checkin_date' })
 
-    // Auto-complete challenge on day 90
-    if (dayNumber >= 90) {
+    // Auto-complete challenge on the final day
+    if (dayNumber >= totalDays) {
       await supabase
         .from('ninety_day_challenges')
         .update({ status: 'completed', updated_at: new Date().toISOString() })
@@ -174,13 +201,27 @@ export default function ChallengeDetail({ challenge, onBack, onComplete }: Props
           Back
         </button>
         <span
-          className="ml-auto text-xs px-2 py-0.5 rounded-full font-medium capitalize"
+          className="text-xs px-2 py-0.5 rounded-full font-medium capitalize"
           style={{ backgroundColor: catColor + '25', color: catColor }}
         >
           {challenge.category}
         </span>
         <span className="text-xs text-slate-500">{phase} Phase</span>
+        <button
+          onClick={() => setEditOpen(true)}
+          className="ml-auto flex items-center gap-1 text-xs text-slate-500 hover:text-white transition-colors"
+        >
+          <Pencil className="h-3.5 w-3.5" /> Edit
+        </button>
       </div>
+
+      {editOpen && (
+        <EditChallengeModal
+          challenge={challenge}
+          onClose={() => setEditOpen(false)}
+          onSaved={updated => { onUpdate(updated); setEditOpen(false) }}
+        />
+      )}
 
       {isOffline && (
         <p className="text-xs text-amber-400">Can&apos;t sync check-ins — you&apos;re offline.</p>
@@ -214,14 +255,14 @@ export default function ChallengeDetail({ challenge, onBack, onComplete }: Props
               </div>
             </div>
           </div>
-          <ProgressRing day={dayNumber} />
+          <ProgressRing day={dayNumber} totalDays={totalDays} />
         </div>
       </div>
 
       {/* Heatmap */}
       <div className="rounded-2xl border border-white/8 bg-white/3 p-4 space-y-3">
         <div className="flex items-center justify-between">
-          <p className="text-xs font-semibold text-slate-400">90-Day Map</p>
+          <p className="text-xs font-semibold text-slate-400">{totalDays}-Day Map</p>
           <div className="flex items-center gap-3 text-[10px] text-slate-600">
             <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-sm inline-block" style={{ backgroundColor: catColor + '99' }} />done</span>
             <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-sm bg-red-500/20 inline-block" />missed</span>
@@ -229,7 +270,7 @@ export default function ChallengeDetail({ challenge, onBack, onComplete }: Props
           </div>
         </div>
         <div className="grid gap-1" style={{ gridTemplateColumns: 'repeat(15, 1fr)' }}>
-          {Array.from({ length: 90 }, (_, i) => {
+          {Array.from({ length: totalDays }, (_, i) => {
             const dateStr = format(addDays(startDate, i), 'yyyy-MM-dd')
             const isFuture = dateStr > today
             const isToday  = dateStr === today
@@ -268,7 +309,7 @@ export default function ChallengeDetail({ challenge, onBack, onComplete }: Props
           <div className="flex items-center gap-2">
             <Trophy className="h-4 w-4 text-yellow-400" />
             <span className="text-sm font-semibold text-yellow-400">
-              {dayNumber === 90 ? '🎉 Challenge Complete!' : `Day ${dayNumber} Milestone!`}
+              {dayNumber === totalDays ? '🎉 Challenge Complete!' : `Day ${dayNumber} Milestone!`}
             </span>
           </div>
           {milestoneMsg ? (
@@ -357,5 +398,135 @@ export default function ChallengeDetail({ challenge, onBack, onComplete }: Props
         </div>
       )}
     </div>
+  )
+}
+
+// ─── Edit Challenge Modal ───────────────────────────────────────
+
+function EditChallengeModal({ challenge, onClose, onSaved }: {
+  challenge: Challenge
+  onClose: () => void
+  onSaved: (updated: Challenge) => void
+}) {
+  const [title, setTitle]                 = useState(challenge.title)
+  const [category, setCategory]           = useState(challenge.category)
+  const [startDate, setStartDate]         = useState(challenge.start_date)
+  const [durationDays, setDurationDays]   = useState(challenge.duration_days)
+  const [dailyCommitment, setDailyCommitment] = useState(challenge.daily_commitment ?? '')
+  const [whyMatters, setWhyMatters]       = useState(challenge.why_matters ?? '')
+  const [saving, setSaving]               = useState(false)
+  const [error, setError]                 = useState<string | null>(null)
+
+  async function handleSave() {
+    if (!title.trim()) return
+    setSaving(true)
+    setError(null)
+    const supabase = createSupabaseBrowserClient()
+    const { data, error: updateError } = await supabase
+      .from('ninety_day_challenges')
+      .update({
+        title: title.trim(),
+        category,
+        start_date: startDate,
+        duration_days: durationDays,
+        daily_commitment: dailyCommitment.trim() || null,
+        why_matters: whyMatters.trim() || null,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', challenge.id)
+      .select()
+      .single()
+    if (updateError) { setError(updateError.message); setSaving(false); return }
+    setSaving(false)
+    onSaved(data as Challenge)
+  }
+
+  return (
+    <Dialog open onOpenChange={open => { if (!open) onClose() }}>
+      <DialogContent>
+        <DialogHeader><DialogTitle>Edit Challenge</DialogTitle></DialogHeader>
+        <div className="space-y-4">
+          <div className="space-y-1.5">
+            <Label htmlFor="edit-challenge-title" className="text-slate-300">Challenge title</Label>
+            <Input
+              id="edit-challenge-title" autoFocus
+              value={title} onChange={e => setTitle(e.target.value)}
+              className="border-white/20 bg-white/5 text-white placeholder:text-slate-500 focus-visible:ring-purple-500"
+            />
+          </div>
+
+          <div className="space-y-1.5">
+            <Label className="text-slate-300">Category</Label>
+            <div className="grid grid-cols-4 gap-2">
+              {CATEGORIES.map(c => (
+                <button key={c.value} type="button" onClick={() => setCategory(c.value)}
+                  className={cn('rounded-lg border py-2 px-2 text-xs font-medium transition-all',
+                    category === c.value
+                      ? 'border-purple-500 bg-purple-500/20 text-white'
+                      : 'border-white/10 bg-white/5 text-slate-400 hover:border-white/20'
+                  )}>
+                  {c.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-1.5">
+              <Label htmlFor="edit-challenge-start" className="text-slate-300">Start date</Label>
+              <input
+                id="edit-challenge-start"
+                type="date"
+                value={startDate}
+                onChange={e => setStartDate(e.target.value)}
+                className="w-full rounded-lg border border-white/20 bg-white/5 px-3 py-2 text-sm text-white focus:outline-none focus:ring-1 focus:ring-purple-500 [color-scheme:dark]"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="edit-challenge-duration" className="text-slate-300">Duration (days)</Label>
+              <Input
+                id="edit-challenge-duration"
+                type="number" min={1}
+                value={durationDays}
+                onChange={e => setDurationDays(Math.max(1, parseInt(e.target.value) || 1))}
+                className="border-white/20 bg-white/5 text-white focus-visible:ring-purple-500"
+              />
+            </div>
+          </div>
+
+          <div className="space-y-1.5">
+            <Label htmlFor="edit-challenge-commitment" className="text-slate-300">Daily commitment</Label>
+            <Input
+              id="edit-challenge-commitment"
+              value={dailyCommitment} onChange={e => setDailyCommitment(e.target.value)}
+              className="border-white/20 bg-white/5 text-white placeholder:text-slate-500 focus-visible:ring-purple-500"
+            />
+          </div>
+
+          <div className="space-y-1.5">
+            <Label htmlFor="edit-challenge-why" className="text-slate-300">Why does this matter to you?</Label>
+            <textarea
+              id="edit-challenge-why"
+              value={whyMatters}
+              onChange={e => setWhyMatters(e.target.value)}
+              rows={3}
+              className="w-full rounded-lg border border-white/20 bg-white/5 px-3 py-2 text-sm text-white placeholder:text-slate-500 focus:outline-none focus:ring-1 focus:ring-purple-500 resize-none"
+            />
+          </div>
+
+          {error && (
+            <div className="flex items-start gap-2 rounded-lg border border-red-500/20 bg-red-500/10 px-3 py-2">
+              <p className="text-xs text-red-400">{error}</p>
+            </div>
+          )}
+
+          <Button className="w-full bg-purple-600 hover:bg-purple-700 text-white"
+            onClick={handleSave} disabled={saving || !title.trim()}>
+            {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+            Save Changes
+          </Button>
+        </div>
+      </DialogContent>
+    </Dialog>
   )
 }

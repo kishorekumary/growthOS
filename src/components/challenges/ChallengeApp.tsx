@@ -13,6 +13,7 @@ interface Challenge {
   description: string | null
   category: string
   start_date: string
+  duration_days: number
   daily_commitment: string | null
   why_matters: string | null
   status: 'active' | 'completed' | 'abandoned'
@@ -29,6 +30,8 @@ const CATEGORIES = [
   { value: 'creative', label: '🎨 Creative' },
 ]
 
+const DURATION_PRESETS = [21, 30, 60, 90, 180, 365]
+
 const CATEGORY_COLOR: Record<string, string> = {
   fitness: '#ef4444', learning: '#a78bfa', habits: '#f59e0b',
   career: '#3b82f6', health: '#22c55e', personal: '#818cf8', creative: '#f472b6',
@@ -41,8 +44,9 @@ const CATEGORY_LABEL: Record<string, string> = Object.fromEntries(
 function ChallengeCard({ challenge, onClick }: { challenge: Challenge; onClick: () => void }) {
   const today       = format(new Date(), 'yyyy-MM-dd')
   const startDate   = parseISO(challenge.start_date)
-  const dayNumber   = Math.max(0, Math.min(differenceInDays(new Date(), startDate) + 1, 90))
-  const pct         = Math.round(dayNumber / 90 * 100)
+  const totalDays   = challenge.duration_days
+  const dayNumber   = Math.max(0, Math.min(differenceInDays(new Date(), startDate) + 1, totalDays))
+  const pct         = Math.round(dayNumber / totalDays * 100)
   const catColor    = CATEGORY_COLOR[challenge.category] ?? '#818cf8'
   const isCompleted = challenge.status === 'completed'
   const notStarted  = challenge.start_date > today
@@ -69,7 +73,7 @@ function ChallengeCard({ challenge, onClick }: { challenge: Challenge; onClick: 
         </div>
         <div className="text-center shrink-0">
           <div className="text-xl font-black text-white">{notStarted ? 0 : dayNumber}</div>
-          <div className="text-[10px] text-slate-500">/ 90</div>
+          <div className="text-[10px] text-slate-500">/ {totalDays}</div>
         </div>
       </div>
 
@@ -97,6 +101,7 @@ export default function ChallengeApp() {
   const [title, setTitle] = useState('')
   const [category, setCategory] = useState('personal')
   const [startDate, setStartDate] = useState(format(new Date(), 'yyyy-MM-dd'))
+  const [durationDays, setDurationDays] = useState(90)
   const [dailyCommitment, setDailyCommitment] = useState('')
   const [whyMatters, setWhyMatters] = useState('')
   const [description, setDescription] = useState('')
@@ -124,6 +129,7 @@ export default function ChallengeApp() {
         title: title.trim(),
         category,
         start_date: startDate,
+        duration_days: durationDays,
         daily_commitment: dailyCommitment.trim() || null,
         why_matters: whyMatters.trim() || null,
         description: description.trim() || null,
@@ -142,12 +148,18 @@ export default function ChallengeApp() {
   function resetForm() {
     setTitle(''); setCategory('personal')
     setStartDate(format(new Date(), 'yyyy-MM-dd'))
+    setDurationDays(90)
     setDailyCommitment(''); setWhyMatters(''); setDescription('')
   }
 
   function handleComplete(id: string) {
     setChallenges(prev => prev.map(c => c.id === id ? { ...c, status: 'completed' as const } : c))
     if (selected?.id === id) setSelected(prev => prev ? { ...prev, status: 'completed' } : null)
+  }
+
+  function handleUpdate(updated: Challenge) {
+    setChallenges(prev => prev.map(c => c.id === updated.id ? updated : c))
+    if (selected?.id === updated.id) setSelected(updated)
   }
 
   const active    = challenges.filter(c => c.status === 'active')
@@ -159,6 +171,7 @@ export default function ChallengeApp() {
         challenge={selected}
         onBack={() => setView('list')}
         onComplete={handleComplete}
+        onUpdate={handleUpdate}
       />
     )
   }
@@ -167,7 +180,7 @@ export default function ChallengeApp() {
     return (
       <div className="space-y-5">
         <div className="flex items-center justify-between">
-          <h2 className="text-base font-semibold text-white">New 90-Day Challenge</h2>
+          <h2 className="text-base font-semibold text-white">New Challenge</h2>
           <button onClick={() => { setView('list'); resetForm() }} className="text-slate-500 hover:text-white transition-colors">
             <X className="h-4 w-4" />
           </button>
@@ -216,6 +229,37 @@ export default function ChallengeApp() {
             />
           </div>
 
+          {/* Duration */}
+          <div className="space-y-1.5">
+            <label className="text-xs font-medium text-slate-400">Duration</label>
+            <div className="grid grid-cols-3 gap-2">
+              {DURATION_PRESETS.map(d => (
+                <button
+                  key={d}
+                  onClick={() => setDurationDays(d)}
+                  className={`rounded-xl border py-2 text-xs font-medium transition-all ${
+                    durationDays === d
+                      ? 'text-white border-white/20 bg-white/10'
+                      : 'text-slate-500 border-white/5 bg-white/2 hover:border-white/10 hover:text-slate-400'
+                  }`}
+                >
+                  {d} days
+                </button>
+              ))}
+            </div>
+            <div className="flex items-center gap-2 pt-0.5">
+              <span className="text-xs text-slate-600">Custom:</span>
+              <input
+                type="number"
+                min={1}
+                value={durationDays}
+                onChange={e => setDurationDays(Math.max(1, parseInt(e.target.value) || 1))}
+                className="w-24 rounded-lg border border-white/8 bg-white/3 px-3 py-1.5 text-sm text-white outline-none focus:border-purple-500/40"
+              />
+              <span className="text-xs text-slate-600">days</span>
+            </div>
+          </div>
+
           {/* Daily commitment */}
           <div className="space-y-1.5">
             <label className="text-xs font-medium text-slate-400">Daily commitment</label>
@@ -245,7 +289,7 @@ export default function ChallengeApp() {
             className="flex w-full items-center justify-center gap-2 rounded-xl bg-purple-600 hover:bg-purple-500 disabled:opacity-50 py-3 text-sm font-semibold text-white transition-colors"
           >
             {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Flame className="h-4 w-4" />}
-            {saving ? 'Starting challenge…' : 'Start 90-Day Challenge'}
+            {saving ? 'Starting challenge…' : `Start ${durationDays}-Day Challenge`}
           </button>
         </div>
       </div>
@@ -260,7 +304,7 @@ export default function ChallengeApp() {
         className="flex w-full items-center justify-center gap-2 rounded-2xl border border-dashed border-white/15 py-4 text-sm text-slate-500 hover:border-purple-500/40 hover:text-purple-400 transition-colors"
       >
         <Plus className="h-4 w-4" />
-        Start a new 90-day challenge
+        Start a new challenge
       </button>
 
       {/* Active */}
@@ -294,9 +338,9 @@ export default function ChallengeApp() {
       {challenges.length === 0 && !isOffline && (
         <div className="rounded-2xl border border-white/8 bg-white/3 p-10 text-center space-y-3">
           <div className="text-4xl">🔥</div>
-          <p className="text-base font-semibold text-white">Transform your life in 90 days</p>
+          <p className="text-base font-semibold text-white">Transform your life, one challenge at a time</p>
           <p className="text-sm text-slate-500 max-w-xs mx-auto">
-            Pick one commitment, show up every day, and watch compound growth change everything.
+            Pick one commitment, choose your timeframe, show up every day, and watch compound growth change everything.
           </p>
           <button
             onClick={() => setView('create')}
