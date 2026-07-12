@@ -2,9 +2,12 @@ import { createServerClient, type CookieOptions } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
 
 export async function middleware(request: NextRequest) {
-  // If Supabase redirected a PKCE code to the wrong path (e.g. /**), forward it to the handler
+  // If Supabase redirected a PKCE code to the wrong path (e.g. /**), forward it to the handler.
+  // Scoped to paths with no other OAuth callback of their own — other integrations (e.g. Gmail)
+  // also receive a `code` param on their callback route and must not be hijacked into this one.
   const code = request.nextUrl.searchParams.get('code')
-  if (code && request.nextUrl.pathname !== '/auth/callback') {
+  const isForeignOAuthCallback = request.nextUrl.pathname.startsWith('/api/integrations/')
+  if (code && request.nextUrl.pathname !== '/auth/callback' && !isForeignOAuthCallback) {
     const callbackUrl = new URL('/auth/callback', request.url)
     callbackUrl.search = request.nextUrl.search
     return NextResponse.redirect(callbackUrl)
