@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import {
-  Loader2, Plus, Trash2, Pencil,
+  Loader2, Plus, Trash2, Pencil, Mail, CheckCircle2, AlertCircle,
   UtensilsCrossed, Home, Car, Tv, Heart, ShoppingBag, Zap, Package,
   Briefcase, Laptop, TrendingUp, Gift, PiggyBank, Target, Shield,
   ArrowUpRight, ArrowDownRight,
@@ -226,6 +226,88 @@ function TxnModal({ initial, onSave, trigger }: {
   )
 }
 
+// ─── Sync Bank Emails Modal ───────────────────────────────────
+
+function SyncBankEmailsModal({ onSynced }: { onSynced: () => void }) {
+  const [open, setOpen]       = useState(false)
+  const [days, setDays]       = useState('7')
+  const [syncing, setSyncing] = useState(false)
+  const [result, setResult]   = useState<{ imported: number } | null>(null)
+  const [error, setError]     = useState<string | null>(null)
+
+  async function runSync() {
+    setSyncing(true)
+    setError(null)
+    setResult(null)
+    try {
+      const res = await fetch(`/api/cron/bank-email-sync?days=${encodeURIComponent(days)}`)
+      const data = await res.json()
+      if (!res.ok || data.error) throw new Error(data.error ?? 'Sync failed')
+      setResult({ imported: data.imported ?? 0 })
+      if (data.imported > 0) onSynced()
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Sync failed')
+    } finally {
+      setSyncing(false)
+    }
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={v => { setOpen(v); if (!v) { setResult(null); setError(null) } }}>
+      <DialogTrigger asChild>
+        <Button size="sm" variant="outline" className="border-white/10 bg-white/5 text-slate-300 hover:text-white gap-1.5">
+          <Mail className="h-4 w-4" /> Sync Bank Emails
+        </Button>
+      </DialogTrigger>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Sync Bank Emails</DialogTitle>
+        </DialogHeader>
+        <div className="space-y-4">
+          <p className="text-xs text-slate-500">
+            Manually check your connected Gmail for Axis Bank alerts, going back a chosen number of days.
+            Safe to re-run — already-imported transactions won&apos;t be duplicated.
+          </p>
+          <div className="space-y-1.5">
+            <Label className="text-slate-300 text-xs">Look back (days)</Label>
+            <Input
+              type="number" min="1" value={days}
+              onChange={e => setDays(e.target.value)}
+              className="border-white/20 bg-white/5 text-white focus-visible:ring-violet-500"
+            />
+          </div>
+
+          {result && (
+            <div className="flex items-center gap-2 rounded-lg border border-emerald-500/20 bg-emerald-500/10 px-3 py-2">
+              <CheckCircle2 className="h-4 w-4 text-emerald-400 shrink-0" />
+              <p className="text-xs text-emerald-300">
+                {result.imported > 0
+                  ? `Imported ${result.imported} new transaction${result.imported === 1 ? '' : 's'}.`
+                  : 'No new transactions found in that window.'}
+              </p>
+            </div>
+          )}
+          {error && (
+            <div className="flex items-start gap-2 rounded-lg border border-red-500/20 bg-red-500/10 px-3 py-2">
+              <AlertCircle className="h-4 w-4 text-red-400 shrink-0 mt-0.5" />
+              <p className="text-xs text-red-400">{error}</p>
+            </div>
+          )}
+
+          <Button
+            className="w-full bg-violet-600 hover:bg-violet-700 text-white"
+            onClick={runSync}
+            disabled={syncing || !days || Number(days) < 1}
+          >
+            {syncing ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Mail className="mr-2 h-4 w-4" />}
+            {syncing ? 'Syncing…' : 'Run Sync'}
+          </Button>
+        </div>
+      </DialogContent>
+    </Dialog>
+  )
+}
+
 // ─── Main component ───────────────────────────────────────────
 
 export default function ExpenseTracker({ start, end }: { start: string; end: string }) {
@@ -275,11 +357,14 @@ export default function ExpenseTracker({ start, end }: { start: string; end: str
           <h3 className="font-semibold text-white">Transactions</h3>
           <p className="text-xs text-slate-500 mt-0.5">{txns.length} {txns.length === 1 ? 'entry' : 'entries'}</p>
         </div>
-        <TxnModal onSave={fetchTxns} trigger={
-          <Button size="sm" className="bg-violet-600 hover:bg-violet-700 text-white gap-1.5">
-            <Plus className="h-4 w-4" /> Add Transaction
-          </Button>
-        } />
+        <div className="flex items-center gap-2">
+          <SyncBankEmailsModal onSynced={fetchTxns} />
+          <TxnModal onSave={fetchTxns} trigger={
+            <Button size="sm" className="bg-violet-600 hover:bg-violet-700 text-white gap-1.5">
+              <Plus className="h-4 w-4" /> Add Transaction
+            </Button>
+          } />
+        </div>
       </div>
 
       {txns.length === 0 && isOffline && (
