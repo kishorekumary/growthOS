@@ -18,6 +18,14 @@ export async function GET(req: NextRequest) {
   }
   if (!authorized) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-  const result = await runBankEmailSync(createSupabaseAdminClient())
+  // Optional one-time backfill: ?days=14 searches Gmail that far back regardless
+  // of last_synced_at, instead of the normal incremental since-last-run window.
+  // Safe to re-run — the (user_id, external_id) unique index no-ops already-imported emails.
+  const daysParam = req.nextUrl.searchParams.get('days')
+  const sinceOverrideEpoch = daysParam
+    ? Math.floor(Date.now() / 1000) - Number(daysParam) * 86400
+    : undefined
+
+  const result = await runBankEmailSync(createSupabaseAdminClient(), sinceOverrideEpoch)
   return NextResponse.json({ ok: true, ...result })
 }
