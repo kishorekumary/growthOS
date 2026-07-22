@@ -35,7 +35,7 @@ const CATEGORY_DOT: Record<GoalCategory, string> = {
   career:  'bg-rose-400',
 }
 
-function GoalsSection() {
+function GoalsSection({ onNavigate }: { onNavigate: () => void }) {
   const { data: goals, loading, isOffline } = useCachedQuery<Goal[]>(
     'quick-reset:goals',
     (supabase, userId) => supabase
@@ -86,11 +86,11 @@ function GoalsSection() {
             )
           })}
           {goals.length > MAX_ITEMS ? (
-            <Link href="/goals" className="block text-center text-xs text-slate-500 hover:text-violet-400 transition-colors pt-0.5">
+            <Link href="/goals" onClick={onNavigate} className="block text-center text-xs text-slate-500 hover:text-violet-400 transition-colors pt-0.5">
               +{goals.length - MAX_ITEMS} more · View all goals →
             </Link>
           ) : (
-            <Link href="/goals" className="block text-center text-xs text-slate-500 hover:text-violet-400 transition-colors pt-0.5">
+            <Link href="/goals" onClick={onNavigate} className="block text-center text-xs text-slate-500 hover:text-violet-400 transition-colors pt-0.5">
               View all goals →
             </Link>
           )}
@@ -100,7 +100,7 @@ function GoalsSection() {
   )
 }
 
-function TodosSection() {
+function TodosSection({ onNavigate }: { onNavigate: () => void }) {
   const { data: todos, loading, isOffline, setData: setTodos } = useCachedQuery<Todo[]>(
     'quick-reset:todos',
     (supabase, userId) => supabase
@@ -158,11 +158,11 @@ function TodosSection() {
             )
           })}
           {todos.length > MAX_ITEMS ? (
-            <Link href="/todos" className="block text-center text-xs text-slate-500 hover:text-violet-400 transition-colors pt-0.5">
+            <Link href="/todos" onClick={onNavigate} className="block text-center text-xs text-slate-500 hover:text-violet-400 transition-colors pt-0.5">
               +{todos.length - MAX_ITEMS} more · View all tasks →
             </Link>
           ) : (
-            <Link href="/todos" className="block text-center text-xs text-slate-500 hover:text-violet-400 transition-colors pt-0.5">
+            <Link href="/todos" onClick={onNavigate} className="block text-center text-xs text-slate-500 hover:text-violet-400 transition-colors pt-0.5">
               View all tasks →
             </Link>
           )}
@@ -199,8 +199,8 @@ export default function OpeningBriefingModal() {
         </div>
 
         <div className="px-5 py-4 max-h-[70vh] overflow-y-auto space-y-5">
-          <GoalsSection />
-          <TodosSection />
+          <GoalsSection onNavigate={() => setOpen(false)} />
+          <TodosSection onNavigate={() => setOpen(false)} />
         </div>
       </div>
     </div>
