@@ -10,6 +10,7 @@ import {
 import { createSupabaseBrowserClient } from '@/lib/supabase'
 import { useCachedQuery } from '@/hooks/useCachedQuery'
 import { useDraggableFab } from '@/hooks/useDraggableFab'
+import { HabitCategory, HABIT_CATEGORY_META } from '@/lib/habitCategories'
 import { cn } from '@/lib/utils'
 import RichTextEditor from './RichTextEditor'
 
@@ -21,7 +22,7 @@ type TxnType     = 'expense' | 'income' | 'savings'
 interface Habit {
   id: string
   habit_name: string
-  category: 'mindset' | 'social' | 'productivity'
+  category: HabitCategory
   streak_count: number
   longest_streak: number
   last_done_at: string | null
@@ -449,11 +450,9 @@ function WorkoutPanel({ onDone }: { onDone: () => void }) {
 
 // ─── Habit Panel ──────────────────────────────────────────────────
 
-const CAT_BADGE: Record<string, string> = {
-  mindset:      'bg-violet-500/20 text-violet-300',
-  social:       'bg-sky-500/20 text-sky-300',
-  productivity: 'bg-emerald-500/20 text-emerald-300',
-}
+const CAT_BADGE: Record<string, string> = Object.fromEntries(
+  Object.entries(HABIT_CATEGORY_META).map(([key, meta]) => [key, meta.badge])
+)
 
 function HabitPanel() {
   const today = todayStr()

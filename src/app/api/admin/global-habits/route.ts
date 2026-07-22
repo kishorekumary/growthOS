@@ -21,11 +21,35 @@ export async function POST(req: Request) {
   const { data, error: dbErr } = await supabase.from('personality_habits').insert({
     user_id: user.id,
     habit_name: habit_name.trim(),
-    category: category ?? 'mindset',
+    category: category ?? 'health',
     frequency: frequency ?? 'daily',
     description: description ?? null,
     is_global: true,
   }).select().single()
+
+  if (dbErr) return NextResponse.json({ error: dbErr.message }, { status: 500 })
+  return NextResponse.json({ habit: data })
+}
+
+// Edit a global habit
+export async function PATCH(req: Request) {
+  const { error, status, supabase } = await requireAdmin()
+  if (error || !supabase) return NextResponse.json({ error }, { status })
+
+  const { searchParams } = new URL(req.url)
+  const id = searchParams.get('id')
+  if (!id) return NextResponse.json({ error: 'id required' }, { status: 400 })
+
+  const { habit_name, category, frequency } = await req.json()
+  if (!habit_name?.trim()) return NextResponse.json({ error: 'habit_name required' }, { status: 400 })
+
+  const { data, error: dbErr } = await supabase
+    .from('personality_habits')
+    .update({ habit_name: habit_name.trim(), category, frequency, updated_at: new Date().toISOString() })
+    .eq('id', id)
+    .eq('is_global', true)
+    .select()
+    .single()
 
   if (dbErr) return NextResponse.json({ error: dbErr.message }, { status: 500 })
   return NextResponse.json({ habit: data })

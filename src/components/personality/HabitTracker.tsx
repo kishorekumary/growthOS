@@ -7,6 +7,7 @@ import {
 } from 'lucide-react'
 import { createSupabaseBrowserClient } from '@/lib/supabase'
 import { useCachedQuery } from '@/hooks/useCachedQuery'
+import { HabitCategory, HABIT_CATEGORY_META } from '@/lib/habitCategories'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -15,7 +16,7 @@ import {
 } from '@/components/ui/dialog'
 import { cn } from '@/lib/utils'
 
-type Category  = 'mindset' | 'social' | 'productivity'
+type Category  = HabitCategory
 type Frequency = 'daily' | 'weekly'
 type LogStatus = 'done' | 'missed' | 'pending'
 
@@ -37,11 +38,9 @@ interface HabitLog {
   status: 'done' | 'missed'
 }
 
-const CATEGORY_STYLES: Record<Category, { label: string; badge: string }> = {
-  mindset:      { label: '🧠 Mindset',      badge: 'bg-violet-500/20 text-violet-300' },
-  social:       { label: '🤝 Social',       badge: 'bg-sky-500/20 text-sky-300' },
-  productivity: { label: '⚡ Productivity', badge: 'bg-emerald-500/20 text-emerald-300' },
-}
+const CATEGORY_STYLES: Record<Category, { label: string; badge: string }> = Object.fromEntries(
+  Object.entries(HABIT_CATEGORY_META).map(([key, meta]) => [key, { label: `${meta.emoji} ${meta.label}`, badge: meta.badge }])
+) as Record<Category, { label: string; badge: string }>
 
 const FREQUENCY_LABELS: Record<Frequency, string> = { daily: 'Daily', weekly: 'Weekly' }
 
@@ -101,7 +100,7 @@ function computeStreak(current: number, lastDoneAt: string | null, frequency: Fr
 function AddHabitModal({ onAdd }: { onAdd: () => void }) {
   const [open, setOpen]           = useState(false)
   const [name, setName]           = useState('')
-  const [category, setCategory]   = useState<Category>('mindset')
+  const [category, setCategory]   = useState<Category>('health')
   const [frequency, setFrequency] = useState<Frequency>('daily')
   const [saving, setSaving]       = useState(false)
   const [error, setError]         = useState<string | null>(null)
@@ -121,7 +120,7 @@ function AddHabitModal({ onAdd }: { onAdd: () => void }) {
       .from('personality_habits')
       .insert({ user_id: session.user.id, habit_name: name.trim(), category, frequency })
     if (insertError) { setError(insertError.message); setSaving(false); return }
-    setName(''); setCategory('mindset'); setFrequency('daily')
+    setName(''); setCategory('health'); setFrequency('daily')
     setSaving(false); setOpen(false); onAdd()
   }
 
@@ -595,7 +594,7 @@ export default function HabitTracker() {
       <div className="space-y-2">
         {sortedHabits.map(habit => {
           const status = getStatus(habit.id)
-          const cat    = CATEGORY_STYLES[habit.category] ?? CATEGORY_STYLES.mindset
+          const cat    = CATEGORY_STYLES[habit.category] ?? CATEGORY_STYLES.health
           const canMarkKeystone = habit.is_keystone || keystoneCount < 2
 
           return (
@@ -762,7 +761,7 @@ export default function HabitTracker() {
             {skipped.length} not possible today
           </p>
           {skipped.map(habit => {
-            const cat = CATEGORY_STYLES[habit.category] ?? CATEGORY_STYLES.mindset
+            const cat = CATEGORY_STYLES[habit.category] ?? CATEGORY_STYLES.health
             return (
               <div key={habit.id}
                 className="group flex items-center gap-3 rounded-xl border border-red-500/15 bg-red-500/5 px-4 py-3 transition-all">

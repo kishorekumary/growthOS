@@ -6,8 +6,9 @@ import {
   Users, Globe, Flame, BookOpen, Dumbbell, Target,
   CheckSquare, Plus, Trash2, Loader2, Shield, ShieldOff,
   ChevronRight, Search, ShieldCheck, Image, FileText, Music, Video, X,
-  Send, MessageSquare,
+  Send, MessageSquare, Pencil,
 } from 'lucide-react'
+import { HABIT_CATEGORIES, HABIT_CATEGORY_META } from '@/lib/habitCategories'
 import { cn } from '@/lib/utils'
 
 type Role = 'user' | 'admin' | 'superadmin'
@@ -34,11 +35,9 @@ export interface GlobalBookItem {
   status: string; has_mindmap: boolean; created_at: string
 }
 
-const CATEGORY_COLOR: Record<string, string> = {
-  mindset:      'text-violet-300 bg-violet-500/15',
-  social:       'text-sky-300 bg-sky-500/15',
-  productivity: 'text-emerald-300 bg-emerald-500/15',
-}
+const CATEGORY_COLOR: Record<string, string> = Object.fromEntries(
+  Object.entries(HABIT_CATEGORY_META).map(([key, meta]) => [key, meta.badge])
+)
 
 export default function AdminDashboard({
   users: initialUsers,
@@ -66,7 +65,9 @@ export default function AdminDashboard({
   const [deletingId, setDeletingId]   = useState<string | null>(null)
   const [removingGalleryId, setRemovingGalleryId] = useState<string | null>(null)
   const [addingHabit, setAddingHabit] = useState(false)
-  const [newHabit, setNewHabit]       = useState({ habit_name: '', category: 'mindset', frequency: 'daily' })
+  const [newHabit, setNewHabit]       = useState({ habit_name: '', category: 'health', frequency: 'daily' })
+  const [editingHabit, setEditingHabit] = useState<GlobalHabit | null>(null)
+  const [savingEdit, setSavingEdit]     = useState(false)
 
   const [msgTarget, setMsgTarget] = useState<{ id: string; name: string } | 'broadcast' | null>(null)
   const [msgTitle, setMsgTitle]   = useState('')
@@ -116,8 +117,21 @@ export default function AdminDashboard({
     })
     const data = await res.json()
     if (data.habit) setGlobalHabits(prev => [data.habit, ...prev])
-    setNewHabit({ habit_name: '', category: 'mindset', frequency: 'daily' })
+    setNewHabit({ habit_name: '', category: 'health', frequency: 'daily' })
     setAddingHabit(false)
+  }
+
+  async function saveGlobalHabitEdit(habit: GlobalHabit) {
+    setSavingEdit(true)
+    const res = await fetch(`/api/admin/global-habits?id=${habit.id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ habit_name: habit.habit_name, category: habit.category, frequency: habit.frequency }),
+    })
+    const data = await res.json()
+    if (data.habit) setGlobalHabits(prev => prev.map(h => h.id === habit.id ? data.habit : h))
+    setSavingEdit(false)
+    setEditingHabit(null)
   }
 
   async function removeFromGlobalBooks(id: string) {
@@ -597,9 +611,9 @@ export default function AdminDashboard({
                 onChange={e => setNewHabit(p => ({ ...p, category: e.target.value }))}
                 className="px-3 py-2 rounded-lg bg-white/[0.04] border border-white/[0.08] text-sm text-white focus:outline-none focus:border-indigo-500/50"
               >
-                <option value="mindset">Mindset</option>
-                <option value="social">Social</option>
-                <option value="productivity">Productivity</option>
+                {HABIT_CATEGORIES.map(c => (
+                  <option key={c} value={c}>{HABIT_CATEGORY_META[c].label}</option>
+                ))}
               </select>
               <select
                 value={newHabit.frequency}
@@ -640,6 +654,12 @@ export default function AdminDashboard({
                       <span className="text-[11px] text-slate-600">{h.frequency}</span>
                     </div>
                   </div>
+                  <button
+                    onClick={() => setEditingHabit(h)}
+                    className="flex items-center justify-center w-7 h-7 rounded-md border border-white/10 text-slate-500 hover:text-indigo-400 hover:border-indigo-500/30 transition-colors"
+                  >
+                    <Pencil className="h-3.5 w-3.5" />
+                  </button>
                   <button
                     onClick={() => deleteGlobalHabit(h.id)}
                     disabled={deletingId === h.id}
@@ -710,6 +730,62 @@ export default function AdminDashboard({
                 </button>
               </>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* Edit global habit modal */}
+      {editingHabit && (
+        <div className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+          <div className="w-full max-w-md rounded-2xl border border-white/10 bg-[#0d0d1a] shadow-2xl p-5 space-y-4">
+            <div className="flex items-center justify-between">
+              <h3 className="text-base font-semibold text-white">Edit Global Habit</h3>
+              <button onClick={() => setEditingHabit(null)} className="text-slate-500 hover:text-white transition-colors">
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+            <div className="space-y-3">
+              <div>
+                <label className="text-xs font-medium text-slate-400 block mb-1.5">Habit name</label>
+                <input
+                  autoFocus
+                  value={editingHabit.habit_name}
+                  onChange={e => setEditingHabit(h => h ? { ...h, habit_name: e.target.value } : h)}
+                  className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2.5 text-sm text-white placeholder:text-slate-600 focus:outline-none focus:border-indigo-500/50"
+                />
+              </div>
+              <div>
+                <label className="text-xs font-medium text-slate-400 block mb-1.5">Category</label>
+                <select
+                  value={editingHabit.category}
+                  onChange={e => setEditingHabit(h => h ? { ...h, category: e.target.value } : h)}
+                  className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2.5 text-sm text-white focus:outline-none focus:border-indigo-500/50"
+                >
+                  {HABIT_CATEGORIES.map(c => (
+                    <option key={c} value={c}>{HABIT_CATEGORY_META[c].label}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="text-xs font-medium text-slate-400 block mb-1.5">Frequency</label>
+                <select
+                  value={editingHabit.frequency}
+                  onChange={e => setEditingHabit(h => h ? { ...h, frequency: e.target.value } : h)}
+                  className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2.5 text-sm text-white focus:outline-none focus:border-indigo-500/50"
+                >
+                  <option value="daily">Daily</option>
+                  <option value="weekly">Weekly</option>
+                </select>
+              </div>
+            </div>
+            <button
+              onClick={() => saveGlobalHabitEdit(editingHabit)}
+              disabled={savingEdit || !editingHabit.habit_name.trim()}
+              className="w-full flex items-center justify-center gap-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 disabled:opacity-40 disabled:cursor-not-allowed px-4 py-3 text-sm font-medium text-white transition-colors"
+            >
+              {savingEdit ? <Loader2 className="h-4 w-4 animate-spin" /> : <Pencil className="h-4 w-4" />}
+              {savingEdit ? 'Saving…' : 'Save Changes'}
+            </button>
           </div>
         </div>
       )}

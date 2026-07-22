@@ -6,13 +6,12 @@ import {
   ChevronLeft, Flame, BookOpen, Dumbbell, Target, CheckSquare,
   Globe, Pencil, Trash2, Plus, Loader2, Check, X, Save,
 } from 'lucide-react'
+import { HABIT_CATEGORIES, HABIT_CATEGORY_META } from '@/lib/habitCategories'
 import { cn } from '@/lib/utils'
 
-const CATEGORY_COLOR: Record<string, string> = {
-  mindset:      'text-violet-300 bg-violet-500/15',
-  social:       'text-sky-300 bg-sky-500/15',
-  productivity: 'text-emerald-300 bg-emerald-500/15',
-}
+const CATEGORY_COLOR: Record<string, string> = Object.fromEntries(
+  Object.entries(HABIT_CATEGORY_META).map(([key, meta]) => [key, meta.badge])
+)
 
 type Habit   = { id: string; habit_name: string; category: string; frequency: string; streak_count: number; longest_streak: number; is_keystone: boolean; is_global: boolean }
 type HabitLog = { habit_id: string; log_date: string; status: string }
@@ -89,7 +88,7 @@ export default function UserDetailClient({
 
   // Add-row forms
   const [addingHabit, setAddingHabit] = useState(false)
-  const [newHabit, setNewHabit]       = useState({ habit_name: '', category: 'mindset', frequency: 'daily' })
+  const [newHabit, setNewHabit]       = useState({ habit_name: '', category: 'health', frequency: 'daily' })
   const [addingBook, setAddingBook]   = useState(false)
   const [newBook, setNewBook]         = useState({ book_title: '', author: '', status: 'reading' })
   const [addingGoal, setAddingGoal]   = useState(false)
@@ -131,7 +130,7 @@ export default function UserDetailClient({
     setBusy('new-habit')
     const { row } = await apiPost('personality_habits', { ...newHabit, user_id: userId, streak_count: 0, longest_streak: 0 })
     if (row) setHabits(p => [...p, row])
-    setNewHabit({ habit_name: '', category: 'mindset', frequency: 'daily' })
+    setNewHabit({ habit_name: '', category: 'health', frequency: 'daily' })
     setAddingHabit(false)
     setBusy(null)
   }
@@ -331,7 +330,7 @@ export default function UserDetailClient({
               <div className="flex gap-2">
                 <select value={newHabit.category} onChange={e => setNewHabit(p => ({ ...p, category: e.target.value }))}
                   className="flex-1 bg-slate-800/80 border border-white/10 rounded px-2 py-1.5 text-xs text-white focus:outline-none">
-                  <option value="mindset">Mindset</option><option value="social">Social</option><option value="productivity">Productivity</option>
+                  {HABIT_CATEGORIES.map(c => <option key={c} value={c}>{HABIT_CATEGORY_META[c].label}</option>)}
                 </select>
                 <select value={newHabit.frequency} onChange={e => setNewHabit(p => ({ ...p, frequency: e.target.value }))}
                   className="flex-1 bg-slate-800/80 border border-white/10 rounded px-2 py-1.5 text-xs text-white focus:outline-none">
@@ -367,7 +366,7 @@ export default function UserDetailClient({
                     {editMode && !h.is_global ? (
                       <select value={h.category} onChange={e => saveHabit(h.id, { category: e.target.value })}
                         className="text-[10px] bg-transparent border-0 text-slate-400 focus:outline-none cursor-pointer">
-                        <option value="mindset">Mindset</option><option value="social">Social</option><option value="productivity">Productivity</option>
+                        {HABIT_CATEGORIES.map(c => <option key={c} value={c}>{HABIT_CATEGORY_META[c].label}</option>)}
                       </select>
                     ) : (
                       <span className={cn('text-[10px] px-1.5 py-0.5 rounded font-medium', CATEGORY_COLOR[h.category] ?? 'text-slate-400 bg-white/5')}>{h.category}</span>
