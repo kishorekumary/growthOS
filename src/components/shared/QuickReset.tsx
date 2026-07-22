@@ -806,15 +806,12 @@ export default function QuickReset({ floatingOnly = false }: { floatingOnly?: bo
           ref={fab.ref}
           style={fab.style}
           onPointerDown={fab.handlers.onPointerDown}
-          onPointerMove={fab.handlers.onPointerMove}
-          onPointerUp={fab.handlers.onPointerUp}
-          onClickCapture={fab.handlers.onClickCapture}
           className="fixed bottom-[4.75rem] right-4 z-40 cursor-grab active:cursor-grabbing sm:bottom-6 sm:right-6"
         >
           {/* Pulse ring — fades after 3 s */}
           {pinging && <span className="absolute inset-0 rounded-full animate-ping bg-violet-500/30 pointer-events-none" />}
           <button
-            onClick={() => setOpen(true)}
+            onClick={() => { if (!fab.wasDragged()) setOpen(true) }}
             title="Quick Reset"
             className="relative flex h-12 w-12 items-center justify-center rounded-full bg-gradient-to-br from-blue-600 to-violet-600 shadow-lg shadow-violet-500/40 hover:shadow-violet-500/60 hover:scale-105 active:scale-95 transition-all"
           >

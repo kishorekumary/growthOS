@@ -1387,14 +1387,11 @@ export default function QuickLog() {
         ref={fab.ref}
         style={fab.style}
         onPointerDown={fab.handlers.onPointerDown}
-        onPointerMove={fab.handlers.onPointerMove}
-        onPointerUp={fab.handlers.onPointerUp}
-        onClickCapture={fab.handlers.onClickCapture}
         className="fixed bottom-[4.75rem] left-4 z-40 cursor-grab active:cursor-grabbing sm:bottom-6 sm:left-6 md:left-[280px]"
       >
         {pinging && <span className="absolute inset-0 rounded-full animate-ping bg-emerald-500/30 pointer-events-none" />}
         <button
-          onClick={() => setOpen(true)}
+          onClick={() => { if (!fab.wasDragged()) setOpen(true) }}
           title="Quick Log"
           className="relative flex h-12 w-12 items-center justify-center rounded-full bg-gradient-to-br from-emerald-600 to-sky-600 shadow-lg shadow-emerald-500/30 hover:shadow-emerald-500/50 hover:scale-105 active:scale-95 transition-all"
         >

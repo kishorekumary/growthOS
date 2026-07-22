@@ -4,12 +4,16 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 
 interface Position { x: number; y: number }
 
-const DRAG_THRESHOLD_PX = 5
+const DRAG_THRESHOLD_PX = 6
 
 // Makes a fixed-position floating button draggable via mouse, touch, or pen
 // (unified through the Pointer Events API). Position persists per `storageKey`
 // in localStorage; until the user first drags, the element keeps its default
 // CSS-based corner position.
+//
+// Drag tracking uses window-level listeners rather than element.setPointerCapture —
+// capture on an ancestor of the clickable button can retarget the derived `click`
+// event away from the button entirely, silently breaking taps.
 export function useDraggableFab(storageKey: string) {
   const ref = useRef<HTMLDivElement>(null)
   const [pos, setPos] = useState<Position | null>(null)
@@ -41,47 +45,35 @@ export function useDraggableFab(storageKey: string) {
     return () => window.removeEventListener('resize', onResize)
   }, [pos, clamp])
 
-  function onPointerDown(e: React.PointerEvent<HTMLDivElement>) {
-    if (e.pointerType === 'mouse' && e.button !== 0) return
-    const el = ref.current
-    if (!el) return
-    el.setPointerCapture(e.pointerId)
-    const rect = el.getBoundingClientRect()
-    draggingRef.current = true
-    movedRef.current    = false
-    startRef.current = { pointerX: e.clientX, pointerY: e.clientY, elemX: rect.left, elemY: rect.top }
-  }
-
-  function onPointerMove(e: React.PointerEvent<HTMLDivElement>) {
+  const onWindowPointerMove = useCallback((e: PointerEvent) => {
     if (!draggingRef.current) return
     const dx = e.clientX - startRef.current.pointerX
     const dy = e.clientY - startRef.current.pointerY
     if (Math.abs(dx) > DRAG_THRESHOLD_PX || Math.abs(dy) > DRAG_THRESHOLD_PX) movedRef.current = true
     setPos(clamp(startRef.current.elemX + dx, startRef.current.elemY + dy))
-  }
+  }, [clamp])
 
-  function endDrag() {
+  const onWindowPointerUp = useCallback(() => {
     if (!draggingRef.current) return
     draggingRef.current = false
+    window.removeEventListener('pointermove', onWindowPointerMove)
+    window.removeEventListener('pointerup', onWindowPointerUp)
     setPos(p => {
       if (p) { try { localStorage.setItem(storageKey, JSON.stringify(p)) } catch {} }
       return p
     })
-  }
+  }, [onWindowPointerMove, storageKey])
 
-  function onPointerUp(e: React.PointerEvent<HTMLDivElement>) {
-    ref.current?.releasePointerCapture(e.pointerId)
-    endDrag()
-  }
-
-  // Swallow the click that follows a drag so the FAB doesn't also pop open
-  // its modal right after being dropped.
-  function onClickCapture(e: React.MouseEvent<HTMLDivElement>) {
-    if (movedRef.current) {
-      e.preventDefault()
-      e.stopPropagation()
-      movedRef.current = false
-    }
+  function onPointerDown(e: React.PointerEvent<HTMLDivElement>) {
+    if (e.pointerType === 'mouse' && e.button !== 0) return
+    const el = ref.current
+    if (!el) return
+    const rect = el.getBoundingClientRect()
+    draggingRef.current = true
+    movedRef.current    = false
+    startRef.current = { pointerX: e.clientX, pointerY: e.clientY, elemX: rect.left, elemY: rect.top }
+    window.addEventListener('pointermove', onWindowPointerMove)
+    window.addEventListener('pointerup', onWindowPointerUp)
   }
 
   const style: React.CSSProperties = pos
@@ -91,6 +83,9 @@ export function useDraggableFab(storageKey: string) {
   return {
     ref,
     style,
-    handlers: { onPointerDown, onPointerMove, onPointerUp, onClickCapture },
+    // Read by the button's own onClick to skip opening the modal right after a drag.
+    // Naturally resets on the next pointerdown, so no explicit "consume" step is needed.
+    wasDragged: () => movedRef.current,
+    handlers: { onPointerDown },
   }
 }
