@@ -9,6 +9,7 @@ import {
 } from 'lucide-react'
 import { createSupabaseBrowserClient } from '@/lib/supabase'
 import { useCachedQuery } from '@/hooks/useCachedQuery'
+import { useDraggableFab } from '@/hooks/useDraggableFab'
 import { cn } from '@/lib/utils'
 import RichTextEditor from './RichTextEditor'
 
@@ -1370,6 +1371,7 @@ export default function QuickLog() {
   const [open, setOpen]       = useState(false)
   const [panel, setPanel]     = useState<Panel>('voice')
   const [pinging, setPinging] = useState(true)
+  const fab = useDraggableFab('quicklog_fab_pos')
 
   useEffect(() => {
     const t = setTimeout(() => setPinging(false), 3000)
@@ -1382,7 +1384,15 @@ export default function QuickLog() {
   return (
     <>
       {/* ── FAB ── */}
-      <div className="fixed bottom-[4.75rem] left-4 z-40 sm:bottom-6 sm:left-6 md:left-[280px]">
+      <div
+        ref={fab.ref}
+        style={fab.style}
+        onPointerDown={fab.handlers.onPointerDown}
+        onPointerMove={fab.handlers.onPointerMove}
+        onPointerUp={fab.handlers.onPointerUp}
+        onClickCapture={fab.handlers.onClickCapture}
+        className="fixed bottom-[4.75rem] left-4 z-40 cursor-grab active:cursor-grabbing sm:bottom-6 sm:left-6 md:left-[280px]"
+      >
         {pinging && <span className="absolute inset-0 rounded-full animate-ping bg-emerald-500/30 pointer-events-none" />}
         <button
           onClick={() => setOpen(true)}

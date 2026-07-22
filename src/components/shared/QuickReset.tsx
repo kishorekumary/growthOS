@@ -5,6 +5,7 @@ import { Wind, Sparkles, Brain, X, ChevronLeft, ChevronRight, Loader2, RefreshCw
 import { differenceInDays, isBefore, parseISO, startOfDay } from 'date-fns'
 import { createSupabaseBrowserClient } from '@/lib/supabase'
 import { useCachedQuery } from '@/hooks/useCachedQuery'
+import { useDraggableFab } from '@/hooks/useDraggableFab'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 
@@ -750,6 +751,7 @@ export default function QuickReset({ floatingOnly = false }: { floatingOnly?: bo
   const [open, setOpen]   = useState(false)
   const [mode, setMode]   = useState<Mode>('menu')
   const [pinging, setPinging] = useState(true)
+  const fab = useDraggableFab('quickreset_fab_pos')
 
   useEffect(() => {
     const t = setTimeout(() => setPinging(false), 3000)
@@ -800,7 +802,15 @@ export default function QuickReset({ floatingOnly = false }: { floatingOnly?: bo
         </div>}
 
         {/* ── Floating action button — stays visible while scrolling ── */}
-        <div className="fixed bottom-[4.75rem] right-4 z-40 sm:bottom-6 sm:right-6">
+        <div
+          ref={fab.ref}
+          style={fab.style}
+          onPointerDown={fab.handlers.onPointerDown}
+          onPointerMove={fab.handlers.onPointerMove}
+          onPointerUp={fab.handlers.onPointerUp}
+          onClickCapture={fab.handlers.onClickCapture}
+          className="fixed bottom-[4.75rem] right-4 z-40 cursor-grab active:cursor-grabbing sm:bottom-6 sm:right-6"
+        >
           {/* Pulse ring — fades after 3 s */}
           {pinging && <span className="absolute inset-0 rounded-full animate-ping bg-violet-500/30 pointer-events-none" />}
           <button
