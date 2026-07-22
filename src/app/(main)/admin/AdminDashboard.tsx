@@ -6,7 +6,7 @@ import {
   Users, Globe, Flame, BookOpen, Dumbbell, Target,
   CheckSquare, Plus, Trash2, Loader2, Shield, ShieldOff,
   ChevronRight, Search, ShieldCheck, Image, FileText, Music, Video, X,
-  Send, MessageSquare, Pencil,
+  Send, MessageSquare, Pencil, AlertCircle,
 } from 'lucide-react'
 import { HABIT_CATEGORIES, HABIT_CATEGORY_META } from '@/lib/habitCategories'
 import { cn } from '@/lib/utils'
@@ -68,6 +68,7 @@ export default function AdminDashboard({
   const [newHabit, setNewHabit]       = useState({ habit_name: '', category: 'health', frequency: 'daily' })
   const [editingHabit, setEditingHabit] = useState<GlobalHabit | null>(null)
   const [savingEdit, setSavingEdit]     = useState(false)
+  const [editError, setEditError]       = useState<string | null>(null)
 
   const [msgTarget, setMsgTarget] = useState<{ id: string; name: string } | 'broadcast' | null>(null)
   const [msgTitle, setMsgTitle]   = useState('')
@@ -123,14 +124,16 @@ export default function AdminDashboard({
 
   async function saveGlobalHabitEdit(habit: GlobalHabit) {
     setSavingEdit(true)
+    setEditError(null)
     const res = await fetch(`/api/admin/global-habits?id=${habit.id}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ habit_name: habit.habit_name, category: habit.category, frequency: habit.frequency }),
     })
     const data = await res.json()
-    if (data.habit) setGlobalHabits(prev => prev.map(h => h.id === habit.id ? data.habit : h))
     setSavingEdit(false)
+    if (!res.ok || !data.habit) { setEditError(data.error ?? 'Failed to save changes'); return }
+    setGlobalHabits(prev => prev.map(h => h.id === habit.id ? data.habit : h))
     setEditingHabit(null)
   }
 
@@ -655,7 +658,7 @@ export default function AdminDashboard({
                     </div>
                   </div>
                   <button
-                    onClick={() => setEditingHabit(h)}
+                    onClick={() => { setEditError(null); setEditingHabit(h) }}
                     className="flex items-center justify-center w-7 h-7 rounded-md border border-white/10 text-slate-500 hover:text-indigo-400 hover:border-indigo-500/30 transition-colors"
                   >
                     <Pencil className="h-3.5 w-3.5" />
@@ -740,7 +743,7 @@ export default function AdminDashboard({
           <div className="w-full max-w-md rounded-2xl border border-white/10 bg-[#0d0d1a] shadow-2xl p-5 space-y-4">
             <div className="flex items-center justify-between">
               <h3 className="text-base font-semibold text-white">Edit Global Habit</h3>
-              <button onClick={() => setEditingHabit(null)} className="text-slate-500 hover:text-white transition-colors">
+              <button onClick={() => { setEditingHabit(null); setEditError(null) }} className="text-slate-500 hover:text-white transition-colors">
                 <X className="h-5 w-5" />
               </button>
             </div>
@@ -778,6 +781,12 @@ export default function AdminDashboard({
                 </select>
               </div>
             </div>
+            {editError && (
+              <div className="flex items-start gap-2 rounded-lg border border-red-500/20 bg-red-500/10 px-3 py-2">
+                <AlertCircle className="h-4 w-4 text-red-400 shrink-0 mt-0.5" />
+                <p className="text-xs text-red-400">{editError}</p>
+              </div>
+            )}
             <button
               onClick={() => saveGlobalHabitEdit(editingHabit)}
               disabled={savingEdit || !editingHabit.habit_name.trim()}
