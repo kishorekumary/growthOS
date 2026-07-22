@@ -27,6 +27,8 @@ interface Todo {
   is_completed: boolean
 }
 
+const ALL_GOAL_CATEGORIES: GoalCategory[] = ['fitness', 'finance', 'books', 'general', 'career']
+
 const CATEGORY_DOT: Record<GoalCategory, string> = {
   fitness: 'bg-emerald-400',
   finance: 'bg-sky-400',
@@ -35,17 +37,20 @@ const CATEGORY_DOT: Record<GoalCategory, string> = {
   career:  'bg-rose-400',
 }
 
-function GoalsSection({ onNavigate }: { onNavigate: () => void }) {
+function GoalsSection({ onNavigate, categories }: { onNavigate: () => void; categories: GoalCategory[] }) {
   const { data: goals, loading, isOffline } = useCachedQuery<Goal[]>(
-    'quick-reset:goals',
-    (supabase, userId) => supabase
-      .from('user_goals')
-      .select('id, title, category, target_date')
-      .eq('user_id', userId)
-      .eq('is_completed', false)
-      .order('target_date', { ascending: true, nullsFirst: false }),
+    'briefing:goals',
+    (supabase, userId) => categories.length === 0
+      ? Promise.resolve({ data: [], error: null })
+      : supabase
+        .from('user_goals')
+        .select('id, title, category, target_date')
+        .eq('user_id', userId)
+        .eq('is_completed', false)
+        .in('category', categories)
+        .order('target_date', { ascending: true, nullsFirst: false }),
     [],
-    []
+    [categories.join(',')]
   )
 
   return (
@@ -174,10 +179,26 @@ function TodosSection({ onNavigate }: { onNavigate: () => void }) {
 
 export default function OpeningBriefingModal() {
   const [open, setOpen] = useState(false)
+  const [goalCategories, setGoalCategories] = useState<GoalCategory[]>(ALL_GOAL_CATEGORIES)
+  const [showTasks, setShowTasks]           = useState(true)
 
   useEffect(() => {
     const t = setTimeout(() => setOpen(true), SHOW_AFTER_MS)
     return () => clearTimeout(t)
+  }, [])
+
+  // Loaded in parallel with the open-delay above so settings are usually
+  // ready by the time the popup actually appears.
+  useEffect(() => {
+    createSupabaseBrowserClient()
+      .from('briefing_settings')
+      .select('goal_categories, show_tasks')
+      .maybeSingle()
+      .then(({ data }) => {
+        if (!data) return
+        setGoalCategories((data.goal_categories as GoalCategory[] | null) ?? [])
+        setShowTasks(data.show_tasks ?? true)
+      })
   }, [])
 
   if (!open) return null
@@ -199,8 +220,8 @@ export default function OpeningBriefingModal() {
         </div>
 
         <div className="px-5 py-4 max-h-[70vh] overflow-y-auto space-y-5">
-          <GoalsSection onNavigate={() => setOpen(false)} />
-          <TodosSection onNavigate={() => setOpen(false)} />
+          <GoalsSection onNavigate={() => setOpen(false)} categories={goalCategories} />
+          {showTasks && <TodosSection onNavigate={() => setOpen(false)} />}
         </div>
       </div>
     </div>
