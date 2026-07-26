@@ -10,6 +10,7 @@ import {
 import { createSupabaseBrowserClient } from '@/lib/supabase'
 import { useCachedQuery } from '@/hooks/useCachedQuery'
 import { useDraggableFab } from '@/hooks/useDraggableFab'
+import { useHabitCelebration } from '@/hooks/useHabitCelebration'
 import { HabitCategory, HABIT_CATEGORY_META } from '@/lib/habitCategories'
 import { cn } from '@/lib/utils'
 import { computeStreak, todayStr } from '@/lib/habitStreak'
@@ -459,6 +460,7 @@ function HabitPanel() {
   const [missedIds, setMissedIds] = useState<Set<string>>(new Set())
   const [markingId, setMarkingId] = useState<string | null>(null)
   const [userId, setUserId]       = useState<string | null>(null)
+  const { celebrate, celebrationNode } = useHabitCelebration()
 
   const loading = habitsLoading || logsLoading
 
@@ -512,6 +514,7 @@ function HabitPanel() {
         { onConflict: 'habit_id,log_date' }
       ),
     ])
+    celebrate()
     setMarkingId(null)
   }
 
@@ -538,6 +541,7 @@ function HabitPanel() {
 
   return (
     <div className="space-y-3">
+      {celebrationNode}
       <p className="text-xs text-center text-slate-500">
         {doneList.length}/{visible} done today
         {allDone && ' 🎉'}
