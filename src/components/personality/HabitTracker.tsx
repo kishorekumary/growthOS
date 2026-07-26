@@ -383,9 +383,15 @@ export default function HabitTracker() {
     const today = todayStr()
     const log = weekLogs.find(l => l.habit_id === habitId && l.log_date === today)
     if (log) return log.status
-    // Always fall back to last_done_at — covers both when habit_logs is unavailable
-    // and when a done entry exists in personality_habits but is absent from habit_logs
     const habit = habits.find(h => h.id === habitId)
+    // Fall back to last_done_at — covers both when habit_logs is unavailable and
+    // when a done entry exists in personality_habits but is absent from habit_logs.
+    // NEVER for global habits: that row is a single shared column across every
+    // user, so it can never answer "did THIS user complete it today" — only this
+    // user's own habit_logs entry (checked above) can. Falling through here for
+    // a global habit would show it "done" for every user once any one value on
+    // that shared row happens to land on today's date.
+    if (habit?.is_global) return 'pending'
     if (habit?.last_done_at && localDateStr(new Date(habit.last_done_at)) === today) return 'done'
     return 'pending'
   }
