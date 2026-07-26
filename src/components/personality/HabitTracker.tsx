@@ -16,6 +16,7 @@ import {
 } from '@/components/ui/dialog'
 import { cn } from '@/lib/utils'
 import { computeStreak, localDateStr, todayStr } from '@/lib/habitStreak'
+import { useHabitCelebration } from '@/hooks/useHabitCelebration'
 
 type Category  = HabitCategory
 type Frequency = 'daily' | 'weekly'
@@ -316,6 +317,7 @@ export default function HabitTracker() {
   const [markingId, setMarkingId]         = useState<string | null>(null)
   const [keystoneId, setKeystoneId]       = useState<string | null>(null)
   const [editTarget, setEditTarget]       = useState<Habit | null>(null)
+  const { celebrate, celebrationNode } = useHabitCelebration()
 
   // Mutations below need the user id; the cached queries resolve it internally
   // but don't expose it, so we resolve it once here for write call-sites.
@@ -402,6 +404,7 @@ export default function HabitTracker() {
 
     // If habit_logs table missing, mark as unavailable so fallback kicks in
     if (logsRes.error) setLogsUnavail(true)
+    else celebrate()
     setMarkingId(null)
   }
 
@@ -514,6 +517,8 @@ export default function HabitTracker() {
 
   return (
     <div className="space-y-4">
+      {celebrationNode}
+
       {/* Edit modal (controlled) */}
       {editTarget && (
         <EditHabitModal
