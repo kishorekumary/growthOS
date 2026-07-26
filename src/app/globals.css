@@ -98,3 +98,35 @@
   float: left;
   height: 0;
 }
+
+/* ── Habit completion celebration ────────────────────────────────── */
+@keyframes coin-burst-fall {
+  0% {
+    transform: translate(-50%, -50%) translateY(0) rotate(0deg);
+    opacity: 1;
+  }
+  30% {
+    transform: translate(-50%, -50%) translate(var(--coin-left), -60px) rotate(calc(var(--coin-rotate) * 0.3));
+    opacity: 1;
+  }
+  100% {
+    transform: translate(-50%, -50%) translate(var(--coin-left), 220px) rotate(var(--coin-rotate));
+    opacity: 0;
+  }
+}
+
+.coin-burst-item {
+  animation-name: coin-burst-fall;
+  animation-timing-function: ease-in;
+  animation-fill-mode: forwards;
+}
+
+@keyframes coin-burst-pulse {
+  0%   { transform: scale(0.6); opacity: 0; }
+  40%  { transform: scale(1.15); opacity: 1; }
+  100% { transform: scale(1); opacity: 1; }
+}
+
+.coin-burst-pulse {
+  animation: coin-burst-pulse 0.4s ease-out forwards;
+}
