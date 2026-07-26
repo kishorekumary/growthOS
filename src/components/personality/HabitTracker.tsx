@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react'
 import {
   Flame, Plus, Trash2, Check, Loader2, AlertCircle,
-  RotateCcw, XCircle, Trophy, Pencil, Crown, Globe,
+  RotateCcw, XCircle, Trophy, Pencil, Crown, Globe, X,
 } from 'lucide-react'
 import { createSupabaseBrowserClient } from '@/lib/supabase'
 import { useCachedQuery } from '@/hooks/useCachedQuery'
@@ -15,7 +15,7 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger,
 } from '@/components/ui/dialog'
 import { cn } from '@/lib/utils'
-import { computeStreak, localDateStr, todayStr } from '@/lib/habitStreak'
+import { computeStreak, localDateStr, todayStr, yesterdayStr, isGraceActive } from '@/lib/habitStreak'
 import { useHabitCelebration } from '@/hooks/useHabitCelebration'
 
 type Category  = HabitCategory
@@ -317,6 +317,9 @@ export default function HabitTracker() {
   const [markingId, setMarkingId]         = useState<string | null>(null)
   const [keystoneId, setKeystoneId]       = useState<string | null>(null)
   const [editTarget, setEditTarget]       = useState<Habit | null>(null)
+  const [bannerExpanded, setBannerExpanded]     = useState(false)
+  const [bannerDismissed, setBannerDismissedRaw] = useState(false)
+  const [catchUpId, setCatchUpId]               = useState<string | null>(null)
   const { celebrate, celebrationNode } = useHabitCelebration()
 
   // Mutations below need the user id; the cached queries resolve it internally
@@ -325,6 +328,10 @@ export default function HabitTracker() {
     createSupabaseBrowserClient().auth.getSession().then(({ data: { session } }) => {
       setUserId(session?.user?.id ?? null)
     })
+  }, [])
+
+  useEffect(() => {
+    try { setBannerDismissedRaw(localStorage.getItem(`habit_grace_dismissed_${todayStr()}`) === '1') } catch {}
   }, [])
 
   const {
@@ -353,6 +360,20 @@ export default function HabitTracker() {
       .gte('log_date', weekStart),
     [],
     [weekStart]
+  )
+
+  const yesterday = yesterdayStr()
+  const {
+    data: yesterdayLogs, isOffline: yesterdayLogsOffline, setData: setYesterdayLogs,
+  } = useCachedQuery<HabitLog[]>(
+    `habit-logs:${yesterday}`,
+    (supabase, userId) => supabase
+      .from('habit_logs')
+      .select('habit_id, log_date, status')
+      .eq('user_id', userId)
+      .eq('log_date', yesterday),
+    [],
+    [yesterday]
   )
 
   const loading   = habitsLoading || logsLoading
@@ -406,6 +427,46 @@ export default function HabitTracker() {
     if (logsRes.error) setLogsUnavail(true)
     else celebrate()
     setMarkingId(null)
+  }
+
+  function dismissBanner() {
+    setBannerDismissedRaw(true)
+    try { localStorage.setItem(`habit_grace_dismissed_${todayStr()}`, '1') } catch {}
+  }
+
+  async function markDoneForYesterday(habit: Habit) {
+    if (catchUpId || !userId) return
+    setCatchUpId(habit.id)
+    const yesterdayDate = new Date()
+    yesterdayDate.setDate(yesterdayDate.getDate() - 1)
+    const newStreak = computeStreak(habit.streak_count, habit.last_done_at, habit.frequency, yesterdayDate)
+    const yesterdayIso = yesterdayDate.toISOString()
+
+    setHabits(prev => prev.map(h => h.id === habit.id
+      ? { ...h, streak_count: newStreak, longest_streak: Math.max(newStreak, h.longest_streak), last_done_at: yesterdayIso }
+      : h
+    ))
+    setYesterdayLogs(prev => [
+      ...prev.filter(l => l.habit_id !== habit.id),
+      { habit_id: habit.id, log_date: yesterday, status: 'done' },
+    ])
+
+    const supabase = createSupabaseBrowserClient()
+    const [, logsRes] = await Promise.all([
+      habit.is_global ? Promise.resolve({ error: null }) : supabase.from('personality_habits').update({
+        streak_count:   newStreak,
+        longest_streak: Math.max(newStreak, habit.longest_streak),
+        last_done_at:   yesterdayIso,
+        updated_at:     new Date().toISOString(),
+      }).eq('id', habit.id),
+      supabase.from('habit_logs').upsert(
+        { user_id: userId, habit_id: habit.id, log_date: yesterday, status: 'done' },
+        { onConflict: 'habit_id,user_id,log_date' }
+      ),
+    ])
+
+    if (!logsRes.error) celebrate()
+    setCatchUpId(null)
   }
 
   async function markMissed(habit: Habit) {
@@ -481,6 +542,11 @@ export default function HabitTracker() {
     setKeystoneId(null)
   }
 
+  const graceOpen = isGraceActive() && !yesterdayLogsOffline
+  const catchableHabits = graceOpen
+    ? habits.filter(h => h.frequency === 'daily' && !yesterdayLogs.some(l => l.habit_id === h.id && l.status === 'done'))
+    : []
+
   if (loading) return (
     <div className="flex items-center justify-center py-12">
       <Loader2 className="h-5 w-5 animate-spin text-slate-500" />
@@ -518,6 +584,45 @@ export default function HabitTracker() {
   return (
     <div className="space-y-4">
       {celebrationNode}
+
+      {/* Grace-period catch-up banner */}
+      {catchableHabits.length > 0 && !bannerDismissed && (
+        <div className="rounded-xl border border-amber-500/25 bg-amber-500/5 overflow-hidden">
+          <button
+            onClick={() => setBannerExpanded(e => !e)}
+            className="w-full flex items-center justify-between gap-3 px-4 py-3 text-left"
+          >
+            <span className="text-sm text-amber-200">
+              {catchableHabits.length} habit{catchableHabits.length > 1 ? 's' : ''} missed yesterday — grace ends at 12:00 PM
+            </span>
+            <span
+              onClick={e => { e.stopPropagation(); dismissBanner() }}
+              role="button"
+              aria-label="Dismiss"
+              className="text-amber-400/60 hover:text-amber-300 shrink-0"
+            >
+              <X className="h-4 w-4" />
+            </span>
+          </button>
+          {bannerExpanded && (
+            <div className="border-t border-amber-500/20 px-4 py-3 space-y-2">
+              {catchableHabits.map(habit => (
+                <div key={habit.id} className="flex items-center justify-between gap-3">
+                  <span className="text-sm text-slate-300 truncate">{habit.habit_name}</span>
+                  <button
+                    onClick={() => markDoneForYesterday(habit)}
+                    disabled={catchUpId === habit.id}
+                    className="shrink-0 flex items-center gap-1 rounded-lg bg-amber-600 hover:bg-amber-700 px-3 py-1.5 text-xs font-medium text-white transition-colors disabled:opacity-50"
+                  >
+                    {catchUpId === habit.id ? <Loader2 className="h-3 w-3 animate-spin" /> : <Check className="h-3 w-3" />}
+                    Mark done
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Edit modal (controlled) */}
       {editTarget && (
