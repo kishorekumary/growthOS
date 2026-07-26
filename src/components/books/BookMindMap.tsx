@@ -12,6 +12,10 @@ const MAX_W  = 540
 const H_GAP  = 440
 const V_GAP  = 96
 const DEPTH_COLORS = ['#7c3aed', '#06b6d4', '#10b981', '#f59e0b', '#ef4444', '#3b82f6']
+// Matches the edge's own `mindmapEdgeDraw 0.7s` animation duration below — a
+// child node's fade-in is offset by this much so the reveal reads as
+// parent → arrow (draws) → child (appears), not both at once.
+const EDGE_DRAW_MS = 700
 
 function nodeWidth(label: string): number {
   return Math.max(MIN_W, Math.min(MAX_W, label.length * 9.5 + 110))
@@ -370,6 +374,8 @@ export default function BookMindMap({ bookId, bookTitle, initialJson, onClose, r
   }
 
   function expandAll() {
+    // Expand All reveals the whole tree in one shot — no per-node stagger.
+    skipStagger.current = true
     setCollapsedNodes(new Set())
   }
 
@@ -414,11 +420,16 @@ export default function BookMindMap({ bookId, bookTitle, initialJson, onClose, r
   }, [nodes, collapsedNodes])
 
   // ── Stagger entrance animation ────────────────────────────
-  // Value stored is the computed delay in ms (not an index).
+  // staggerMap holds each edge's draw-start delay; nodeDelayMap holds each
+  // node's fade-in-start delay (offset later than its edge so the reveal
+  // reads as parent → arrow → child instead of both animating at once).
   const [staggerMap, setStaggerMap] = useState<Map<string, number>>(new Map())
+  const [nodeDelayMap, setNodeDelayMap] = useState<Map<string, number>>(new Map())
   const prevVisibleIds  = useRef<Set<string>>(new Set())
   // First load uses a quick cascade; user-triggered expands use 800ms per child.
   const isFirstLoad     = useRef(true)
+  // Set by expandAll() to bypass the stagger entirely for that one batch.
+  const skipStagger     = useRef(false)
 
   useEffect(() => {
     const currentIds = new Set(visibleNodes.map(n => n.id))
@@ -430,16 +441,49 @@ export default function BookMindMap({ bookId, bookTitle, initialJson, onClose, r
 
     if (newNodes.length === 0 && removedIds.length === 0) return
 
+    // Expand All: reveal everything immediately, no stagger.
+    if (skipStagger.current) {
+      skipStagger.current = false
+      setStaggerMap(prev => {
+        const m = new Map(prev)
+        removedIds.forEach(id => m.delete(id))
+        newNodes.forEach(node => m.set(node.id, 0))
+        return m
+      })
+      setNodeDelayMap(prev => {
+        const m = new Map(prev)
+        removedIds.forEach(id => m.delete(id))
+        newNodes.forEach(node => m.set(node.id, 0))
+        return m
+      })
+      return
+    }
+
     // 120 ms between nodes on first open; 800 ms on each subsequent expand click
     const stepMs = isFirstLoad.current ? 120 : 800
     isFirstLoad.current = false
 
+    // Depth-first, then top-to-bottom: a batch can span multiple tree levels
+    // at once (e.g. re-expanding an ancestor whose child branch was already
+    // toggled open before the ancestor got collapsed) — sorting by y alone
+    // can then place a descendant before its own ancestor. Depth first keeps
+    // every parent ahead of its own descendants regardless of batch shape.
+    const sorted = [...newNodes].sort((a, b) => {
+      const da = getDepth(a.id, nodesRef.current)
+      const db = getDepth(b.id, nodesRef.current)
+      return da - db || a.y - b.y
+    })
+
     setStaggerMap(prev => {
       const m = new Map(prev)
       removedIds.forEach(id => m.delete(id))
-      // Sort top-to-bottom by y so first child (topmost) appears first
-      const sorted = [...newNodes].sort((a, b) => a.y - b.y)
       sorted.forEach((node, idx) => m.set(node.id, idx * stepMs))
+      return m
+    })
+    setNodeDelayMap(prev => {
+      const m = new Map(prev)
+      removedIds.forEach(id => m.delete(id))
+      sorted.forEach((node, idx) => m.set(node.id, idx * stepMs + EDGE_DRAW_MS))
       return m
     })
   }, [visibleNodes])
@@ -1537,9 +1581,12 @@ export default function BookMindMap({ bookId, bookTitle, initialJson, onClose, r
                   // Hide until staggerMap is populated (effect fires after first paint).
                   // Once map is ready, animation-fill-mode:both keeps opacity:0 during
                   // the stagger delay, then animates in. No flash, proper sequencing.
+                  // nodeDelayMap (not staggerMap) drives the node's own delay — it's
+                  // offset past the incoming edge's draw time (see EDGE_DRAW_MS) so
+                  // the reveal reads as parent → arrow → child, not simultaneous.
                   ...(staggerMap.size > 0 ? {
                     animation: `mindmapFadeIn 0.85s cubic-bezier(0.16,1,0.3,1) both`,
-                    animationDelay: `${staggerMap.get(node.id) ?? 0}ms`,
+                    animationDelay: `${nodeDelayMap.get(node.id) ?? 0}ms`,
                   } : { opacity: 0 }),
                   borderColor: isBeingMoved
                     ? 'rgba(6,182,212,0.7)'
