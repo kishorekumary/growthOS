@@ -15,6 +15,7 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger,
 } from '@/components/ui/dialog'
 import { cn } from '@/lib/utils'
+import { computeStreak, localDateStr, todayStr } from '@/lib/habitStreak'
 
 type Category  = HabitCategory
 type Frequency = 'daily' | 'weekly'
@@ -44,16 +45,6 @@ const CATEGORY_STYLES: Record<Category, { label: string; badge: string }> = Obje
 
 const FREQUENCY_LABELS: Record<Frequency, string> = { daily: 'Daily', weekly: 'Weekly' }
 
-function localDateStr(d = new Date()): string {
-  return [
-    d.getFullYear(),
-    String(d.getMonth() + 1).padStart(2, '0'),
-    String(d.getDate()).padStart(2, '0'),
-  ].join('-')
-}
-
-function todayStr() { return localDateStr() }
-
 function readTodayMissed(): string[] {
   try { return JSON.parse(localStorage.getItem(`habit_missed_${todayStr()}`) ?? '[]') } catch { return [] }
 }
@@ -76,23 +67,6 @@ function getWeekStart(): string {
 function daysElapsedThisWeek(): number {
   const d = new Date().getDay()
   return d === 0 ? 7 : d
-}
-
-function computeStreak(current: number, lastDoneAt: string | null, frequency: Frequency): number {
-  if (!lastDoneAt) return 1
-  const last = new Date(lastDoneAt)
-  last.setHours(0, 0, 0, 0)
-  const today = new Date()
-  today.setHours(0, 0, 0, 0)
-  const diffDays = Math.round((today.getTime() - last.getTime()) / 86400000)
-  if (frequency === 'daily') {
-    if (diffDays === 0) return current
-    if (diffDays === 1) return current + 1
-    return 1
-  }
-  if (diffDays === 0) return current
-  if (diffDays <= 7) return current + 1
-  return 1
 }
 
 // ─── Add Habit Modal ──────────────────────────────────────────
