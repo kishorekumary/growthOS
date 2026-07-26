@@ -12,6 +12,7 @@ import { useCachedQuery } from '@/hooks/useCachedQuery'
 import { useDraggableFab } from '@/hooks/useDraggableFab'
 import { HabitCategory, HABIT_CATEGORY_META } from '@/lib/habitCategories'
 import { cn } from '@/lib/utils'
+import { computeStreak, todayStr } from '@/lib/habitStreak'
 import RichTextEditor from './RichTextEditor'
 
 type Panel = 'voice' | 'meal' | 'workout' | 'habit' | 'finance' | 'journal' | 'task'
@@ -28,28 +29,6 @@ interface Habit {
   last_done_at: string | null
   frequency: 'daily' | 'weekly'
   is_keystone: boolean
-}
-
-// ─── Utils ────────────────────────────────────────────────────────
-
-function todayStr() {
-  const d = new Date()
-  return [d.getFullYear(), String(d.getMonth() + 1).padStart(2, '0'), String(d.getDate()).padStart(2, '0')].join('-')
-}
-
-function computeStreak(current: number, lastDoneAt: string | null, freq: 'daily' | 'weekly'): number {
-  if (!lastDoneAt) return 1
-  const last  = new Date(lastDoneAt); last.setHours(0, 0, 0, 0)
-  const today = new Date();           today.setHours(0, 0, 0, 0)
-  const diff  = Math.round((today.getTime() - last.getTime()) / 86400000)
-  if (freq === 'daily') {
-    if (diff === 0) return current
-    if (diff === 1) return current + 1
-    return 1
-  }
-  if (diff === 0) return current
-  if (diff <= 7)  return current + 1
-  return 1
 }
 
 // ─── Image resize (prevents 413 on large phone photos) ───────────
