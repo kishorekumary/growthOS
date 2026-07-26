@@ -654,14 +654,14 @@ function HabitPanel() {
               onClick={() => markDone(habit)}
               disabled={isDone || !!markingId}
               className={cn(
-                'w-full flex items-center gap-3 rounded-xl border px-4 py-3 text-left transition-all',
+                'w-full flex items-start gap-3 rounded-xl border px-4 py-3 text-left transition-all',
                 isDone
                   ? 'border-emerald-500/20 bg-emerald-500/5 opacity-60 cursor-default'
                   : 'border-white/10 bg-white/5 hover:border-emerald-500/30 hover:bg-emerald-500/8 active:scale-[0.98]',
               )}
             >
               <div className={cn(
-                'flex h-6 w-6 shrink-0 items-center justify-center rounded-full border-2 transition-all',
+                'flex h-6 w-6 shrink-0 items-center justify-center rounded-full border-2 transition-all mt-0.5',
                 isDone ? 'border-emerald-400 bg-emerald-400' : 'border-slate-600',
               )}>
                 {markingId === habit.id
@@ -671,7 +671,7 @@ function HabitPanel() {
                     : null}
               </div>
               <div className="flex-1 min-w-0">
-                <p className={cn('text-sm font-medium truncate', isDone ? 'text-slate-500 line-through' : 'text-white')}>
+                <p className={cn('text-sm font-medium line-clamp-2', isDone ? 'text-slate-500 line-through' : 'text-white')}>
                   {habit.habit_name}
                 </p>
                 <div className="flex items-center gap-1.5 mt-0.5">

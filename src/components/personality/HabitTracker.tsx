@@ -781,7 +781,7 @@ export default function HabitTracker() {
                     <Crown className="h-3.5 w-3.5 shrink-0 text-amber-400" />
                   )}
                   <p className={cn(
-                    'text-sm font-medium truncate',
+                    'text-sm font-medium line-clamp-2',
                     habit.is_keystone && status === 'pending' && 'text-amber-100',
                     !habit.is_keystone && status === 'pending' && 'text-white',
                     status === 'done' && 'text-slate-500 line-through',
@@ -895,7 +895,7 @@ export default function HabitTracker() {
                       </>}
                 </button>
                 <div className="flex-1 min-w-0 space-y-0.5">
-                  <p className="text-sm text-slate-500 line-through truncate">{habit.habit_name}</p>
+                  <p className="text-sm text-slate-500 line-through line-clamp-2">{habit.habit_name}</p>
                   <span className={cn('text-xs px-1.5 py-0.5 rounded-full', cat.badge)}>
                     {cat.label}
                   </span>

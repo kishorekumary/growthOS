@@ -66,7 +66,10 @@ export default function FloatingTimer() {
   return (
     <div
       ref={widgetRef}
-      style={{ left: pos.x, top: pos.y, position: 'fixed', zIndex: 50 }}
+      // Below every modal backdrop and the mobile bottom nav (all z-50), so this
+      // widget is fully hidden behind them instead of poking through a
+      // semi-transparent backdrop at whatever edge it was last dragged to.
+      style={{ left: pos.x, top: pos.y, position: 'fixed', zIndex: 30 }}
     >
       <div className="flex items-center rounded-2xl border border-white/15 bg-[#0d0d1a]/95 backdrop-blur-md shadow-2xl">
 
