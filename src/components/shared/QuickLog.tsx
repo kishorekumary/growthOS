@@ -814,6 +814,7 @@ function VoicePanel({ onDone }: { onDone: () => void }) {
   const [matchedHabit, setMatchedHabit]   = useState<Habit | null>(null)
   const [nutritionData, setNutritionData] = useState<NutritionEstimate | null>(null)
   const [parsingMsg, setParsingMsg]       = useState('Understanding your command…')
+  const { celebrate, celebrationNode } = useHabitCelebration()
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const recognitionRef  = useRef<any>(null)
@@ -1017,6 +1018,7 @@ function VoicePanel({ onDone }: { onDone: () => void }) {
             { onConflict: 'habit_id,log_date' }
           ),
         ])
+        celebrate()
       } else if (result.type === 'journal') {
         await supabase.from('journal_entries').insert({
           title:      result.title?.trim() || null,
@@ -1075,6 +1077,7 @@ function VoicePanel({ onDone }: { onDone: () => void }) {
 
   return (
     <div className="space-y-5">
+      {celebrationNode}
       {/* Instruction */}
       {state === 'idle' && (
         <p className="text-xs text-center text-slate-500">
