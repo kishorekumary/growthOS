@@ -364,7 +364,7 @@ export default function HabitTracker() {
 
   const yesterday = yesterdayStr()
   const {
-    data: yesterdayLogs, isOffline: yesterdayLogsOffline, setData: setYesterdayLogs,
+    data: yesterdayLogs, loading: yesterdayLogsLoading, isOffline: yesterdayLogsOffline, setData: setYesterdayLogs,
   } = useCachedQuery<HabitLog[]>(
     `habit-logs:${yesterday}`,
     (supabase, userId) => supabase
@@ -436,6 +436,21 @@ export default function HabitTracker() {
 
   async function markDoneForYesterday(habit: Habit) {
     if (catchUpId || !userId) return
+
+    // Defense-in-depth: never roll last_done_at backwards. If the habit was
+    // already completed today (or otherwise has a last_done_at on/after
+    // yesterday), catching up "yesterday" would corrupt the streak — the UI
+    // filter should already exclude this habit from the banner, but this
+    // write is consequential enough to guard independently.
+    const yesterdayMidnight = new Date()
+    yesterdayMidnight.setDate(yesterdayMidnight.getDate() - 1)
+    yesterdayMidnight.setHours(0, 0, 0, 0)
+    if (habit.last_done_at) {
+      const lastMidnight = new Date(habit.last_done_at)
+      lastMidnight.setHours(0, 0, 0, 0)
+      if (lastMidnight.getTime() >= yesterdayMidnight.getTime()) return
+    }
+
     setCatchUpId(habit.id)
     const yesterdayDate = new Date()
     yesterdayDate.setDate(yesterdayDate.getDate() - 1)
@@ -450,6 +465,15 @@ export default function HabitTracker() {
       ...prev.filter(l => l.habit_id !== habit.id),
       { habit_id: habit.id, log_date: yesterday, status: 'done' },
     ])
+    // Only touch weekLogs (which feeds the weekly score card) when yesterday
+    // actually falls within the currently-fetched week range — i.e. skip this
+    // when today is Monday, since then yesterday belongs to last week.
+    if (yesterday >= weekStart) {
+      setWeekLogs(prev => [
+        ...prev.filter(l => !(l.habit_id === habit.id && l.log_date === yesterday)),
+        { habit_id: habit.id, log_date: yesterday, status: 'done' },
+      ])
+    }
 
     const supabase = createSupabaseBrowserClient()
     const [, logsRes] = await Promise.all([
@@ -542,9 +566,9 @@ export default function HabitTracker() {
     setKeystoneId(null)
   }
 
-  const graceOpen = isGraceActive() && !yesterdayLogsOffline
+  const graceOpen = isGraceActive() && !yesterdayLogsOffline && !yesterdayLogsLoading
   const catchableHabits = graceOpen
-    ? habits.filter(h => h.frequency === 'daily' && !yesterdayLogs.some(l => l.habit_id === h.id && l.status === 'done'))
+    ? habits.filter(h => h.frequency === 'daily' && getStatus(h.id) !== 'done' && !yesterdayLogs.some(l => l.habit_id === h.id && l.status === 'done'))
     : []
 
   if (loading) return (

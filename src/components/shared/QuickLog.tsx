@@ -458,7 +458,7 @@ function HabitPanel() {
 
   const yesterday = yesterdayStr()
   const {
-    data: yesterdayLogs, isOffline: yesterdayLogsOffline, refetch: refetchYesterday,
+    data: yesterdayLogs, loading: yesterdayLogsLoading, isOffline: yesterdayLogsOffline, refetch: refetchYesterday,
   } = useCachedQuery<{ habit_id: string; status: string }[]>(
     `habit_logs:${yesterday}`,
     (supabase, userId) => supabase.from('habit_logs')
@@ -530,7 +530,7 @@ function HabitPanel() {
       }).eq('id', habit.id),
       supabase.from('habit_logs').upsert(
         { user_id: userId, habit_id: habit.id, log_date: today, status: 'done' },
-        { onConflict: 'habit_id,log_date' }
+        { onConflict: 'habit_id,user_id,log_date' }
       ),
     ])
     celebrate()
@@ -544,6 +544,21 @@ function HabitPanel() {
 
   async function markDoneForYesterday(habit: Habit) {
     if (catchUpId || !userId) return
+
+    // Defense-in-depth: never roll last_done_at backwards. If the habit was
+    // already completed today (or otherwise has a last_done_at on/after
+    // yesterday), catching up "yesterday" would corrupt the streak — the UI
+    // filter should already exclude this habit from the banner, but this
+    // write is consequential enough to guard independently.
+    const yesterdayMidnight = new Date()
+    yesterdayMidnight.setDate(yesterdayMidnight.getDate() - 1)
+    yesterdayMidnight.setHours(0, 0, 0, 0)
+    if (habit.last_done_at) {
+      const lastMidnight = new Date(habit.last_done_at)
+      lastMidnight.setHours(0, 0, 0, 0)
+      if (lastMidnight.getTime() >= yesterdayMidnight.getTime()) return
+    }
+
     setCatchUpId(habit.id)
     const yesterdayDate = new Date()
     yesterdayDate.setDate(yesterdayDate.getDate() - 1)
@@ -572,9 +587,9 @@ function HabitPanel() {
     setCatchUpId(null)
   }
 
-  const graceOpen = isGraceActive() && !yesterdayLogsOffline
+  const graceOpen = isGraceActive() && !yesterdayLogsOffline && !yesterdayLogsLoading
   const catchableHabits = graceOpen
-    ? habits.filter(h => h.frequency === 'daily' && !yesterdayLogs.some(l => l.habit_id === h.id && l.status === 'done'))
+    ? habits.filter(h => h.frequency === 'daily' && !doneIds.has(h.id) && !yesterdayLogs.some(l => l.habit_id === h.id && l.status === 'done'))
     : []
 
   if (loading) return <div className="flex justify-center py-8"><Loader2 className="h-5 w-5 animate-spin text-slate-500" /></div>
@@ -1099,7 +1114,7 @@ function VoicePanel({ onDone }: { onDone: () => void }) {
           }).eq('id', h.id),
           supabase.from('habit_logs').upsert(
             { user_id: uid, habit_id: h.id, log_date: today, status: 'done' },
-            { onConflict: 'habit_id,log_date' }
+            { onConflict: 'habit_id,user_id,log_date' }
           ),
         ])
         celebrate()
@@ -1137,6 +1152,7 @@ function VoicePanel({ onDone }: { onDone: () => void }) {
 
   if (state === 'done') return (
     <div className="flex flex-col items-center gap-3 py-10">
+      {celebrationNode}
       <div className="flex h-14 w-14 items-center justify-center rounded-full bg-emerald-500/20 border border-emerald-500/30">
         <Check className="h-7 w-7 text-emerald-400" />
       </div>
