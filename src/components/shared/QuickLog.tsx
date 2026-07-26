@@ -13,7 +13,7 @@ import { useDraggableFab } from '@/hooks/useDraggableFab'
 import { useHabitCelebration } from '@/hooks/useHabitCelebration'
 import { HabitCategory, HABIT_CATEGORY_META } from '@/lib/habitCategories'
 import { cn } from '@/lib/utils'
-import { computeStreak, todayStr } from '@/lib/habitStreak'
+import { computeStreak, todayStr, yesterdayStr, isGraceActive } from '@/lib/habitStreak'
 import RichTextEditor from './RichTextEditor'
 
 type Panel = 'voice' | 'meal' | 'workout' | 'habit' | 'finance' | 'journal' | 'task'
@@ -456,10 +456,25 @@ function HabitPanel() {
     [today]
   )
 
+  const yesterday = yesterdayStr()
+  const {
+    data: yesterdayLogs, isOffline: yesterdayLogsOffline, refetch: refetchYesterday,
+  } = useCachedQuery<{ habit_id: string; status: string }[]>(
+    `habit_logs:${yesterday}`,
+    (supabase, userId) => supabase.from('habit_logs')
+      .select('habit_id, status')
+      .eq('user_id', userId)
+      .eq('log_date', yesterday),
+    [],
+    [yesterday]
+  )
+
   const [doneIds, setDoneIds]     = useState<Set<string>>(new Set())
   const [missedIds, setMissedIds] = useState<Set<string>>(new Set())
   const [markingId, setMarkingId] = useState<string | null>(null)
   const [userId, setUserId]       = useState<string | null>(null)
+  const [catchUpId, setCatchUpId]     = useState<string | null>(null)
+  const [bannerDismissed, setBannerDismissedRaw] = useState(false)
   const { celebrate, celebrationNode } = useHabitCelebration()
 
   const loading = habitsLoading || logsLoading
@@ -468,6 +483,10 @@ function HabitPanel() {
     createSupabaseBrowserClient().auth.getSession()
       .then(({ data: { session } }) => setUserId(session?.user?.id ?? null))
   }, [])
+
+  useEffect(() => {
+    try { setBannerDismissedRaw(localStorage.getItem(`habit_grace_dismissed_${today}`) === '1') } catch {}
+  }, [today])
 
   useEffect(() => {
     const done   = new Set<string>()
@@ -518,6 +537,46 @@ function HabitPanel() {
     setMarkingId(null)
   }
 
+  function dismissBanner() {
+    setBannerDismissedRaw(true)
+    try { localStorage.setItem(`habit_grace_dismissed_${today}`, '1') } catch {}
+  }
+
+  async function markDoneForYesterday(habit: Habit) {
+    if (catchUpId || !userId) return
+    setCatchUpId(habit.id)
+    const yesterdayDate = new Date()
+    yesterdayDate.setDate(yesterdayDate.getDate() - 1)
+    const newStreak = computeStreak(habit.streak_count, habit.last_done_at, habit.frequency, yesterdayDate)
+    const yesterdayIso = yesterdayDate.toISOString()
+
+    setHabits(prev => prev.map(h => h.id === habit.id
+      ? { ...h, streak_count: newStreak, longest_streak: Math.max(newStreak, h.longest_streak), last_done_at: yesterdayIso }
+      : h
+    ))
+
+    const supabase = createSupabaseBrowserClient()
+    const { error } = await supabase.from('habit_logs').upsert(
+      { user_id: userId, habit_id: habit.id, log_date: yesterday, status: 'done' },
+      { onConflict: 'habit_id,user_id,log_date' }
+    )
+    await supabase.from('personality_habits').update({
+      streak_count:   newStreak,
+      longest_streak: Math.max(newStreak, habit.longest_streak),
+      last_done_at:   yesterdayIso,
+      updated_at:     new Date().toISOString(),
+    }).eq('id', habit.id)
+
+    if (!error) celebrate()
+    refetchYesterday()
+    setCatchUpId(null)
+  }
+
+  const graceOpen = isGraceActive() && !yesterdayLogsOffline
+  const catchableHabits = graceOpen
+    ? habits.filter(h => h.frequency === 'daily' && !yesterdayLogs.some(l => l.habit_id === h.id && l.status === 'done'))
+    : []
+
   if (loading) return <div className="flex justify-center py-8"><Loader2 className="h-5 w-5 animate-spin text-slate-500" /></div>
 
   if (habits.length === 0 && isOffline) return (
@@ -542,6 +601,31 @@ function HabitPanel() {
   return (
     <div className="space-y-3">
       {celebrationNode}
+      {catchableHabits.length > 0 && !bannerDismissed && (
+        <div className="rounded-lg border border-amber-500/25 bg-amber-500/5 px-3 py-2 space-y-2">
+          <div className="flex items-center justify-between gap-2">
+            <p className="text-xs text-amber-200">
+              {catchableHabits.length} missed yesterday — grace ends 12 PM
+            </p>
+            <button onClick={dismissBanner} aria-label="Dismiss" className="text-amber-400/60 hover:text-amber-300 shrink-0">
+              <X className="h-3.5 w-3.5" />
+            </button>
+          </div>
+          {catchableHabits.map(habit => (
+            <div key={habit.id} className="flex items-center justify-between gap-2">
+              <span className="text-xs text-slate-300 truncate">{habit.habit_name}</span>
+              <button
+                onClick={() => markDoneForYesterday(habit)}
+                disabled={catchUpId === habit.id}
+                className="shrink-0 flex items-center gap-1 rounded-md bg-amber-600 hover:bg-amber-700 px-2 py-1 text-[11px] font-medium text-white transition-colors disabled:opacity-50"
+              >
+                {catchUpId === habit.id ? <Loader2 className="h-3 w-3 animate-spin" /> : <Check className="h-3 w-3" />}
+                Mark done
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
       <p className="text-xs text-center text-slate-500">
         {doneList.length}/{visible} done today
         {allDone && ' 🎉'}
