@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation'
 import {
   Plus, X, Utensils, Dumbbell, CheckSquare, CreditCard, BookOpen,
   Loader2, Check, Camera, Image as ImageIcon, Zap, Sparkles, AlertCircle, CheckCircle2,
-  Mic, MicOff, RefreshCw, ClipboardList,
+  Mic, MicOff, RefreshCw, ClipboardList, Moon,
 } from 'lucide-react'
 import { createSupabaseBrowserClient } from '@/lib/supabase'
 import { useCachedQuery } from '@/hooks/useCachedQuery'
@@ -16,7 +16,7 @@ import { cn } from '@/lib/utils'
 import { computeStreak, todayStr, yesterdayStr, isGraceActive } from '@/lib/habitStreak'
 import RichTextEditor from './RichTextEditor'
 
-type Panel = 'voice' | 'meal' | 'workout' | 'habit' | 'finance' | 'journal' | 'task'
+type Panel = 'voice' | 'meal' | 'workout' | 'habit' | 'finance' | 'journal' | 'task' | 'sleep'
 type MealType    = 'breakfast' | 'lunch' | 'dinner' | 'snack' | 'drink'
 type WorkoutType = 'cardio' | 'strength' | 'yoga' | 'sports' | 'rest'
 type TxnType     = 'expense' | 'income' | 'savings'
@@ -423,6 +423,98 @@ function WorkoutPanel({ onDone }: { onDone: () => void }) {
       >
         {saving && <Loader2 className="h-4 w-4 animate-spin" />}
         Log Workout
+      </button>
+    </div>
+  )
+}
+
+// ─── Sleep Panel ──────────────────────────────────────────────────
+
+const SLEEP_QUALITY_LABELS = ['Poor', 'Fair', 'Good', 'Great', 'Perfect']
+
+function sleepHours(bedtime: string, wakeTime: string): number {
+  const [bh, bm] = bedtime.split(':').map(Number)
+  const [wh, wm] = wakeTime.split(':').map(Number)
+  let mins = (wh * 60 + wm) - (bh * 60 + bm)
+  if (mins < 0) mins += 24 * 60
+  return Math.round((mins / 60) * 10) / 10
+}
+
+function SleepPanel({ onDone }: { onDone: () => void }) {
+  const [bedtime, setBedtime]   = useState('22:30')
+  const [wakeTime, setWakeTime] = useState('06:30')
+  const [quality, setQuality]   = useState(0)
+  const [saving, setSaving]     = useState(false)
+  const [saved, setSaved]       = useState(false)
+
+  async function handleSave() {
+    setSaving(true)
+    const supabase = createSupabaseBrowserClient()
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) { setSaving(false); return }
+    await supabase.from('sleep_logs').upsert({
+      user_id:    user.id,
+      sleep_date: todayStr(),
+      bedtime,
+      wake_time:  wakeTime,
+      quality:    quality || null,
+      updated_at: new Date().toISOString(),
+    }, { onConflict: 'user_id,sleep_date' })
+    setSaving(false); setSaved(true)
+    setTimeout(onDone, 900)
+  }
+
+  if (saved) return (
+    <div className="flex flex-col items-center gap-3 py-8">
+      <div className="flex h-12 w-12 items-center justify-center rounded-full bg-indigo-500/20 border border-indigo-500/30">
+        <Check className="h-6 w-6 text-indigo-400" />
+      </div>
+      <p className="text-sm text-slate-300">Sleep logged!</p>
+    </div>
+  )
+
+  return (
+    <div className="space-y-3.5">
+      <div className="grid grid-cols-2 gap-2">
+        <div className="space-y-1.5">
+          <label className="text-xs text-slate-500">Bedtime</label>
+          <input type="time" value={bedtime} onChange={e => setBedtime(e.target.value)}
+            className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2.5 text-sm text-white focus:outline-none focus:border-indigo-500" />
+        </div>
+        <div className="space-y-1.5">
+          <label className="text-xs text-slate-500">Wake time</label>
+          <input type="time" value={wakeTime} onChange={e => setWakeTime(e.target.value)}
+            className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2.5 text-sm text-white focus:outline-none focus:border-indigo-500" />
+        </div>
+      </div>
+
+      {bedtime && wakeTime && (
+        <p className="text-xs text-indigo-300 font-medium">
+          ≈ {sleepHours(bedtime, wakeTime)} hours of sleep
+        </p>
+      )}
+
+      <div className="flex gap-1.5">
+        {SLEEP_QUALITY_LABELS.map((label, i) => {
+          const n = i + 1
+          return (
+            <button key={n} type="button" onClick={() => setQuality(quality === n ? 0 : n)}
+              className={cn(
+                'flex-1 h-9 rounded-lg border text-xs font-medium transition-all',
+                quality === n
+                  ? 'border-indigo-500 bg-indigo-500/20 text-white'
+                  : 'border-white/10 bg-white/5 text-slate-400 hover:border-white/20',
+              )}>
+              {label}
+            </button>
+          )
+        })}
+      </div>
+
+      <button onClick={handleSave} disabled={saving}
+        className="w-full flex items-center justify-center gap-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed px-4 py-3 text-sm font-semibold text-white transition-all">
+        {saving && <Loader2 className="h-4 w-4 animate-spin" />}
+        Log Sleep
       </button>
     </div>
   )
@@ -1430,6 +1522,12 @@ const TABS: {
     route: '/fitness',
   },
   {
+    id: 'sleep', label: 'Sleep', Icon: Moon,
+    activeClass:   'border-indigo-500 bg-indigo-500/20 text-white',
+    inactiveClass: 'border-indigo-500/20 bg-indigo-500/8 text-indigo-400/80 hover:opacity-100',
+    route: '/personality/habits',
+  },
+  {
     id: 'finance', label: 'Finance', Icon: CreditCard,
     activeClass:   'border-violet-500 bg-violet-500/20 text-white',
     inactiveClass: 'border-violet-500/20 bg-violet-500/8 text-violet-400/80 hover:opacity-100',
@@ -1526,6 +1624,7 @@ export default function QuickLog() {
               {panel === 'voice'   && <VoicePanel   onDone={handleDone} />}
               {panel === 'meal'    && <MealPanel    onDone={handleDone} />}
               {panel === 'workout' && <WorkoutPanel onDone={handleDone} />}
+              {panel === 'sleep'   && <SleepPanel   onDone={handleDone} />}
               {panel === 'habit'   && <HabitPanel />}
               {panel === 'finance' && <FinancePanel onDone={handleDone} />}
               {panel === 'journal' && <JournalPanel onDone={handleDone} />}

@@ -21,13 +21,6 @@ export function useDraggableFab(storageKey: string) {
   const movedRef    = useRef(false)
   const startRef    = useRef({ pointerX: 0, pointerY: 0, elemX: 0, elemY: 0 })
 
-  useEffect(() => {
-    try {
-      const raw = localStorage.getItem(storageKey)
-      if (raw) setPos(JSON.parse(raw))
-    } catch {}
-  }, [storageKey])
-
   const clamp = useCallback((x: number, y: number) => {
     const el = ref.current
     const w  = el?.offsetWidth  ?? 56
@@ -37,6 +30,20 @@ export function useDraggableFab(storageKey: string) {
       y: Math.min(Math.max(0, y), window.innerHeight - h),
     }
   }, [])
+
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(storageKey)
+      // Clamp against the CURRENT viewport — a position persisted on a
+      // different-sized window (or before a rotation/resize) can otherwise
+      // load off-screen, making the FAB unreachable until the next resize
+      // event (the effect below) happens to clamp it back into view.
+      if (raw) {
+        const parsed = JSON.parse(raw) as Position
+        setPos(clamp(parsed.x, parsed.y))
+      }
+    } catch {}
+  }, [storageKey, clamp])
 
   useEffect(() => {
     if (!pos) return

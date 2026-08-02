@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import {
   Flame, Plus, Trash2, Check, Loader2, AlertCircle,
   RotateCcw, XCircle, Trophy, Pencil, Crown, Globe, X,
@@ -38,6 +38,10 @@ interface HabitLog {
   habit_id: string
   log_date: string   // YYYY-MM-DD
   status: 'done' | 'missed'
+}
+
+interface KeystoneMark {
+  habit_id: string
 }
 
 const CATEGORY_STYLES: Record<Category, { label: string; badge: string }> = Object.fromEntries(
@@ -348,6 +352,22 @@ export default function HabitTracker() {
     []
   )
 
+  const {
+    data: globalKeystoneMarks, setData: setGlobalKeystoneMarks,
+  } = useCachedQuery<KeystoneMark[]>(
+    'global-keystone-marks',
+    (supabase, userId) => supabase
+      .from('user_habit_keystones')
+      .select('habit_id')
+      .eq('user_id', userId),
+    []
+  )
+
+  const globalKeystoneIds = useMemo(
+    () => new Set(globalKeystoneMarks.map(k => k.habit_id)),
+    [globalKeystoneMarks]
+  )
+
   const weekStart = getWeekStart()
   const {
     data: weekLogs, loading: logsLoading, isOffline: logsOffline, setData: setWeekLogs,
@@ -394,6 +414,10 @@ export default function HabitTracker() {
     if (habit?.is_global) return 'pending'
     if (habit?.last_done_at && localDateStr(new Date(habit.last_done_at)) === today) return 'done'
     return 'pending'
+  }
+
+  function isKeystoneFor(habit: Habit): boolean {
+    return habit.is_global ? globalKeystoneIds.has(habit.id) : habit.is_keystone
   }
 
   async function markDone(habit: Habit) {
@@ -559,16 +583,32 @@ export default function HabitTracker() {
   }
 
   async function toggleKeystone(habit: Habit) {
-    if (keystoneId) return
-    const keystoneCount = habits.filter(h => h.is_keystone).length
-    if (!habit.is_keystone && keystoneCount >= 2) return  // enforced in UI
+    if (keystoneId || !userId) return
+    const alreadyKeystone = isKeystoneFor(habit)
+    const keystoneCount = habits.filter(isKeystoneFor).length
+    if (!alreadyKeystone && keystoneCount >= 2) return  // enforced in UI
     setKeystoneId(habit.id)
-    const next = !habit.is_keystone
-    setHabits(prev => prev.map(h => h.id === habit.id ? { ...h, is_keystone: next } : h))
     const supabase = createSupabaseBrowserClient()
-    await supabase.from('personality_habits')
-      .update({ is_keystone: next })
-      .eq('id', habit.id)
+
+    if (habit.is_global) {
+      const next = !alreadyKeystone
+      setGlobalKeystoneMarks(prev => next
+        ? [...prev, { habit_id: habit.id }]
+        : prev.filter(k => k.habit_id !== habit.id))
+      if (next) {
+        await supabase.from('user_habit_keystones').insert({ user_id: userId, habit_id: habit.id })
+      } else {
+        await supabase.from('user_habit_keystones').delete()
+          .eq('user_id', userId).eq('habit_id', habit.id)
+      }
+    } else {
+      const next = !habit.is_keystone
+      setHabits(prev => prev.map(h => h.id === habit.id ? { ...h, is_keystone: next } : h))
+      await supabase.from('personality_habits')
+        .update({ is_keystone: next })
+        .eq('id', habit.id)
+    }
+
     setKeystoneId(null)
   }
 
@@ -588,16 +628,19 @@ export default function HabitTracker() {
   const done    = habits.filter(h => getStatus(h.id) === 'done')
   const skipped = habits.filter(h => getStatus(h.id) === 'missed')
   const sortedHabits = [
-    ...pending.filter(h => h.is_keystone),
-    ...pending.filter(h => !h.is_keystone),
-    ...done.filter(h => h.is_keystone),
-    ...done.filter(h => !h.is_keystone),
+    ...pending.filter(h => isKeystoneFor(h)),
+    ...pending.filter(h => !isKeystoneFor(h)),
+    ...done.filter(h => isKeystoneFor(h)),
+    ...done.filter(h => !isKeystoneFor(h)),
   ]
 
-  const keystoneCount = habits.filter(h => h.is_keystone).length
+  const keystoneCount = habits.filter(isKeystoneFor).length
 
   // Weighted score: keystone logs count 2×, regular logs count 1×
-  const habitWeight = (id: string) => habits.find(h => h.id === id)?.is_keystone ? 2 : 1
+  const habitWeight = (id: string) => {
+    const habit = habits.find(h => h.id === id)
+    return habit && isKeystoneFor(habit) ? 2 : 1
+  }
   const weekDone      = weekLogs.filter(l => l.status === 'done').length
   const weekMissed    = weekLogs.filter(l => l.status === 'missed').length
   const weightedDone  = weekLogs.filter(l => l.status === 'done').reduce((s, l) => s + habitWeight(l.habit_id), 0)
@@ -709,17 +752,18 @@ export default function HabitTracker() {
         {sortedHabits.map(habit => {
           const status = getStatus(habit.id)
           const cat    = CATEGORY_STYLES[habit.category] ?? CATEGORY_STYLES.health
-          const canMarkKeystone = habit.is_keystone || keystoneCount < 2
+          const keystone = isKeystoneFor(habit)
+          const canMarkKeystone = keystone || keystoneCount < 2
 
           return (
             <div
               key={habit.id}
               className={cn(
                 'group flex items-center gap-3 rounded-xl border px-4 py-3.5 transition-all',
-                habit.is_keystone && status === 'pending' && 'border-amber-500/40 bg-gradient-to-r from-amber-500/10 to-transparent shadow-[0_0_12px_-4px_rgba(245,158,11,0.3)]',
-                habit.is_keystone && status === 'done'    && 'border-amber-500/20 bg-gradient-to-r from-amber-500/5 to-emerald-500/5',
-                !habit.is_keystone && status === 'done'    && 'border-emerald-500/20 bg-emerald-500/5',
-                !habit.is_keystone && status === 'pending' && 'border-white/10 bg-white/5 hover:border-white/20',
+                keystone && status === 'pending' && 'border-amber-500/40 bg-gradient-to-r from-amber-500/10 to-transparent shadow-[0_0_12px_-4px_rgba(245,158,11,0.3)]',
+                keystone && status === 'done'    && 'border-amber-500/20 bg-gradient-to-r from-amber-500/5 to-emerald-500/5',
+                !keystone && status === 'done'    && 'border-emerald-500/20 bg-emerald-500/5',
+                !keystone && status === 'pending' && 'border-white/10 bg-white/5 hover:border-white/20',
               )}
             >
               {/* Status button */}
@@ -777,13 +821,13 @@ export default function HabitTracker() {
               <div className="flex-1 min-w-0 space-y-0.5">
                 <div className="flex items-center gap-1.5">
                   {habit.is_global && <Globe className="h-3 w-3 shrink-0 text-emerald-400" />}
-                  {habit.is_keystone && !habit.is_global && (
+                  {keystone && (
                     <Crown className="h-3.5 w-3.5 shrink-0 text-amber-400" />
                   )}
                   <p className={cn(
                     'text-sm font-medium line-clamp-2',
-                    habit.is_keystone && status === 'pending' && 'text-amber-100',
-                    !habit.is_keystone && status === 'pending' && 'text-white',
+                    keystone && status === 'pending' && 'text-amber-100',
+                    !keystone && status === 'pending' && 'text-white',
                     status === 'done' && 'text-slate-500 line-through',
                   )}>
                     {habit.habit_name}
@@ -795,7 +839,7 @@ export default function HabitTracker() {
                       Global
                     </span>
                   )}
-                  {habit.is_keystone && !habit.is_global && (
+                  {keystone && (
                     <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-amber-500/20 text-amber-300 font-medium tracking-wide uppercase">
                       Keystone
                     </span>
@@ -818,31 +862,29 @@ export default function HabitTracker() {
                 </div>
               )}
 
-              {/* Crown toggle — hidden for global habits */}
-              {!habit.is_global && (
-                <button
-                  onClick={() => canMarkKeystone && toggleKeystone(habit)}
-                  disabled={!!keystoneId || !canMarkKeystone}
-                  aria-label={habit.is_keystone ? 'Remove keystone' : 'Mark as keystone'}
-                  title={
-                    habit.is_keystone ? 'Remove keystone'
-                    : canMarkKeystone ? 'Mark as keystone (2× score weight)'
-                    : 'Maximum 2 keystone habits'
-                  }
-                  className={cn(
-                    'shrink-0 transition-all opacity-0 group-hover:opacity-100',
-                    habit.is_keystone
-                      ? 'text-amber-400 opacity-100 hover:text-amber-300'
-                      : canMarkKeystone
-                        ? 'text-slate-600 hover:text-amber-400'
-                        : 'text-slate-800 cursor-not-allowed',
-                  )}
-                >
-                  {keystoneId === habit.id
-                    ? <Loader2 className="h-4 w-4 animate-spin" />
-                    : <Crown className="h-4 w-4" />}
-                </button>
-              )}
+              {/* Crown toggle */}
+              <button
+                onClick={() => canMarkKeystone && toggleKeystone(habit)}
+                disabled={!!keystoneId || !canMarkKeystone}
+                aria-label={keystone ? 'Remove keystone' : 'Mark as keystone'}
+                title={
+                  keystone ? 'Remove keystone'
+                  : canMarkKeystone ? 'Mark as keystone (2× score weight)'
+                  : 'Maximum 2 keystone habits'
+                }
+                className={cn(
+                  'shrink-0 transition-all opacity-0 group-hover:opacity-100',
+                  keystone
+                    ? 'text-amber-400 opacity-100 hover:text-amber-300'
+                    : canMarkKeystone
+                      ? 'text-slate-600 hover:text-amber-400'
+                      : 'text-slate-800 cursor-not-allowed',
+                )}
+              >
+                {keystoneId === habit.id
+                  ? <Loader2 className="h-4 w-4 animate-spin" />
+                  : <Crown className="h-4 w-4" />}
+              </button>
 
               {/* Edit / Delete — hidden for global habits */}
               {!habit.is_global && (
