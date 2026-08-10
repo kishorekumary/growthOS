@@ -278,9 +278,12 @@ function ManageGlobalHabitsModal({
   async function toggle(habit: Habit) {
     if (pendingId) return
     setPendingId(habit.id)
-    if (hiddenIds.has(habit.id)) await onUnhide(habit.id)
-    else await onHide(habit.id)
-    setPendingId(null)
+    try {
+      if (hiddenIds.has(habit.id)) await onUnhide(habit.id)
+      else await onHide(habit.id)
+    } finally {
+      setPendingId(null)
+    }
   }
 
   return (
@@ -308,7 +311,7 @@ function ManageGlobalHabitsModal({
                 </span>
                 <button
                   onClick={() => toggle(habit)}
-                  disabled={pendingId === habit.id}
+                  disabled={pendingId !== null}
                   className={cn(
                     'shrink-0 flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-medium transition-all',
                     hidden
@@ -719,9 +722,26 @@ export default function HabitTracker() {
 
   async function unhideGlobalHabit(habitId: string) {
     if (!userId) return
-    setHiddenHabitMarks(prev => prev.filter(h => h.habit_id !== habitId))
     const supabase = createSupabaseBrowserClient()
+
+    // Product decision: auto-unmark keystone on restore if it would exceed the
+    // 2-keystone cap. `visibleHabits` here still excludes `habitId` (it's still
+    // hidden until the setHiddenHabitMarks update below takes effect), so
+    // currentKeystoneCount correctly reflects the pre-restore state — the
+    // correct baseline to compare against the cap.
+    const wasKeystone = globalKeystoneIds.has(habitId)
+    const currentKeystoneCount = visibleHabits.filter(isKeystoneFor).length
+    const wouldExceedCap = wasKeystone && currentKeystoneCount >= 2
+
+    setHiddenHabitMarks(prev => prev.filter(h => h.habit_id !== habitId))
+    if (wouldExceedCap) {
+      setGlobalKeystoneMarks(prev => prev.filter(k => k.habit_id !== habitId))
+    }
+
     await supabase.from('user_hidden_habits').delete().eq('user_id', userId).eq('habit_id', habitId)
+    if (wouldExceedCap) {
+      await supabase.from('user_habit_keystones').delete().eq('user_id', userId).eq('habit_id', habitId)
+    }
   }
 
   const graceOpen = isGraceActive() && !yesterdayLogsOffline && !yesterdayLogsLoading
