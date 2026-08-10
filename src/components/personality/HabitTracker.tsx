@@ -4,6 +4,7 @@ import { useState, useEffect, useMemo } from 'react'
 import {
   Flame, Plus, Trash2, Check, Loader2, AlertCircle,
   RotateCcw, XCircle, Trophy, Pencil, Crown, Globe, X,
+  Settings2, Eye, EyeOff,
 } from 'lucide-react'
 import { createSupabaseBrowserClient } from '@/lib/supabase'
 import { useCachedQuery } from '@/hooks/useCachedQuery'
@@ -255,6 +256,74 @@ function EditHabitModal({ habit, onClose, onSave }: {
             {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
             Save Changes
           </Button>
+        </div>
+      </DialogContent>
+    </Dialog>
+  )
+}
+
+// ─── Manage Global Habits Modal ──────────────────────────────────
+
+function ManageGlobalHabitsModal({
+  globalHabits, hiddenIds, onHide, onUnhide,
+}: {
+  globalHabits: Habit[]
+  hiddenIds: Set<string>
+  onHide: (habitId: string) => Promise<void>
+  onUnhide: (habitId: string) => Promise<void>
+}) {
+  const [open, setOpen]           = useState(false)
+  const [pendingId, setPendingId] = useState<string | null>(null)
+
+  async function toggle(habit: Habit) {
+    if (pendingId) return
+    setPendingId(habit.id)
+    if (hiddenIds.has(habit.id)) await onUnhide(habit.id)
+    else await onHide(habit.id)
+    setPendingId(null)
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogTrigger asChild>
+        <Button size="sm" variant="outline" className="border-white/15 bg-white/5 text-slate-300 hover:bg-white/10 gap-1.5">
+          <Settings2 className="h-4 w-4" /> Manage Global
+        </Button>
+      </DialogTrigger>
+      <DialogContent>
+        <DialogHeader><DialogTitle>Manage Global Habits</DialogTitle></DialogHeader>
+        <p className="text-xs text-slate-500">
+          Hide habits you don&apos;t want to track. You can bring them back here anytime.
+        </p>
+        <div className="space-y-2 max-h-[60vh] overflow-y-auto">
+          {globalHabits.length === 0 && (
+            <p className="text-sm text-slate-500 py-4 text-center">No global habits yet.</p>
+          )}
+          {globalHabits.map(habit => {
+            const hidden = hiddenIds.has(habit.id)
+            return (
+              <div key={habit.id} className="flex items-center justify-between gap-3 rounded-lg border border-white/10 bg-white/5 px-3 py-2.5">
+                <span className={cn('text-sm truncate', hidden ? 'text-slate-500' : 'text-white')}>
+                  {habit.habit_name}
+                </span>
+                <button
+                  onClick={() => toggle(habit)}
+                  disabled={pendingId === habit.id}
+                  className={cn(
+                    'shrink-0 flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-medium transition-all',
+                    hidden
+                      ? 'bg-violet-600 hover:bg-violet-700 text-white'
+                      : 'bg-white/10 hover:bg-white/15 text-slate-300'
+                  )}
+                >
+                  {pendingId === habit.id
+                    ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                    : hidden ? <Eye className="h-3.5 w-3.5" /> : <EyeOff className="h-3.5 w-3.5" />}
+                  {hidden ? 'Restore' : 'Hide'}
+                </button>
+              </div>
+            )
+          })}
         </div>
       </DialogContent>
     </Dialog>
@@ -761,7 +830,17 @@ export default function HabitTracker() {
             </p>
           )}
         </div>
-        <AddHabitModal onAdd={fetchData} />
+        <div className="flex items-center gap-2">
+          {habits.some(h => h.is_global) && (
+            <ManageGlobalHabitsModal
+              globalHabits={habits.filter(h => h.is_global)}
+              hiddenIds={hiddenHabitIds}
+              onHide={hideGlobalHabit}
+              onUnhide={unhideGlobalHabit}
+            />
+          )}
+          <AddHabitModal onAdd={fetchData} />
+        </div>
       </div>
 
       {/* Weekly score */}
