@@ -114,7 +114,11 @@ export default function ChallengeDetail({ challenge, onBack, onComplete, onUpdat
   const today      = format(new Date(), 'yyyy-MM-dd')
   const startDate  = parseISO(challenge.start_date)
   const dayNumber  = Math.max(1, Math.min(differenceInDays(new Date(), startDate) + 1, totalDays))
-  const isTodayInRange = dayNumber >= 1 && dayNumber <= totalDays && challenge.start_date <= today
+  // Gated on status === 'active' so an abandoned or already-completed challenge
+  // can't be silently revived by checking in again — without this, the clamped
+  // dayNumber above never exceeds totalDays, so date math alone would keep
+  // showing a live check-in card indefinitely after the challenge is over.
+  const isTodayInRange = challenge.status === 'active' && dayNumber >= 1 && dayNumber <= totalDays && challenge.start_date <= today
   const todayCheckin   = checkins[today]
   const isMilestoneDay = MILESTONES.includes(dayNumber)
   const phase = dayNumber <= totalDays / 3 ? 'Foundation' : dayNumber <= totalDays * 2 / 3 ? 'Momentum' : 'Mastery'

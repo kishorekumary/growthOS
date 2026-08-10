@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Plus, Flame, ChevronRight, X, Loader2 } from 'lucide-react'
 import { createSupabaseBrowserClient } from '@/lib/supabase'
 import { useCachedQuery } from '@/hooks/useCachedQuery'
@@ -41,6 +41,15 @@ const CATEGORY_LABEL: Record<string, string> = Object.fromEntries(
   CATEGORIES.map(c => [c.value, c.label])
 )
 
+// A challenge's days have run out once its raw (unclamped) day number passes
+// duration_days. Used both to keep expired-but-never-completed challenges out
+// of the Active list and to detect which ones need to transition to
+// 'abandoned' — single source of truth so the two never drift apart.
+function isChallengeExpired(challenge: Challenge): boolean {
+  const rawDayNumber = differenceInDays(new Date(), parseISO(challenge.start_date)) + 1
+  return rawDayNumber > challenge.duration_days
+}
+
 function ChallengeCard({ challenge, onClick }: { challenge: Challenge; onClick: () => void }) {
   const today       = format(new Date(), 'yyyy-MM-dd')
   const startDate   = parseISO(challenge.start_date)
@@ -49,6 +58,7 @@ function ChallengeCard({ challenge, onClick }: { challenge: Challenge; onClick: 
   const pct         = Math.round(dayNumber / totalDays * 100)
   const catColor    = CATEGORY_COLOR[challenge.category] ?? '#818cf8'
   const isCompleted = challenge.status === 'completed'
+  const isAbandoned = challenge.status === 'abandoned' || (challenge.status === 'active' && isChallengeExpired(challenge))
   const notStarted  = challenge.start_date > today
 
   return (
@@ -64,6 +74,7 @@ function ChallengeCard({ challenge, onClick }: { challenge: Challenge; onClick: 
               {challenge.category}
             </span>
             {isCompleted && <span className="text-[10px] text-emerald-400 bg-emerald-500/10 px-1.5 py-0.5 rounded">Completed</span>}
+            {isAbandoned && <span className="text-[10px] text-red-400/70 bg-red-500/10 px-1.5 py-0.5 rounded">Abandoned</span>}
             {notStarted && <span className="text-[10px] text-slate-500 bg-white/5 px-1.5 py-0.5 rounded">Starts {challenge.start_date}</span>}
           </div>
           <p className="text-sm font-semibold text-white truncate">{challenge.title}</p>
@@ -162,8 +173,27 @@ export default function ChallengeApp() {
     if (selected?.id === updated.id) setSelected(updated)
   }
 
-  const active    = challenges.filter(c => c.status === 'active')
+  // Nothing ever flips status away from 'active' on its own — completion only
+  // happens if the user checks in on/after the final day (ChallengeDetail).
+  // A challenge whose days simply ran out with no final check-in would stay
+  // 'active' forever. Persist the transition to 'abandoned' here; the bucket
+  // filters below also treat it as abandoned immediately (optimistically),
+  // so it never has to wait on this write to disappear from Active.
+  useEffect(() => {
+    const toAbandon = challenges.filter(c => c.status === 'active' && isChallengeExpired(c))
+    if (toAbandon.length === 0) return
+    const ids = toAbandon.map(c => c.id)
+    setChallenges(prev => prev.map(c => ids.includes(c.id) ? { ...c, status: 'abandoned' as const } : c))
+    const supabase = createSupabaseBrowserClient()
+    supabase.from('ninety_day_challenges')
+      .update({ status: 'abandoned', updated_at: new Date().toISOString() })
+      .in('id', ids)
+      .then()
+  }, [challenges, setChallenges])
+
+  const active    = challenges.filter(c => c.status === 'active' && !isChallengeExpired(c))
   const completed = challenges.filter(c => c.status === 'completed')
+  const abandoned = challenges.filter(c => c.status === 'abandoned' || (c.status === 'active' && isChallengeExpired(c)))
 
   if (view === 'detail' && selected) {
     return (
@@ -322,6 +352,16 @@ export default function ChallengeApp() {
         <div className="space-y-2">
           <p className="text-xs font-semibold text-slate-600 uppercase tracking-wide px-1">Completed 🏆</p>
           {completed.map(c => (
+            <ChallengeCard key={c.id} challenge={c} onClick={() => { setSelected(c); setView('detail') }} />
+          ))}
+        </div>
+      )}
+
+      {/* Abandoned — days ran out without a final check-in */}
+      {abandoned.length > 0 && (
+        <div className="space-y-2">
+          <p className="text-xs font-semibold text-slate-600 uppercase tracking-wide px-1">Abandoned</p>
+          {abandoned.map(c => (
             <ChallengeCard key={c.id} challenge={c} onClick={() => { setSelected(c); setView('detail') }} />
           ))}
         </div>
