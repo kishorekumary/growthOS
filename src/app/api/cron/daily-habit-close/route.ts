@@ -62,14 +62,32 @@ export async function GET(req: NextRequest) {
     userHabitMap[h.user_id].push(h.id)
   }
 
+  // Global habits each user has opted out of — same opt-out filtering logic as
+  // HabitTracker.tsx's `visibleHabits` (!h.is_global || !hiddenHabitIds.has(h.id)),
+  // applied here so the cron never inserts 'missed' logs for a habit the user
+  // can no longer see or act on.
+  const { data: hiddenRows } = await admin
+    .from('user_hidden_habits')
+    .select('user_id, habit_id')
+  const hiddenHabitsByUser: Record<string, Set<string>> = {}
+  for (const r of (hiddenRows ?? [])) {
+    if (!hiddenHabitsByUser[r.user_id]) hiddenHabitsByUser[r.user_id] = new Set()
+    hiddenHabitsByUser[r.user_id].add(r.habit_id)
+  }
+
   let totalInserted = 0
 
   for (const u of authUsers) {
     const tz        = tzMap[u.id] ?? 'UTC'
     const yesterday = localYesterday(tz)
 
-    // Habits this user is responsible for: own daily habits + all global daily habits
-    const habitIds = [...(userHabitMap[u.id] ?? []), ...globalHabitIds]
+    // Habits this user is responsible for: own daily habits + all global daily
+    // habits the user hasn't hidden. Personal habits are never filtered here.
+    const hiddenForUser = hiddenHabitsByUser[u.id]
+    const visibleGlobalHabitIds = hiddenForUser
+      ? globalHabitIds.filter(id => !hiddenForUser.has(id))
+      : globalHabitIds
+    const habitIds = [...(userHabitMap[u.id] ?? []), ...visibleGlobalHabitIds]
     if (!habitIds.length) continue
 
     // Find habits that already have ANY log (done or missed) for yesterday
