@@ -44,6 +44,10 @@ interface KeystoneMark {
   habit_id: string
 }
 
+interface HiddenMark {
+  habit_id: string
+}
+
 const CATEGORY_STYLES: Record<Category, { label: string; badge: string }> = Object.fromEntries(
   Object.entries(HABIT_CATEGORY_META).map(([key, meta]) => [key, { label: `${meta.emoji} ${meta.label}`, badge: meta.badge }])
 ) as Record<Category, { label: string; badge: string }>
@@ -368,6 +372,31 @@ export default function HabitTracker() {
     [globalKeystoneMarks]
   )
 
+  const {
+    data: hiddenHabitMarks, setData: setHiddenHabitMarks,
+  } = useCachedQuery<HiddenMark[]>(
+    'hidden-global-habits',
+    (supabase, userId) => supabase
+      .from('user_hidden_habits')
+      .select('habit_id')
+      .eq('user_id', userId),
+    []
+  )
+
+  const hiddenHabitIds = useMemo(
+    () => new Set(hiddenHabitMarks.map(h => h.habit_id)),
+    [hiddenHabitMarks]
+  )
+
+  // habits minus any global habit this user has hidden — the source every
+  // render-facing computation below should read from instead of `habits`.
+  // `habits` itself stays unfiltered so the manage-global-habits modal (Task 3)
+  // can still list and restore hidden ones.
+  const visibleHabits = useMemo(
+    () => habits.filter(h => !h.is_global || !hiddenHabitIds.has(h.id)),
+    [habits, hiddenHabitIds]
+  )
+
   const weekStart = getWeekStart()
   const {
     data: weekLogs, loading: logsLoading, isOffline: logsOffline, setData: setWeekLogs,
@@ -585,7 +614,7 @@ export default function HabitTracker() {
   async function toggleKeystone(habit: Habit) {
     if (keystoneId || !userId) return
     const alreadyKeystone = isKeystoneFor(habit)
-    const keystoneCount = habits.filter(isKeystoneFor).length
+    const keystoneCount = visibleHabits.filter(isKeystoneFor).length
     if (!alreadyKeystone && keystoneCount >= 2) return  // enforced in UI
     setKeystoneId(habit.id)
     const supabase = createSupabaseBrowserClient()
@@ -612,9 +641,23 @@ export default function HabitTracker() {
     setKeystoneId(null)
   }
 
+  async function hideGlobalHabit(habitId: string) {
+    if (!userId) return
+    setHiddenHabitMarks(prev => prev.some(h => h.habit_id === habitId) ? prev : [...prev, { habit_id: habitId }])
+    const supabase = createSupabaseBrowserClient()
+    await supabase.from('user_hidden_habits').insert({ user_id: userId, habit_id: habitId })
+  }
+
+  async function unhideGlobalHabit(habitId: string) {
+    if (!userId) return
+    setHiddenHabitMarks(prev => prev.filter(h => h.habit_id !== habitId))
+    const supabase = createSupabaseBrowserClient()
+    await supabase.from('user_hidden_habits').delete().eq('user_id', userId).eq('habit_id', habitId)
+  }
+
   const graceOpen = isGraceActive() && !yesterdayLogsOffline && !yesterdayLogsLoading
   const catchableHabits = graceOpen
-    ? habits.filter(h => h.frequency === 'daily' && getStatus(h.id) !== 'done' && !yesterdayLogs.some(l => l.habit_id === h.id && l.status === 'done'))
+    ? visibleHabits.filter(h => h.frequency === 'daily' && getStatus(h.id) !== 'done' && !yesterdayLogs.some(l => l.habit_id === h.id && l.status === 'done'))
     : []
 
   if (loading) return (
@@ -623,10 +666,11 @@ export default function HabitTracker() {
     </div>
   )
 
-  // Keystone first, then pending, then done — skipped habits shown below
-  const pending = habits.filter(h => getStatus(h.id) === 'pending')
-  const done    = habits.filter(h => getStatus(h.id) === 'done')
-  const skipped = habits.filter(h => getStatus(h.id) === 'missed')
+  // Keystone first, then pending, then done — skipped habits shown below.
+  // Sourced from visibleHabits (not habits) so a hidden global habit never renders.
+  const pending = visibleHabits.filter(h => getStatus(h.id) === 'pending')
+  const done    = visibleHabits.filter(h => getStatus(h.id) === 'done')
+  const skipped = visibleHabits.filter(h => getStatus(h.id) === 'missed')
   const sortedHabits = [
     ...pending.filter(h => isKeystoneFor(h)),
     ...pending.filter(h => !isKeystoneFor(h)),
@@ -634,7 +678,7 @@ export default function HabitTracker() {
     ...done.filter(h => !isKeystoneFor(h)),
   ]
 
-  const keystoneCount = habits.filter(isKeystoneFor).length
+  const keystoneCount = visibleHabits.filter(isKeystoneFor).length
 
   // Weighted score: keystone logs count 2×, regular logs count 1×
   const habitWeight = (id: string) => {
@@ -645,7 +689,7 @@ export default function HabitTracker() {
   const weekMissed    = weekLogs.filter(l => l.status === 'missed').length
   const weightedDone  = weekLogs.filter(l => l.status === 'done').reduce((s, l) => s + habitWeight(l.habit_id), 0)
   const weightedTotal = weekLogs.reduce((s, l) => s + habitWeight(l.habit_id), 0)
-  const topStreak  = habits.reduce((m, h) => Math.max(m, h.streak_count), 0)
+  const topStreak  = visibleHabits.reduce((m, h) => Math.max(m, h.streak_count), 0)
 
   // Average streak of habits completed at least once this week (for streak bonus)
   const completedHabitIds = new Set(weekLogs.filter(l => l.status === 'done').map(l => l.habit_id))
@@ -710,9 +754,9 @@ export default function HabitTracker() {
       <div className="flex items-center justify-between">
         <div>
           <h2 className="font-semibold text-white">Habit Tracker</h2>
-          {habits.length > 0 && (
+          {visibleHabits.length > 0 && (
             <p className="text-xs text-slate-500 mt-0.5">
-              {done.length}/{habits.length} done today
+              {done.length}/{visibleHabits.length} done today
               {topStreak > 0 && ` · 🔥 Best streak: ${topStreak}`}
             </p>
           )}
@@ -724,14 +768,14 @@ export default function HabitTracker() {
       <WeeklyScoreCard done={weekDone} missed={weekMissed} weightedDone={weightedDone} weightedTotal={weightedTotal} avgCompletedStreak={avgCompletedStreak} />
 
       {/* Empty state */}
-      {habits.length === 0 && isOffline && (
+      {visibleHabits.length === 0 && isOffline && (
         <div className="rounded-xl border border-dashed border-white/10 p-10 text-center">
           <Flame className="h-10 w-10 text-orange-400/40 mx-auto mb-3" />
           <p className="text-slate-400 text-sm">Can&apos;t load — you&apos;re offline.</p>
         </div>
       )}
 
-      {habits.length === 0 && !isOffline && (
+      {visibleHabits.length === 0 && !isOffline && (
         <div className="rounded-xl border border-dashed border-white/10 p-10 text-center">
           <Flame className="h-10 w-10 text-orange-400/40 mx-auto mb-3" />
           <p className="text-slate-400 text-sm">No habits yet.</p>
@@ -740,7 +784,7 @@ export default function HabitTracker() {
       )}
 
       {/* Keystone hint */}
-      {keystoneCount < 2 && habits.length >= 2 && (
+      {keystoneCount < 2 && visibleHabits.length >= 2 && (
         <p className="text-xs text-amber-500/60 px-1 flex items-center gap-1.5">
           <Crown className="h-3 w-3" />
           Tap the crown on up to 2 habits to mark them as keystone — they count 2× in your score.
