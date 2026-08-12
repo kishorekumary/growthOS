@@ -94,6 +94,7 @@ export default function ChallengeDetail({ challenge, onBack, onComplete, onUpdat
   const [milestoneMsg, setMilestoneMsg] = useState<string | null>(null)
   const [milestoneLoading, setMilestoneLoading] = useState(false)
   const [editOpen, setEditOpen] = useState(false)
+  const [editingDate, setEditingDate] = useState<string | null>(null)
 
   const { data: checkins, isOffline, refetch: load } = useCachedQuery<Record<string, Checkin>>(
     `challenge-checkins:${challenge.id}`,
@@ -250,6 +251,20 @@ export default function ChallengeDetail({ challenge, onBack, onComplete, onUpdat
         />
       )}
 
+      {editingDate && (
+        <DayEditModal
+          date={editingDate}
+          dayNumber={dayNumberForDate(editingDate)}
+          checkin={checkins[editingDate]}
+          saving={saving}
+          onSave={async (completed, reflectionText) => {
+            await saveCheckin(editingDate, completed, reflectionText)
+            setEditingDate(null)
+          }}
+          onClose={() => setEditingDate(null)}
+        />
+      )}
+
       {isOffline && (
         <p className="text-xs text-amber-400">Can&apos;t sync check-ins — you&apos;re offline.</p>
       )}
@@ -303,6 +318,7 @@ export default function ChallengeDetail({ challenge, onBack, onComplete, onUpdat
             const isToday  = dateStr === today
             const isDone   = checkins[dateStr]?.completed
             const isMilestone = MILESTONES.includes(i + 1)
+            const editable = isEditableDate(dateStr)
 
             let bg = 'bg-white/5'
             let style: React.CSSProperties | undefined
@@ -313,9 +329,12 @@ export default function ChallengeDetail({ challenge, onBack, onComplete, onUpdat
               <div
                 key={i}
                 title={`Day ${i + 1} · ${dateStr}`}
+                onClick={editable ? () => setEditingDate(dateStr) : undefined}
                 className={`aspect-square rounded-sm transition-all ${bg} ${
                   isToday && !isDone ? 'ring-1 ring-white/40' : ''
-                } ${isMilestone && !isDone && !isFuture ? 'ring-1 ring-yellow-500/40' : ''}`}
+                } ${isMilestone && !isDone && !isFuture ? 'ring-1 ring-yellow-500/40' : ''} ${
+                  editable ? 'cursor-pointer hover:ring-1 hover:ring-white/50' : ''
+                }`}
                 style={style}
               />
             )
@@ -559,6 +578,65 @@ function EditChallengeModal({ challenge, onClose, onSaved }: {
             {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
             Save Changes
           </Button>
+        </div>
+      </DialogContent>
+    </Dialog>
+  )
+}
+
+// ─── Day Edit Modal ─────────────────────────────────────────────
+
+function DayEditModal({ date, dayNumber, checkin, saving, onSave, onClose }: {
+  date: string
+  dayNumber: number
+  checkin: Checkin | undefined
+  saving: boolean
+  onSave: (completed: boolean, reflection: string) => Promise<void>
+  onClose: () => void
+}) {
+  const [reflection, setReflection] = useState(checkin?.reflection ?? '')
+
+  return (
+    <Dialog open onOpenChange={open => { if (!open) onClose() }}>
+      <DialogContent>
+        <DialogHeader><DialogTitle>Day {dayNumber} · {format(parseISO(date), 'MMM d')}</DialogTitle></DialogHeader>
+        <div className="space-y-4">
+          <textarea
+            value={reflection}
+            onChange={e => setReflection(e.target.value)}
+            placeholder="Quick reflection (optional)…"
+            rows={3}
+            className="w-full rounded-xl border border-white/8 bg-white/3 px-3 py-2 text-sm text-slate-300 placeholder-slate-600 outline-none focus:border-purple-500/40 resize-none"
+          />
+          <div className="flex gap-2">
+            {checkin?.completed ? (
+              <>
+                <Button
+                  className="flex-1 bg-purple-600 hover:bg-purple-700 text-white"
+                  disabled={saving}
+                  onClick={() => onSave(true, reflection)}
+                >
+                  Save reflection
+                </Button>
+                <Button
+                  variant="outline"
+                  className="flex-1 border-white/20 text-slate-300"
+                  disabled={saving}
+                  onClick={() => onSave(false, reflection)}
+                >
+                  Mark incomplete
+                </Button>
+              </>
+            ) : (
+              <Button
+                className="flex-1 bg-purple-600 hover:bg-purple-700 text-white"
+                disabled={saving}
+                onClick={() => onSave(true, reflection)}
+              >
+                Mark complete
+              </Button>
+            )}
+          </div>
         </div>
       </DialogContent>
     </Dialog>
