@@ -138,19 +138,43 @@ export default function ChallengeDetail({ challenge, onBack, onComplete, onUpdat
     d = subDays(d, 1)
   }
 
-  async function checkIn() {
-    if (!isTodayInRange || saving) return
-    setSaving(true)
-    await supabase.from('challenge_checkins').upsert({
-      challenge_id: challenge.id,
-      user_id: (await supabase.auth.getUser()).data.user?.id,
-      checkin_date: today,
-      completed: true,
-      reflection: reflection.trim() || null,
-    }, { onConflict: 'challenge_id,checkin_date' })
+  function dayNumberForDate(dateStr: string) {
+    return differenceInDays(parseISO(dateStr), startDate) + 1
+  }
 
-    // Auto-complete challenge on the final day
-    if (dayNumber >= totalDays) {
+  // A day can be marked/unmarked/edited if it's not in the future, it's
+  // within 3 days of today (a grace window for catching up on missed days),
+  // and it falls within the challenge's actual day range. Independent of
+  // challenge.status so it behaves the same for active/abandoned/completed.
+  function isEditableDate(dateStr: string) {
+    if (dateStr > today) return false
+    if (differenceInDays(parseISO(today), parseISO(dateStr)) > 3) return false
+    const dn = dayNumberForDate(dateStr)
+    return dn >= 1 && dn <= totalDays
+  }
+
+  async function saveCheckin(date: string, completed: boolean, reflectionText: string) {
+    if (saving) return
+    setSaving(true)
+    if (completed) {
+      await supabase.from('challenge_checkins').upsert({
+        challenge_id: challenge.id,
+        user_id: (await supabase.auth.getUser()).data.user?.id,
+        checkin_date: date,
+        completed: true,
+        reflection: reflectionText.trim() || null,
+      }, { onConflict: 'challenge_id,checkin_date' })
+    } else {
+      await supabase.from('challenge_checkins')
+        .delete()
+        .eq('challenge_id', challenge.id)
+        .eq('checkin_date', date)
+    }
+
+    // Auto-complete the challenge if the edited day is the final day — keyed
+    // off the edited date, not "today", so backfilling day `totalDays` within
+    // the grace window fixes an abandoned challenge by completing it.
+    if (completed && dayNumberForDate(date) >= totalDays) {
       await supabase
         .from('ninety_day_challenges')
         .update({ status: 'completed', updated_at: new Date().toISOString() })
@@ -159,7 +183,6 @@ export default function ChallengeDetail({ challenge, onBack, onComplete, onUpdat
     }
 
     await load()
-    setReflection('')
     setSaving(false)
   }
 
@@ -337,12 +360,19 @@ export default function ChallengeDetail({ challenge, onBack, onComplete, onUpdat
           {todayCheckin?.completed ? (
             <div className="flex items-center gap-2.5">
               <CheckCircle2 className="h-5 w-5 text-emerald-400 shrink-0" />
-              <div>
+              <div className="flex-1">
                 <p className="text-sm font-medium text-emerald-400">Day {dayNumber} complete!</p>
                 {todayCheckin.reflection && (
                   <p className="text-xs text-slate-500 mt-0.5 italic">"{todayCheckin.reflection}"</p>
                 )}
               </div>
+              <button
+                onClick={() => saveCheckin(today, false, '')}
+                disabled={saving}
+                className="text-xs text-slate-500 hover:text-red-400 transition-colors underline decoration-dotted disabled:opacity-50"
+              >
+                Undo
+              </button>
             </div>
           ) : (
             <>
@@ -358,7 +388,7 @@ export default function ChallengeDetail({ challenge, onBack, onComplete, onUpdat
                 className="w-full rounded-xl border border-white/8 bg-white/3 px-3 py-2 text-sm text-slate-300 placeholder-slate-600 outline-none focus:border-purple-500/40 resize-none"
               />
               <button
-                onClick={checkIn}
+                onClick={async () => { await saveCheckin(today, true, reflection); setReflection('') }}
                 disabled={saving}
                 className="flex items-center gap-2 rounded-xl px-5 py-2.5 text-sm font-medium text-white transition-colors disabled:opacity-50"
                 style={{ backgroundColor: catColor + 'cc' }}
