@@ -40,7 +40,21 @@ export function useDraggableFab(storageKey: string) {
       // event (the effect below) happens to clamp it back into view.
       if (raw) {
         const parsed = JSON.parse(raw) as Position
-        setPos(clamp(parsed.x, parsed.y))
+        // A malformed stored value (e.g. non-numeric x/y from an older format,
+        // or a corrupted write) makes Math.max/min below propagate NaN. React
+        // then renders `left`/`top` as invalid CSS, which browsers silently
+        // drop — combined with this hook's `right/bottom: 'auto'` override,
+        // the element ends up with no valid position: fixed offset at all, so
+        // it's placed at its in-flow "static position" instead: pinned at a
+        // viewport-relative point far off past the bottom of the layout,
+        // invisible and unreachable by scrolling (fixed elements don't move
+        // with scroll), and this persists across reloads since it's stored.
+        // Treat anything that isn't a finite pair as "no stored position."
+        if (Number.isFinite(parsed?.x) && Number.isFinite(parsed?.y)) {
+          setPos(clamp(parsed.x, parsed.y))
+        } else {
+          localStorage.removeItem(storageKey)
+        }
       }
     } catch {}
   }, [storageKey, clamp])
