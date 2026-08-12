@@ -11,9 +11,21 @@ type SupabaseClient = ReturnType<typeof createSupabaseServerClient>
 
 interface Milestone { label: string; points: number }
 
-async function awardPoints(supabase: SupabaseClient, userId: string, delta: number, reason: string) {
-  await supabase.from('reward_points_log').insert({ user_id: userId, delta, reason })
-  await supabase.rpc('increment_points_balance', { p_user_id: userId, p_delta: delta })
+// Returns whether the points actually landed (both the log insert and the
+// balance RPC succeeded). Callers must not tell the client a milestone was
+// awarded — or persist any "already awarded" marker — when this is false.
+async function awardPoints(supabase: SupabaseClient, userId: string, delta: number, reason: string): Promise<boolean> {
+  const { error: logError } = await supabase.from('reward_points_log').insert({ user_id: userId, delta, reason })
+  if (logError) {
+    console.error('awardPoints: failed to insert reward_points_log', { userId, delta, reason, error: logError })
+    return false
+  }
+  const { error: rpcError } = await supabase.rpc('increment_points_balance', { p_user_id: userId, p_delta: delta })
+  if (rpcError) {
+    console.error('awardPoints: increment_points_balance RPC failed', { userId, delta, reason, error: rpcError })
+    return false
+  }
+  return true
 }
 
 export async function POST(req: Request) {
@@ -52,30 +64,59 @@ export async function POST(req: Request) {
     }
   }
 
-  // 1. Upsert the log for the target day as done
-  await supabase.from('habit_logs').upsert(
+  // Idempotency guard for the common "today" path (and a second layer for
+  // "yesterday", alongside the stale-replay guard above): if this exact
+  // (habit_id, user_id, log_date) row is already 'done', this call is a
+  // repeat — a network retry, a double-submit, or a future caller that
+  // re-invokes this route. Nothing changed, so skip every write and award
+  // and return the habit's current (unchanged) streak.
+  const { data: existingLog } = await supabase
+    .from('habit_logs')
+    .select('status')
+    .eq('habit_id', habit.id)
+    .eq('user_id', user.id)
+    .eq('log_date', logDate)
+    .maybeSingle()
+  if (existingLog?.status === 'done') {
+    return NextResponse.json({ streak_count: habit.streak_count, milestones: [] })
+  }
+
+  // 1. Upsert the log for the target day as done. This is the point of no
+  // return for this request — if it fails, bail out before any further
+  // writes or point awards happen.
+  const { error: logUpsertErr } = await supabase.from('habit_logs').upsert(
     { user_id: user.id, habit_id: habit.id, log_date: logDate, status: 'done' },
     { onConflict: 'habit_id,user_id,log_date' }
   )
+  if (logUpsertErr) {
+    console.error('POST /api/habits/complete: habit_logs upsert failed', logUpsertErr)
+    return NextResponse.json({ error: 'Failed to record habit completion' }, { status: 500 })
+  }
 
   // 2. Update streak — skipped for global habits (shared row across every
   // user, so no per-user streak can live on it; matches existing client behavior).
   let newStreak = habit.streak_count
   if (!habit.is_global) {
     newStreak = computeStreak(habit.streak_count, habit.last_done_at, habit.frequency, refDate)
-    await supabase.from('personality_habits').update({
+    const { error: streakUpdateErr } = await supabase.from('personality_habits').update({
       streak_count:   newStreak,
       longest_streak: Math.max(newStreak, habit.longest_streak),
       last_done_at:   refIso,
       updated_at:     now,
     }).eq('id', habit.id)
+    if (streakUpdateErr) {
+      console.error('POST /api/habits/complete: personality_habits streak update failed', streakUpdateErr)
+    }
   }
 
   // 3. Ensure a user_rewards row exists before awarding anything
-  await supabase.from('user_rewards').upsert(
+  const { error: rewardsUpsertErr } = await supabase.from('user_rewards').upsert(
     { user_id: user.id },
     { onConflict: 'user_id', ignoreDuplicates: true }
   )
+  if (rewardsUpsertErr) {
+    console.error('POST /api/habits/complete: user_rewards upsert failed', rewardsUpsertErr)
+  }
 
   // 4. Daily points
   const dailyPoints = habit.is_keystone ? DAILY_POINTS_KEYSTONE : DAILY_POINTS
@@ -89,9 +130,14 @@ export async function POST(req: Request) {
     const crossed  = highestMilestoneCrossed(newStreak)
     if (crossed > baseline) {
       const points = PER_HABIT_MILESTONE_POINTS[crossed]
-      await awardPoints(supabase, user.id, points, `Milestone: ${habit.habit_name} ${crossed}-day streak`)
-      await supabase.from('personality_habits').update({ last_milestone_awarded: crossed }).eq('id', habit.id)
-      milestones.push({ label: `${habit.habit_name} — ${crossed}-day streak!`, points })
+      const awarded = await awardPoints(supabase, user.id, points, `Milestone: ${habit.habit_name} ${crossed}-day streak`)
+      if (awarded) {
+        // Only persist the "already awarded" marker and tell the client
+        // about the milestone if the points actually landed — otherwise
+        // leave last_milestone_awarded alone so a future call can retry.
+        await supabase.from('personality_habits').update({ last_milestone_awarded: crossed }).eq('id', habit.id)
+        milestones.push({ label: `${habit.habit_name} — ${crossed}-day streak!`, points })
+      }
     } else if (baseline !== lastAwarded) {
       await supabase.from('personality_habits').update({ last_milestone_awarded: 0 }).eq('id', habit.id)
     }
@@ -121,18 +167,27 @@ export async function POST(req: Request) {
     const overallBaseline  = newPerfect === 1 ? 0 : rewards.last_overall_milestone
     const overallCrossed   = highestMilestoneCrossed(newPerfect)
 
-    await supabase.from('user_rewards').update({
+    // Award (if crossed) before persisting last_overall_milestone, so a
+    // failed award doesn't get recorded as if it succeeded — that would
+    // permanently block a retry on a future call.
+    const overallPoints = OVERALL_MILESTONE_POINTS[overallCrossed]
+    const overallAwarded = overallCrossed > overallBaseline
+      ? await awardPoints(supabase, user.id, overallPoints, `Milestone: Perfect day streak ${overallCrossed} days`)
+      : false
+
+    const { error: rewardsUpdateErr } = await supabase.from('user_rewards').update({
       current_perfect_streak: newPerfect,
       longest_perfect_streak: longestPerfect,
       last_perfect_date:      logDate,
-      last_overall_milestone: overallCrossed > overallBaseline ? overallCrossed : overallBaseline,
+      last_overall_milestone: overallAwarded ? overallCrossed : overallBaseline,
       updated_at:              now,
     }).eq('user_id', user.id)
+    if (rewardsUpdateErr) {
+      console.error('POST /api/habits/complete: user_rewards perfect-day update failed', rewardsUpdateErr)
+    }
 
-    if (overallCrossed > overallBaseline) {
-      const points = OVERALL_MILESTONE_POINTS[overallCrossed]
-      await awardPoints(supabase, user.id, points, `Milestone: Perfect day streak ${overallCrossed} days`)
-      milestones.push({ label: `Perfect Day Streak — ${overallCrossed} days!`, points })
+    if (overallAwarded) {
+      milestones.push({ label: `Perfect Day Streak — ${overallCrossed} days!`, points: overallPoints })
     }
   }
 
