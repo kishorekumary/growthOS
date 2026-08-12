@@ -95,6 +95,7 @@ export default function ChallengeDetail({ challenge, onBack, onComplete, onUpdat
   const [milestoneLoading, setMilestoneLoading] = useState(false)
   const [editOpen, setEditOpen] = useState(false)
   const [editingDate, setEditingDate] = useState<string | null>(null)
+  const [checkinError, setCheckinError] = useState<string | null>(null)
 
   const { data: checkins, isOffline, refetch: load } = useCachedQuery<Record<string, Checkin>>(
     `challenge-checkins:${challenge.id}`,
@@ -154,22 +155,33 @@ export default function ChallengeDetail({ challenge, onBack, onComplete, onUpdat
     return dn >= 1 && dn <= totalDays
   }
 
-  async function saveCheckin(date: string, completed: boolean, reflectionText: string) {
-    if (saving) return
+  async function saveCheckin(date: string, completed: boolean, reflectionText: string): Promise<boolean> {
+    setCheckinError(null)
+    if (saving || !isEditableDate(date)) return false
     setSaving(true)
     if (completed) {
-      await supabase.from('challenge_checkins').upsert({
+      const { error } = await supabase.from('challenge_checkins').upsert({
         challenge_id: challenge.id,
         user_id: (await supabase.auth.getUser()).data.user?.id,
         checkin_date: date,
         completed: true,
         reflection: reflectionText.trim() || null,
       }, { onConflict: 'challenge_id,checkin_date' })
+      if (error) {
+        setSaving(false)
+        setCheckinError(error.message)
+        return false
+      }
     } else {
-      await supabase.from('challenge_checkins')
+      const { error } = await supabase.from('challenge_checkins')
         .delete()
         .eq('challenge_id', challenge.id)
         .eq('checkin_date', date)
+      if (error) {
+        setSaving(false)
+        setCheckinError(error.message)
+        return false
+      }
     }
 
     // Auto-complete the challenge if the edited day is the final day — keyed
@@ -185,6 +197,7 @@ export default function ChallengeDetail({ challenge, onBack, onComplete, onUpdat
 
     await load()
     setSaving(false)
+    return true
   }
 
   async function loadAiPrompt() {
@@ -258,8 +271,8 @@ export default function ChallengeDetail({ challenge, onBack, onComplete, onUpdat
           checkin={checkins[editingDate]}
           saving={saving}
           onSave={async (completed, reflectionText) => {
-            await saveCheckin(editingDate, completed, reflectionText)
-            setEditingDate(null)
+            const ok = await saveCheckin(editingDate, completed, reflectionText)
+            if (ok) setEditingDate(null)
           }}
           onClose={() => setEditingDate(null)}
         />
@@ -267,6 +280,10 @@ export default function ChallengeDetail({ challenge, onBack, onComplete, onUpdat
 
       {isOffline && (
         <p className="text-xs text-amber-400">Can&apos;t sync check-ins — you&apos;re offline.</p>
+      )}
+
+      {checkinError && (
+        <p className="text-xs text-red-400">{checkinError}</p>
       )}
 
       {/* Hero card */}
@@ -326,14 +343,17 @@ export default function ChallengeDetail({ challenge, onBack, onComplete, onUpdat
             else if (!isFuture && !isToday) bg = 'bg-red-500/15'
 
             return (
-              <div
+              <button
                 key={i}
+                type="button"
                 title={`Day ${i + 1} · ${dateStr}`}
+                aria-label={`Day ${i + 1}, ${dateStr}, ${isDone ? 'complete' : isFuture ? 'upcoming' : 'not complete'}`}
                 onClick={editable ? () => setEditingDate(dateStr) : undefined}
-                className={`aspect-square rounded-sm transition-all ${bg} ${
+                disabled={!editable}
+                className={`aspect-square w-full rounded-sm transition-all ${bg} ${
                   isToday && !isDone ? 'ring-1 ring-white/40' : ''
                 } ${isMilestone && !isDone && !isFuture ? 'ring-1 ring-yellow-500/40' : ''} ${
-                  editable ? 'cursor-pointer hover:ring-1 hover:ring-white/50' : ''
+                  editable ? 'cursor-pointer hover:ring-1 hover:ring-white/50' : 'cursor-default'
                 }`}
                 style={style}
               />
@@ -407,7 +427,7 @@ export default function ChallengeDetail({ challenge, onBack, onComplete, onUpdat
                 className="w-full rounded-xl border border-white/8 bg-white/3 px-3 py-2 text-sm text-slate-300 placeholder-slate-600 outline-none focus:border-purple-500/40 resize-none"
               />
               <button
-                onClick={async () => { await saveCheckin(today, true, reflection); setReflection('') }}
+                onClick={async () => { const ok = await saveCheckin(today, true, reflection); if (ok) setReflection('') }}
                 disabled={saving}
                 className="flex items-center gap-2 rounded-xl px-5 py-2.5 text-sm font-medium text-white transition-colors disabled:opacity-50"
                 style={{ backgroundColor: catColor + 'cc' }}
