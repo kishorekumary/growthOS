@@ -1,106 +1,69 @@
 # Unified habit + todo points engine
 
-## Problem
+> **Supersedes** the same-named draft written earlier today. That draft used different point values
+> and a simpler (client-writes-only) architecture, written before discovering that
+> [`2026-07-22-habit-reward-system-design.md`](2026-07-22-habit-reward-system-design.md) already exists
+> for this exact feature and is considerably more thorough. This doc adopts that spec's economy and
+> architecture wholesale (do not re-derive point values or the endpoint design — read that file) and
+> adds two things it doesn't cover: the grace-period "yesterday" catch-up path, and todo completions.
 
-`supabase/migrations/043_reward_system.sql` already added a full schema for a spendable points
-economy — `user_rewards` (balance + perfect-day streak state), `reward_catalog`, `reward_redemptions`,
-`reward_points_log`, and `personality_habits.last_milestone_awarded` — but nothing in the app reads or
-writes any of it. The only "points" a user currently sees are two unrelated, purely-cosmetic things:
-`CoinBurst`/`useHabitCelebration` (a coin animation on habit completion with no persistence at all) and
-`TaskRewards.tsx` (a fully client-computed todo gamification widget — Seedling→Legend tiers, streak,
-weekly activity grid — derived live from `todos.completed_at`/`due_date`, never written anywhere).
+## What carries over unchanged from the 2026-07-22 spec
 
-Users should earn real, persisted, spendable points from both habits and todos, redeemable against a
-self-defined reward catalog.
+- Point values: 5 pts / habit completion, 10 pts for keystone habits.
+- Per-habit milestone ladder (7/14/30/60/90/180/365 days → 50/100/250/500/1000/2000/5000 pts) and the
+  separate, bigger perfect-day-streak ladder (150/300/750/1500/3000/6000/15000 pts).
+- "Perfect day" definition (all daily-frequency habits — own + global — either done or missed/skipped;
+  only a habit left pending blocks it).
+- The consolidated completion architecture: one endpoint owns the streak update, points award, and
+  milestone detection, so the logic isn't tripled across call sites.
+- `increment_points_balance(p_user_id, p_delta)` atomic RPC, the milestone celebration popup
+  (`RewardMilestoneModal` via a `RewardContext`), the `/rewards` page (balance, streaks, catalog,
+  redemption history), the starter catalog, and the honor-system redemption flow.
+- Migration backfill of `last_milestone_awarded` for habits with pre-existing streaks.
 
-## Design
+## What's changed in the codebase since 2026-07-22 (why the old plan's diffs are stale)
 
-### Point values
+Three things shipped after that spec was written, and the consolidated endpoint must account for all of
+them even though the old plan's code samples predate them:
 
-- Habit completion: **10 pts**, or **20 pts** for a keystone habit — reusing the existing
-  keystone-based weight (`habitWeight()` in `HabitTracker.tsx`, 2× for keystone / 1× otherwise; there is
-  no category-based weighting anywhere in this codebase today, so none is introduced here).
-- Todo completion: **unchanged** — still exactly `taskPoints()`'s existing 10 base + 5 on-time bonus.
-  `TaskRewards.tsx` keeps computing and rendering its own live tier display exactly as it does today;
-  this feature adds a second, independent write into the persisted ledger alongside it. The two are not
-  reconciled or deduplicated against each other — `TaskRewards` remains a display, the ledger is now
-  also fed from the same completion event.
+1. **Shared streak logic**: `computeStreak`/`isGraceActive`/`graceDeadlineToday` now live in
+   `src/lib/habitStreak.ts`, imported by both `HabitTracker.tsx` and `QuickLog.tsx` — no more per-file
+   duplicate `computeStreak` to delete; it's a shared import with other callers, so it stays.
+2. **Grace-period "yesterday" catch-up**: `HabitTracker.tsx`'s `markDoneForYesterday` (and `QuickLog`'s
+   equivalent) let a user catch up a missed daily habit before noon the next day, scored as if done
+   yesterday. The 2026-07-22 endpoint design only ever handles "today" — as written, a caught-up habit
+   would silently earn no points/milestones, which is a real gap, not an acceptable omission (grace
+   catch-up is an actively-used, banner-advertised feature).
+3. **Hidden global habits** (`user_hidden_habits`) and the **coin-burst celebration**
+   (`useHabitCelebration`/`celebrate()`) both need to keep working exactly as they do today — hidden
+   habits stay excluded from the perfect-day set (same as everywhere else they're excluded), and
+   `celebrate()` still fires on a successful completion regardless of whether a milestone also fired.
 
-### Milestones
+**Fix**: `POST /api/habits/complete` takes an optional `for: 'today' | 'yesterday'` (default `'today'`)
+instead of assuming today. `for: 'yesterday'` upserts `habit_logs` for yesterday's date, computes the
+streak against yesterday as the reference date (mirroring `markDoneForYesterday`'s existing
+`computeStreak(..., yesterdayDate)` call), and otherwise runs the exact same points/milestone/perfect-day
+logic — perfect-day is evaluated against *yesterday's* date in that branch, not today's, matching what
+the pre-existing grace-catch-up already scores against.
 
-- **Per-habit streak milestones**: 7 / 30 / 60 / 90 / 180 / 365 days → 25 / 100 / 250 / 500 / 1000 / 2500
-  pts. `personality_habits.last_milestone_awarded` holds the highest rung already paid for the *current*
-  run and resets to 0 whenever `computeStreak()` (`src/lib/habitStreak.ts`) resets that habit's
-  `streak_count` back to 1 — so the ladder re-earns on every new run rather than being a lifetime bonus.
-- **Perfect-day bonus**: a day where every daily-frequency, currently-visible habit is marked done earns
-  a flat **20 pts**, plus the *same* 7/30/60/90/180/365 ladder (same point values) applied to the
-  perfect-day streak itself. `user_rewards.current_perfect_streak`/`longest_perfect_streak`/
-  `last_perfect_date` track the streak; `last_overall_milestone` is its ladder position, resetting to 0
-  whenever a day passes without becoming perfect. Weekly-frequency habits are excluded from the
-  perfect-day check entirely (they aren't due every day). Hidden global habits (`user_hidden_habits`)
-  are excluded, matching how they're already excluded from every other habit computation.
+## Addition: todo points
 
-### Atomicity
+Todo completions earn into the *same* `user_rewards.points_balance`/`reward_points_log`, using the
+`taskPoints()` value `TaskRewards.tsx` already computes (10 base + 5 on-time bonus) — exported from that
+file and called wherever a todo's `is_completed`/`completed_at` gets set (`TodoList.tsx`'s and
+`TodoWidget.tsx`'s `handleComplete`), via the same `awardPoints`-style insert-and-RPC pattern used by the
+habit endpoint (a plain client-side call is fine here — todos have no milestone/perfect-day logic to
+consolidate, so there's no need for a dedicated API route the way habits needed one for their three call
+sites). `TaskRewards.tsx` itself is untouched — its own tier/streak/weekly-grid display keeps computing
+live from `todos`, completely independent of the ledger.
 
-A single Postgres function, `award_points(p_user_id uuid, p_delta int, p_reason text)`, does the insert
-into `reward_points_log` and the balance increment on `user_rewards` (creating the row on first award if
-missing) in one statement, called via `supabase.rpc('award_points', ...)`. This is a deliberate departure
-from this codebase's usual client-side read-then-write convention (e.g. `streak_count` updates read
-current state then write it back) — a spendable balance is worth protecting from lost-update races in a
-way a habit streak count isn't. Every other write in this feature (habit logs, todo completion, catalog
-CRUD, redemptions) keeps using ordinary client-side Supabase calls, matching existing patterns.
+## Out of scope (same as 2026-07-22, plus)
 
-### Write paths
-
-- **Habit completion** (`HabitTracker.tsx`'s `markDone`/`markDoneForYesterday`, wherever a habit_logs row
-  is successfully written as `done`): after the existing streak update, call `award_points` for the base
-  amount, then check whether the new `streak_count` crossed a new milestone rung (compare against
-  `last_milestone_awarded`) and award+advance it if so, then check whether this completion makes today a
-  perfect day (every visible daily habit now done) and if so award the perfect-day bonus/streak/ladder.
-- **Todo completion**: wherever a todo's `is_completed`/`completed_at` gets set true (not yet located —
-  the implementation plan pins the exact file), call `award_points` with the same `taskPoints()` value
-  already computed for the live display, so the two numbers can never drift apart.
-- **Redemption**: spending points is a plain client-side transaction — check `points_balance >=
-  point_cost`, insert into `reward_redemptions` (snapshotting title/cost so later catalog edits don't
-  rewrite history), then decrement the balance. This one is a simple decrement, not routed through
-  `award_points` (which is additive-only by design — redemptions are a distinct, user-initiated action,
-  not an automatic award).
-
-### UI
-
-- A compact points-balance chip in the Habit Tracker header, next to the existing "done today" line —
-  reads `user_rewards.points_balance` for the current user, updates after any award in the same session.
-- A new **Rewards** page: current balance, a user-managed catalog (add/edit/delete a reward with a title
-  and point cost), a "Redeem" action per catalog item (disabled if balance is insufficient), and a
-  scrollable history of `reward_points_log` entries (reason + delta + timestamp) plus `reward_redemptions`.
-  Needs a nav entry (Sidebar/BottomNav) to reach it — exact placement decided in the implementation plan
-  by following this app's existing nav-entry pattern.
-
-## Out of scope
-
-- No change to `TaskRewards.tsx`'s visual tier system, streak calc, or weekly grid — it stays exactly as
-  it is; only a new, separate ledger write is added alongside its existing (unchanged) display logic.
-- No retroactive point awards for habit/todo completions that already happened before this ships — the
-  ledger starts accruing from the day this feature goes live.
-- No admin-side visibility into other users' points/redemptions.
-- No expiring points, no negative balances (a redemption that would drop the balance below zero is
-  simply blocked client-side rather than allowed and clamped).
+Everything the original spec excluded, plus: no todo milestones, no todo "perfect day" concept, no
+change to `TaskRewards.tsx`'s UI or scoring.
 
 ## Testing
 
-Manual verification in-browser (no test framework in this repo):
-
-- Complete a regular habit; confirm the points chip increases by 10 and a `reward_points_log` row exists
-  with the right reason text.
-- Complete a keystone habit; confirm +20 instead of +10.
-- Drive a habit's streak across the 7-day threshold; confirm a one-time +25 milestone award fires exactly
-  once, not on every subsequent day, and that breaking the streak and rebuilding it to 7 again re-awards it.
-- Complete every daily habit in one day; confirm the +20 perfect-day bonus fires, and that the perfect-day
-  streak/ladder advances the same way the per-habit one does across a multi-day run.
-- Complete a todo; confirm the points chip increases by the same amount `TaskRewards.tsx` displays for
-  that completion, and that `TaskRewards.tsx`'s own display is completely unaffected.
-- Add a reward catalog item, redeem it with sufficient balance (confirm balance decrements and a
-  `reward_redemptions` row appears), then attempt to redeem with insufficient balance (confirm it's
-  blocked).
-- Confirm a second browser tab/session for a different user never sees the first user's balance,
-  catalog, or history (RLS).
+Same manual checklist as the 2026-07-22 spec, plus: catch up a missed habit via the grace-period banner
+before noon and confirm it awards points/milestones identically to marking it done same-day; complete a
+todo and confirm the points chip increases by the exact amount `TaskRewards.tsx` shows for it.
