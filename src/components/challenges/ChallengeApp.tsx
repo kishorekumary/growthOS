@@ -59,12 +59,13 @@ function ChallengeCard({ challenge, onClick }: { challenge: Challenge; onClick: 
   const catColor    = CATEGORY_COLOR[challenge.category] ?? '#818cf8'
   const isCompleted = challenge.status === 'completed'
   const isAbandoned = challenge.status === 'abandoned' || (challenge.status === 'active' && isChallengeExpired(challenge))
+  const isDull      = isCompleted || isAbandoned
   const notStarted  = challenge.start_date > today
 
   return (
     <button
       onClick={onClick}
-      className="w-full text-left rounded-2xl border border-white/8 bg-white/3 p-4 hover:border-white/15 hover:bg-white/5 transition-all group"
+      className={`w-full text-left rounded-2xl border border-white/8 bg-white/3 p-4 hover:border-white/15 hover:bg-white/5 transition-all group ${isDull ? 'opacity-55' : ''}`}
     >
       <div className="flex items-start justify-between gap-3 mb-3">
         <div className="flex-1 min-w-0">
