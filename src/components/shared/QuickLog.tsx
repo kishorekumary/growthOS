@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useMemo, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import {
   Plus, X, Utensils, Dumbbell, CheckSquare, CreditCard, BookOpen,
@@ -30,6 +30,11 @@ interface Habit {
   last_done_at: string | null
   frequency: 'daily' | 'weekly'
   is_keystone: boolean
+  is_global: boolean
+}
+
+interface HiddenMark {
+  habit_id: string
 }
 
 // ─── Image resize (prevents 413 on large phone photos) ───────────
@@ -529,13 +534,35 @@ const CAT_BADGE: Record<string, string> = Object.fromEntries(
 function HabitPanel() {
   const today = todayStr()
 
-  const { data: habits, loading: habitsLoading, isOffline, setData: setHabits } = useCachedQuery<Habit[]>(
+  const { data: rawHabits, loading: habitsLoading, isOffline, setData: setHabits } = useCachedQuery<Habit[]>(
     'habits:quicklog',
     (supabase, userId) => supabase.from('personality_habits')
-      .select('id, habit_name, category, streak_count, longest_streak, last_done_at, frequency, is_keystone')
+      .select('id, habit_name, category, streak_count, longest_streak, last_done_at, frequency, is_keystone, is_global')
       .eq('user_id', userId)
       .order('created_at', { ascending: true }),
     [],
+  )
+
+  // A habit row here can be one of the admin's own global habits (global rows
+  // are owned by the creating admin's user_id, so `.eq('user_id', userId)`
+  // above picks them up same as any personal habit) — respect the same
+  // per-user hide state the Habit Tracker's "Manage Global" modal writes to,
+  // so hiding a global habit there also removes it from Quick Log.
+  const { data: hiddenHabitMarks } = useCachedQuery<HiddenMark[]>(
+    'hidden-global-habits',
+    (supabase, userId) => supabase
+      .from('user_hidden_habits')
+      .select('habit_id')
+      .eq('user_id', userId),
+    []
+  )
+  const hiddenHabitIds = useMemo(
+    () => new Set(hiddenHabitMarks.map(h => h.habit_id)),
+    [hiddenHabitMarks]
+  )
+  const habits = useMemo(
+    () => rawHabits.filter(h => !h.is_global || !hiddenHabitIds.has(h.id)),
+    [rawHabits, hiddenHabitIds]
   )
 
   const { data: logs, loading: logsLoading } = useCachedQuery<{ habit_id: string; status: string }[]>(
