@@ -201,7 +201,11 @@ export default function TodoList({ initialTodos = [] }: { initialTodos?: Todo[] 
   }
 
   async function handleUncomplete(id: string) {
-    const now = new Date().toISOString()
+    const now  = new Date().toISOString()
+    // Capture the todo (with its due_date/completed_at) before resetting
+    // local state, so taskPoints() below computes the exact amount that was
+    // originally awarded — the reversal can never drift from the award.
+    const todo = todos.find(t => t.id === id)
     setTodos(prev => prev.map(t =>
       t.id === id ? { ...t, is_completed: false, completed_at: null } : t
     ))
@@ -210,6 +214,20 @@ export default function TodoList({ initialTodos = [] }: { initialTodos?: Todo[] 
       .from('user_todos')
       .update({ is_completed: false, completed_at: null, updated_at: now })
       .eq('id', id)
+
+    // Reverse the points this completion earned. A failed reversal must
+    // never block or roll back the uncomplete above (already applied) —
+    // same non-blocking error-logging discipline as handleComplete's award.
+    const { data: { user } } = await supabase.auth.getUser()
+    if (user && todo) {
+      const points = -taskPoints(todo)
+      const { error: rewardsUpsertErr } = await supabase.from('user_rewards').upsert({ user_id: user.id }, { onConflict: 'user_id', ignoreDuplicates: true })
+      if (rewardsUpsertErr) console.error('Failed to reverse todo points:', rewardsUpsertErr)
+      const { error: logErr } = await supabase.from('reward_points_log').insert({ user_id: user.id, delta: points, reason: `Undo: ${todo.title}` })
+      if (logErr) console.error('Failed to reverse todo points:', logErr)
+      const { error: rpcErr } = await supabase.rpc('increment_points_balance', { p_user_id: user.id, p_delta: points })
+      if (rpcErr) console.error('Failed to reverse todo points:', rpcErr)
+    }
   }
 
   async function handleDelete(id: string) {

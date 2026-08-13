@@ -614,8 +614,13 @@ function HabitPanel() {
     const done   = new Set<string>()
     const missed = new Set<string>()
     for (const row of logs) {
-      if (row.status === 'done')   done.add(row.habit_id)
-      if (row.status === 'missed') missed.add(row.habit_id)
+      if (row.status === 'done')        done.add(row.habit_id)
+      if (row.status === 'missed')      missed.add(row.habit_id)
+      // 'auto_missed' is the nightly cron's silent backfill for a habit the
+      // user never touched — treat it exactly like a normal missed/skipped
+      // habit here too, so it's hidden from the list instead of showing as
+      // pending (only isPerfectDay treats it differently).
+      if (row.status === 'auto_missed') missed.add(row.habit_id)
     }
     // Fallback: check last_done_at for today
     for (const h of habits) {

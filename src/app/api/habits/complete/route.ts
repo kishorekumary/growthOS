@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { createSupabaseServerClient } from '@/lib/supabase-server'
-import { computeStreak, todayStr, yesterdayStr } from '@/lib/habitStreak'
+import { computeStreak, localDateStr } from '@/lib/habitStreak'
 import {
   highestMilestoneCrossed, PER_HABIT_MILESTONE_POINTS, OVERALL_MILESTONE_POINTS,
   DAILY_POINTS, DAILY_POINTS_KEYSTONE,
@@ -28,14 +28,36 @@ async function awardPoints(supabase: SupabaseClient, userId: string, delta: numb
   return true
 }
 
+const DATE_RE = /^\d{4}-\d{2}-\d{2}$/
+
 export async function POST(req: Request) {
   const supabase = createSupabaseServerClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-  const { habit_id, for: forDay } = await req.json() as { habit_id?: string; for?: 'today' | 'yesterday' }
+  const { habit_id, for: forDay, date: clientDate } = await req.json() as {
+    habit_id?: string; for?: 'today' | 'yesterday'; date?: string
+  }
   if (!habit_id) return NextResponse.json({ error: 'habit_id required' }, { status: 400 })
   const isYesterday = forDay === 'yesterday'
+
+  // The client (browser) computes "today"/"yesterday" in the user's own local
+  // timezone and sends it as `date` — this server runtime resolves plain JS
+  // Date methods to its own timezone (UTC in production), not the user's, so
+  // it cannot reliably derive the correct calendar day itself. This is only a
+  // loose sanity bound against a garbage/malicious client value (not an
+  // attempt at full timezone correctness): reject anything wildly off from
+  // the server's own current UTC date.
+  if (!clientDate || !DATE_RE.test(clientDate)) {
+    return NextResponse.json({ error: 'date required (YYYY-MM-DD)' }, { status: 400 })
+  }
+  const serverUtcToday      = new Date().toISOString().slice(0, 10)
+  const clientMidnightUtcMs = new Date(`${clientDate}T00:00:00Z`).getTime()
+  const serverMidnightUtcMs = new Date(`${serverUtcToday}T00:00:00Z`).getTime()
+  const dayDiff             = Math.round((clientMidnightUtcMs - serverMidnightUtcMs) / 86400000)
+  if (Number.isNaN(clientMidnightUtcMs) || Math.abs(dayDiff) > 2) {
+    return NextResponse.json({ error: 'date is out of range' }, { status: 400 })
+  }
 
   const { data: habit, error: habitErr } = await supabase
     .from('personality_habits')
@@ -45,12 +67,16 @@ export async function POST(req: Request) {
   if (habitErr || !habit) return NextResponse.json({ error: 'Habit not found' }, { status: 404 })
 
   // Reference point for every date-sensitive calculation below — "today"
-  // in the normal case, "yesterday" for a grace-period catch-up. Mirrors
-  // markDoneForYesterday's existing client-side behavior exactly.
-  const refDate  = isYesterday ? (() => { const d = new Date(); d.setDate(d.getDate() - 1); return d })() : new Date()
-  const logDate  = isYesterday ? yesterdayStr() : todayStr()
-  const now       = new Date().toISOString()
-  const refIso    = isYesterday ? refDate.toISOString() : now
+  // in the normal case, "yesterday" for a grace-period catch-up. Derived
+  // from the client-supplied date, parsed as a *local-midnight* Date (no
+  // trailing "Z") rather than `new Date(clientDate)` alone (which parses as
+  // UTC midnight and could shift the calendar day depending on the server's
+  // timezone offset). computeStreak/isPerfectDay/the guard below only ever
+  // compare day-granularity differences, not absolute time, so this is safe.
+  const logDate = clientDate
+  const refDate = new Date(`${clientDate}T00:00:00`)
+  const now     = new Date().toISOString()
+  const refIso  = isYesterday ? refDate.toISOString() : now
   const milestones: Milestone[] = []
 
   // Defense-in-depth mirroring markDoneForYesterday's client-side guard:
@@ -109,17 +135,41 @@ export async function POST(req: Request) {
     }
   }
 
-  // 3. Ensure a user_rewards row exists before awarding anything
+  // 3. Ensure a user_rewards row exists before awarding anything. This is a
+  // point of no return the same way the habit_logs upsert above is: if it
+  // fails, increment_points_balance's UPDATE ... WHERE user_id = ... below
+  // would match zero rows and return no error, so awardPoints would report
+  // success even though no points moved — and if this happens to land on a
+  // milestone-crossing call, last_milestone_awarded would get persisted as
+  // paid without the points actually landing, permanently blocking that
+  // milestone. Bail out before any award/milestone/perfect-day logic runs.
   const { error: rewardsUpsertErr } = await supabase.from('user_rewards').upsert(
     { user_id: user.id },
     { onConflict: 'user_id', ignoreDuplicates: true }
   )
   if (rewardsUpsertErr) {
     console.error('POST /api/habits/complete: user_rewards upsert failed', rewardsUpsertErr)
+    return NextResponse.json({ error: 'Failed to initialize rewards' }, { status: 500 })
+  }
+
+  // 3b. Keystone-ness for a GLOBAL habit is per-user (user_habit_keystones),
+  // not the shared personality_habits.is_keystone column — that column means
+  // nothing per-user for a row shared across every user. Mirrors
+  // HabitTracker.tsx's isKeystoneFor(habit). Personal (non-global) habits
+  // keep using habit.is_keystone directly, unchanged.
+  let isKeystone = habit.is_keystone
+  if (habit.is_global) {
+    const { data: keystoneMark } = await supabase
+      .from('user_habit_keystones')
+      .select('habit_id')
+      .eq('user_id', user.id)
+      .eq('habit_id', habit.id)
+      .maybeSingle()
+    isKeystone = !!keystoneMark
   }
 
   // 4. Daily points
-  const dailyPoints = habit.is_keystone ? DAILY_POINTS_KEYSTONE : DAILY_POINTS
+  const dailyPoints = isKeystone ? DAILY_POINTS_KEYSTONE : DAILY_POINTS
   await awardPoints(supabase, user.id, dailyPoints, `Daily: ${habit.habit_name}`)
 
   // 5. Per-habit milestone — skipped for global habits, same reason as step 2
@@ -161,7 +211,13 @@ export async function POST(req: Request) {
   const dailyHabits = (dailyHabitsRaw ?? []).filter(h => !h.is_global || !hiddenIds.has(h.id))
 
   if (rewards && isPerfectDay(dailyHabits, logsForDay ?? []) && rewards.last_perfect_date !== logDate) {
-    const priorDay        = isYesterday ? (() => { const d = new Date(); d.setDate(d.getDate() - 2); return [d.getFullYear(), String(d.getMonth() + 1).padStart(2, '0'), String(d.getDate()).padStart(2, '0')].join('-') })() : yesterdayStr()
+    // Calendar day immediately before logDate, computed by pure local-date
+    // arithmetic on the client-supplied date (never via server "now") — same
+    // reasoning as refDate above.
+    const priorDate = new Date(`${logDate}T00:00:00`)
+    priorDate.setDate(priorDate.getDate() - 1)
+    const priorDay = localDateStr(priorDate)
+
     const newPerfect       = rewards.last_perfect_date === priorDay ? rewards.current_perfect_streak + 1 : 1
     const longestPerfect   = Math.max(newPerfect, rewards.longest_perfect_streak)
     const overallBaseline  = newPerfect === 1 ? 0 : rewards.last_overall_milestone

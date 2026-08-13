@@ -102,7 +102,11 @@ export async function GET(req: NextRequest) {
     const missing = habitIds.filter(id => !logged.has(id))
     if (!missing.length) continue
 
-    // Insert a 'missed' log for each unlogged habit
+    // Insert an 'auto_missed' log for each unlogged habit — distinct from a
+    // user-initiated 'missed' (skip) so isPerfectDay (src/lib/perfectDay.ts)
+    // never treats this silent backfill as "handled." Every other read site
+    // (HabitTracker, QuickLog) normalizes 'auto_missed' back to 'missed' for
+    // display/undo purposes; only perfect-day scoring needs to tell them apart.
     const { error: insertErr } = await admin
       .from('habit_logs')
       .insert(
@@ -110,7 +114,7 @@ export async function GET(req: NextRequest) {
           user_id:  u.id,
           habit_id,
           log_date: yesterday,
-          status:   'missed',
+          status:   'auto_missed',
         }))
       )
 

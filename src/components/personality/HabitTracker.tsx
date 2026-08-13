@@ -20,6 +20,7 @@ import { computeStreak, localDateStr, todayStr, yesterdayStr, isGraceActive } fr
 import { useHabitCelebration } from '@/hooks/useHabitCelebration'
 import { completeHabit } from '@/lib/completeHabit'
 import { useReward } from '@/contexts/RewardContext'
+import { DAILY_POINTS, DAILY_POINTS_KEYSTONE } from '@/lib/rewardMilestones'
 
 type Category  = HabitCategory
 type Frequency = 'daily' | 'weekly'
@@ -40,7 +41,10 @@ interface Habit {
 interface HabitLog {
   habit_id: string
   log_date: string   // YYYY-MM-DD
-  status: 'done' | 'missed'
+  // 'auto_missed' is the nightly cron's silent backfill for a habit the user
+  // never touched — getStatus() normalizes it to 'missed' before it reaches
+  // any other code path in this file (see getStatus below).
+  status: 'done' | 'missed' | 'auto_missed'
 }
 
 interface KeystoneMark {
@@ -506,7 +510,12 @@ export default function HabitTracker() {
   function getStatus(habitId: string): LogStatus {
     const today = todayStr()
     const log = weekLogs.find(l => l.habit_id === habitId && l.log_date === today)
-    if (log) return log.status
+    // Normalize the cron's silent 'auto_missed' backfill to 'missed' here —
+    // every other code path in this file (LogStatus, undoLog, the
+    // pending/done/skipped filters, the JSX icon branches) only ever needs
+    // to distinguish user-initiated 'missed' from 'done'/'pending'; only
+    // isPerfectDay (src/lib/perfectDay.ts) treats 'auto_missed' differently.
+    if (log) return log.status === 'auto_missed' ? 'missed' : log.status
     const habit = habits.find(h => h.id === habitId)
     // Fall back to last_done_at — covers both when habit_logs is unavailable and
     // when a done entry exists in personality_habits but is absent from habit_logs.
@@ -661,6 +670,26 @@ export default function HabitTracker() {
             streak_count: newStreak, last_done_at: null, updated_at: new Date().toISOString(),
           }).eq('id', habit.id)
       await Promise.all([deleteLog, updateHabit])
+
+      // Reverse the base daily points this completion earned — only the
+      // base amount (5 or 10 for keystone), not any milestone/perfect-day
+      // bonuses, which stay earned (matches this feature's existing "no
+      // streak-loss penalty" principle). A failed reversal must never block
+      // or roll back the undo above (already applied) — same non-blocking
+      // error-logging discipline TodoList.tsx already uses for its own
+      // points-award/reversal calls.
+      if (userId) {
+        const delta = -(isKeystoneFor(habit) ? DAILY_POINTS_KEYSTONE : DAILY_POINTS)
+        const { error: rewardsUpsertErr } = await supabase.from('user_rewards').upsert(
+          { user_id: userId }, { onConflict: 'user_id', ignoreDuplicates: true }
+        )
+        if (rewardsUpsertErr) console.error('Failed to reverse habit undo points:', rewardsUpsertErr)
+        const { error: logErr } = await supabase.from('reward_points_log')
+          .insert({ user_id: userId, delta, reason: `Undo: ${habit.habit_name}` })
+        if (logErr) console.error('Failed to reverse habit undo points:', logErr)
+        const { error: rpcErr } = await supabase.rpc('increment_points_balance', { p_user_id: userId, p_delta: delta })
+        if (rpcErr) console.error('Failed to reverse habit undo points:', rpcErr)
+      }
     } else {
       writeTodayMissed(readTodayMissed().filter(id => id !== habit.id))
       await supabase.from('habit_logs').delete()
