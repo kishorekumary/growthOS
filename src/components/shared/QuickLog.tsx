@@ -1015,6 +1015,7 @@ function VoicePanel({ onDone }: { onDone: () => void }) {
   const [nutritionData, setNutritionData] = useState<NutritionEstimate | null>(null)
   const [parsingMsg, setParsingMsg]       = useState('Understanding your command…')
   const { celebrate, celebrationNode } = useHabitCelebration()
+  const { celebrateMilestones } = useReward()
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const recognitionRef  = useRef<any>(null)
@@ -1203,22 +1204,9 @@ function VoicePanel({ onDone }: { onDone: () => void }) {
           logged_at: new Date().toISOString(),
         })
       } else if (result.type === 'habit' && matchedHabit) {
-        const h         = matchedHabit
-        const newStreak = computeStreak(h.streak_count, h.last_done_at, h.frequency)
-        const now       = new Date().toISOString()
-        await Promise.all([
-          supabase.from('personality_habits').update({
-            streak_count:   newStreak,
-            longest_streak: Math.max(newStreak, h.longest_streak),
-            last_done_at:   now,
-            updated_at:     now,
-          }).eq('id', h.id),
-          supabase.from('habit_logs').upsert(
-            { user_id: uid, habit_id: h.id, log_date: today, status: 'done' },
-            { onConflict: 'habit_id,user_id,log_date' }
-          ),
-        ])
+        const { milestones } = await completeHabit(matchedHabit.id)
         celebrate()
+        celebrateMilestones(milestones)
       } else if (result.type === 'journal') {
         await supabase.from('journal_entries').insert({
           title:      result.title?.trim() || null,
