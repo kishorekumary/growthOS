@@ -17,27 +17,23 @@ export async function POST(req: Request) {
     .single()
   if (itemErr || !item) return NextResponse.json({ error: 'Reward not found' }, { status: 404 })
 
-  const { data: rewards } = await supabase
-    .from('user_rewards')
-    .select('points_balance')
-    .eq('user_id', user.id)
-    .single()
-  if (!rewards || rewards.points_balance < item.point_cost) {
+  const { data: redeemed, error: redeemErr } = await supabase.rpc('redeem_points', {
+    p_user_id: user.id,
+    p_cost:    item.point_cost,
+  })
+  if (redeemErr || !redeemed) {
     return NextResponse.json({ error: 'Not enough points' }, { status: 400 })
   }
 
-  const { error: deductErr } = await supabase.rpc('increment_points_balance', {
-    p_user_id: user.id,
-    p_delta:   -item.point_cost,
-  })
-  if (deductErr) return NextResponse.json({ error: deductErr.message }, { status: 500 })
-
-  await supabase.from('reward_points_log').insert({
+  const { error: logErr } = await supabase.from('reward_points_log').insert({
     user_id: user.id, delta: -item.point_cost, reason: `Redeemed: ${item.title}`,
   })
-  const { data: redemption } = await supabase.from('reward_redemptions').insert({
+  if (logErr) return NextResponse.json({ error: logErr.message }, { status: 500 })
+
+  const { data: redemption, error: redemptionErr } = await supabase.from('reward_redemptions').insert({
     user_id: user.id, title: item.title, point_cost: item.point_cost,
   }).select().single()
+  if (redemptionErr) return NextResponse.json({ error: redemptionErr.message }, { status: 500 })
 
   return NextResponse.json({ redemption })
 }

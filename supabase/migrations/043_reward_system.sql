@@ -88,3 +88,21 @@ AS $$
   SET points_balance = points_balance + p_delta, updated_at = NOW()
   WHERE user_id = p_user_id;
 $$;
+
+-- Atomic spend: only deducts if the balance actually covers the cost,
+-- avoiding the race a separate read-then-increment_points_balance call
+-- would have (the only place in this schema enforcing a balance floor).
+-- Returns true if the deduction happened, false if the balance was
+-- insufficient (no row matched the WHERE clause, nothing was changed).
+CREATE OR REPLACE FUNCTION public.redeem_points(p_user_id UUID, p_cost INTEGER)
+RETURNS boolean
+LANGUAGE sql
+AS $$
+  WITH updated AS (
+    UPDATE public.user_rewards
+    SET points_balance = points_balance - p_cost, updated_at = NOW()
+    WHERE user_id = p_user_id AND points_balance >= p_cost
+    RETURNING 1
+  )
+  SELECT EXISTS (SELECT 1 FROM updated);
+$$;
