@@ -6,6 +6,7 @@ import { Plus, ArrowRight, Loader2, CheckSquare } from 'lucide-react'
 import { createSupabaseBrowserClient } from '@/lib/supabase'
 import { format, isBefore, parseISO, startOfDay } from 'date-fns'
 import { cn } from '@/lib/utils'
+import { taskPoints } from './TaskRewards'
 
 interface Todo {
   id: string
@@ -40,6 +41,7 @@ export default function TodoWidget({ initialTodos = [] }: { initialTodos?: Todo[
   }
 
   async function handleComplete(id: string) {
+    const todo = todos.find(t => t.id === id)
     setTodos(prev => prev.filter(t => t.id !== id))
     const now = new Date().toISOString()
     const supabase = createSupabaseBrowserClient()
@@ -47,6 +49,14 @@ export default function TodoWidget({ initialTodos = [] }: { initialTodos?: Todo[
       .from('user_todos')
       .update({ is_completed: true, completed_at: now, updated_at: now })
       .eq('id', id)
+
+    const { data: { user } } = await supabase.auth.getUser()
+    if (user && todo) {
+      const points = taskPoints({ id: todo.id, is_completed: true, completed_at: now, due_date: todo.due_date })
+      await supabase.from('user_rewards').upsert({ user_id: user.id }, { onConflict: 'user_id', ignoreDuplicates: true })
+      await supabase.from('reward_points_log').insert({ user_id: user.id, delta: points, reason: `Task: ${todo.title}` })
+      await supabase.rpc('increment_points_balance', { p_user_id: user.id, p_delta: points })
+    }
   }
 
   function isOverdue(dateStr: string | null) {

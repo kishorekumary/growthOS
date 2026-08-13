@@ -8,7 +8,7 @@ import {
 import { Leaf, Zap, Flame, Star, Crown, Sparkles, ChevronDown, ChevronUp } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
-interface Todo {
+export interface Todo {
   id: string
   is_completed: boolean
   completed_at: string | null
@@ -60,7 +60,7 @@ function getProgress(pts: number, tiers: TierDef[]): number {
 }
 
 // Points for a single completed todo
-function taskPoints(todo: Todo): number {
+export function taskPoints(todo: Todo): number {
   let pts = 10
   if (todo.due_date && todo.completed_at) {
     const completedDate = todo.completed_at.slice(0, 10)  // YYYY-MM-DD

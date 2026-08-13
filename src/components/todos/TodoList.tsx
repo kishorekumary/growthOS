@@ -12,7 +12,7 @@ import {
 } from 'date-fns'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
-import TaskRewards from './TaskRewards'
+import TaskRewards, { taskPoints } from './TaskRewards'
 
 interface Todo {
   id: string
@@ -177,7 +177,8 @@ export default function TodoList({ initialTodos = [] }: { initialTodos?: Todo[] 
   }
 
   async function handleComplete(id: string) {
-    const now = new Date().toISOString()
+    const now  = new Date().toISOString()
+    const todo = todos.find(t => t.id === id)
     setTodos(prev => prev.map(t =>
       t.id === id ? { ...t, is_completed: true, completed_at: now } : t
     ))
@@ -186,6 +187,14 @@ export default function TodoList({ initialTodos = [] }: { initialTodos?: Todo[] 
       .from('user_todos')
       .update({ is_completed: true, completed_at: now, updated_at: now })
       .eq('id', id)
+
+    const { data: { user } } = await supabase.auth.getUser()
+    if (user && todo) {
+      const points = taskPoints({ ...todo, completed_at: now })
+      await supabase.from('user_rewards').upsert({ user_id: user.id }, { onConflict: 'user_id', ignoreDuplicates: true })
+      await supabase.from('reward_points_log').insert({ user_id: user.id, delta: points, reason: `Task: ${todo.title}` })
+      await supabase.rpc('increment_points_balance', { p_user_id: user.id, p_delta: points })
+    }
   }
 
   async function handleUncomplete(id: string) {
