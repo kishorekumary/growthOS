@@ -451,6 +451,37 @@ function ManageGlobalHabitsModal({
 
 // ─── Weekly Score Card ────────────────────────────────────────
 
+function OverallProgressCard({
+  habitCount, completionRate, topStreak, bestEverStreak,
+}: {
+  habitCount: number; completionRate: number | null; topStreak: number; bestEverStreak: number
+}) {
+  if (habitCount === 0) return null
+
+  return (
+    <div className="rounded-xl border border-white/8 bg-white/3 p-4 space-y-3">
+      <div className="flex items-center gap-2">
+        <Flame className="h-4 w-4 text-violet-400" />
+        <p className="text-xs font-medium text-slate-400">Overall Progress</p>
+      </div>
+      <div className="grid grid-cols-3 gap-2">
+        <div className="text-center">
+          <p className="text-2xl font-bold text-white">{completionRate === null ? '—' : `${completionRate}%`}</p>
+          <p className="text-[10px] text-slate-500 mt-0.5">done · 90d</p>
+        </div>
+        <div className="text-center">
+          <p className="text-2xl font-bold text-orange-300">{topStreak}</p>
+          <p className="text-[10px] text-slate-500 mt-0.5">best current streak</p>
+        </div>
+        <div className="text-center">
+          <p className="text-2xl font-bold text-amber-300">{bestEverStreak}</p>
+          <p className="text-[10px] text-slate-500 mt-0.5">best-ever streak</p>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 function WeeklyScoreCard({
   done, missed, weightedDone, weightedTotal, avgCompletedStreak,
 }: {
@@ -599,6 +630,27 @@ export default function HabitTracker() {
       .gte('log_date', weekStart),
     [],
     [weekStart]
+  )
+
+  // 90-day window for the Overall Progress card's completion-rate stat —
+  // same rolling scale as the per-habit detail modal's heatmap, across all
+  // habits rather than just one.
+  const ninetyDaysAgoStr = useMemo(() => {
+    const d = new Date()
+    d.setDate(d.getDate() - 89)
+    return localDateStr(d)
+  }, [])
+  const {
+    data: last90dLogs,
+  } = useCachedQuery<HabitLog[]>(
+    `habit-logs:90d-all`,
+    (supabase, userId) => supabase
+      .from('habit_logs')
+      .select('habit_id, log_date, status')
+      .eq('user_id', userId)
+      .gte('log_date', ninetyDaysAgoStr),
+    [],
+    [ninetyDaysAgoStr]
   )
 
   const yesterday = yesterdayStr()
@@ -913,6 +965,22 @@ export default function HabitTracker() {
   const weightedDone  = weekLogs.filter(l => l.status === 'done').reduce((s, l) => s + habitWeight(l.habit_id), 0)
   const weightedTotal = weekLogs.reduce((s, l) => s + habitWeight(l.habit_id), 0)
   const topStreak  = visibleHabits.reduce((m, h) => Math.max(m, h.streak_count), 0)
+  const bestEverStreak = visibleHabits.reduce((m, h) => Math.max(m, h.longest_streak), 0)
+
+  // Overall completion rate over the last 90 days, daily-frequency habits
+  // only (weekly habits have no clean "one expected per day" denominator).
+  // Each habit's own creation date clamps its share of the window so a
+  // habit added recently doesn't get penalized for days before it existed.
+  const dailyVisibleHabits = visibleHabits.filter(h => h.frequency === 'daily')
+  const dailyHabitIds = new Set(dailyVisibleHabits.map(h => h.id))
+  const totalPossibleDays = dailyVisibleHabits.reduce((sum, h) => {
+    const createdAtStr = localDateStr(new Date(h.created_at))
+    const windowStart = createdAtStr > ninetyDaysAgoStr ? createdAtStr : ninetyDaysAgoStr
+    const days = Math.round((new Date(todayStr()).getTime() - new Date(windowStart).getTime()) / 86400000) + 1
+    return sum + Math.max(0, days)
+  }, 0)
+  const totalDoneDays = last90dLogs.filter(l => l.status === 'done' && dailyHabitIds.has(l.habit_id)).length
+  const completionRate90d = totalPossibleDays > 0 ? Math.round((totalDoneDays / totalPossibleDays) * 100) : null
 
   // Average streak of habits completed at least once this week (for streak bonus)
   const completedHabitIds = new Set(weekLogs.filter(l => l.status === 'done').map(l => l.habit_id))
@@ -1004,6 +1072,14 @@ export default function HabitTracker() {
           <AddHabitModal onAdd={fetchData} />
         </div>
       </div>
+
+      {/* Overall progress across all habits */}
+      <OverallProgressCard
+        habitCount={visibleHabits.length}
+        completionRate={completionRate90d}
+        topStreak={topStreak}
+        bestEverStreak={bestEverStreak}
+      />
 
       {/* Weekly score */}
       <WeeklyScoreCard done={weekDone} missed={weekMissed} weightedDone={weightedDone} weightedTotal={weightedTotal} avgCompletedStreak={avgCompletedStreak} />
@@ -1157,6 +1233,9 @@ export default function HabitTracker() {
                     {habit.streak_count}
                     <span className="text-xs font-normal text-slate-500 ml-0.5">days</span>
                   </span>
+                  {habit.longest_streak > habit.streak_count && (
+                    <span className="text-[10px] text-slate-600">· best {habit.longest_streak}</span>
+                  )}
                 </div>
               )}
 
