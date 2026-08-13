@@ -20,17 +20,6 @@ CREATE POLICY "own rewards" ON public.user_rewards
 ALTER TABLE public.personality_habits
   ADD COLUMN IF NOT EXISTS last_milestone_awarded INTEGER NOT NULL DEFAULT 0;
 
--- Backfill: existing habits already have a streak_count built up before
--- this feature existed. Set last_milestone_awarded to the highest
--- threshold already reached so there's no retroactive flood of popups
--- the moment this ships — the *next* new milestone still pays out.
-UPDATE public.personality_habits
-SET last_milestone_awarded = (
-  SELECT COALESCE(MAX(t), 0)
-  FROM unnest(ARRAY[7, 14, 30, 60, 90, 180, 365]) AS t
-  WHERE t <= streak_count
-);
-
 -- User-defined reward catalog.
 CREATE TABLE public.reward_catalog (
   id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -74,35 +63,3 @@ ALTER TABLE public.reward_points_log ENABLE ROW LEVEL SECURITY;
 
 CREATE POLICY "own reward points log" ON public.reward_points_log
   FOR ALL USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
-
--- Atomic balance increment/decrement (used for both awarding and
--- redemption spending) — avoids a read-then-write race between
--- concurrent requests. Runs as SECURITY INVOKER (default), so the
--- caller's own RLS policy above still applies: a mismatched p_user_id
--- simply matches zero rows.
-CREATE OR REPLACE FUNCTION public.increment_points_balance(p_user_id UUID, p_delta INTEGER)
-RETURNS void
-LANGUAGE sql
-AS $$
-  UPDATE public.user_rewards
-  SET points_balance = points_balance + p_delta, updated_at = NOW()
-  WHERE user_id = p_user_id;
-$$;
-
--- Atomic spend: only deducts if the balance actually covers the cost,
--- avoiding the race a separate read-then-increment_points_balance call
--- would have (the only place in this schema enforcing a balance floor).
--- Returns true if the deduction happened, false if the balance was
--- insufficient (no row matched the WHERE clause, nothing was changed).
-CREATE OR REPLACE FUNCTION public.redeem_points(p_user_id UUID, p_cost INTEGER)
-RETURNS boolean
-LANGUAGE sql
-AS $$
-  WITH updated AS (
-    UPDATE public.user_rewards
-    SET points_balance = points_balance - p_cost, updated_at = NOW()
-    WHERE user_id = p_user_id AND points_balance >= p_cost
-    RETURNING 1
-  )
-  SELECT EXISTS (SELECT 1 FROM updated);
-$$;
