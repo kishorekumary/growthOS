@@ -18,6 +18,8 @@ import {
 import { cn } from '@/lib/utils'
 import { computeStreak, localDateStr, todayStr, yesterdayStr, isGraceActive } from '@/lib/habitStreak'
 import { useHabitCelebration } from '@/hooks/useHabitCelebration'
+import { completeHabit } from '@/lib/completeHabit'
+import { useReward } from '@/contexts/RewardContext'
 
 type Category  = HabitCategory
 type Frequency = 'daily' | 'weekly'
@@ -401,6 +403,7 @@ export default function HabitTracker() {
   const [bannerDismissed, setBannerDismissedRaw] = useState(false)
   const [catchUpId, setCatchUpId]               = useState<string | null>(null)
   const { celebrate, celebrationNode } = useHabitCelebration()
+  const { celebrateMilestones } = useReward()
 
   // Mutations below need the user id; the cached queries resolve it internally
   // but don't expose it, so we resolve it once here for write call-sites.
@@ -538,25 +541,19 @@ export default function HabitTracker() {
       { habit_id: habit.id, log_date: today, status: 'done' },
     ])
 
-    const supabase = createSupabaseBrowserClient()
-    const logPromise = supabase.from('habit_logs').upsert(
-      { user_id: userId, habit_id: habit.id, log_date: today, status: 'done' },
-      { onConflict: 'habit_id,user_id,log_date' }
-    )
-    const [, logsRes] = await Promise.all([
-      // Global habits track no per-user streak on the habit row itself
-      habit.is_global ? Promise.resolve({ error: null }) : supabase.from('personality_habits').update({
-        streak_count:   newStreak,
-        longest_streak: Math.max(newStreak, habit.longest_streak),
-        last_done_at:   now,
-        updated_at:     now,
-      }).eq('id', habit.id),
-      logPromise,
-    ])
-
-    // If habit_logs table missing, mark as unavailable so fallback kicks in
-    if (logsRes.error) setLogsUnavail(true)
-    else celebrate()
+    try {
+      const { streak_count, milestones } = await completeHabit(habit.id)
+      // Reconcile the optimistic streak with the server-computed value (source of truth).
+      setHabits(prev => prev.map(h => h.id === habit.id
+        ? { ...h, streak_count, longest_streak: Math.max(streak_count, h.longest_streak), last_done_at: now }
+        : h
+      ))
+      celebrate()
+      celebrateMilestones(milestones)
+    } catch {
+      // If the write failed, mark logs unavailable so the fallback UI kicks in
+      setLogsUnavail(true)
+    }
     setMarkingId(null)
   }
 
@@ -606,21 +603,18 @@ export default function HabitTracker() {
       ])
     }
 
-    const supabase = createSupabaseBrowserClient()
-    const [, logsRes] = await Promise.all([
-      habit.is_global ? Promise.resolve({ error: null }) : supabase.from('personality_habits').update({
-        streak_count:   newStreak,
-        longest_streak: Math.max(newStreak, habit.longest_streak),
-        last_done_at:   yesterdayIso,
-        updated_at:     new Date().toISOString(),
-      }).eq('id', habit.id),
-      supabase.from('habit_logs').upsert(
-        { user_id: userId, habit_id: habit.id, log_date: yesterday, status: 'done' },
-        { onConflict: 'habit_id,user_id,log_date' }
-      ),
-    ])
-
-    if (!logsRes.error) celebrate()
+    try {
+      const { streak_count, milestones } = await completeHabit(habit.id, 'yesterday')
+      // Reconcile the optimistic streak with the server-computed value (source of truth).
+      setHabits(prev => prev.map(h => h.id === habit.id
+        ? { ...h, streak_count, longest_streak: Math.max(streak_count, h.longest_streak), last_done_at: yesterdayIso }
+        : h
+      ))
+      celebrate()
+      celebrateMilestones(milestones)
+    } catch {
+      // no rollback — matches prior behavior where optimistic state persisted on write failure
+    }
     setCatchUpId(null)
   }
 
