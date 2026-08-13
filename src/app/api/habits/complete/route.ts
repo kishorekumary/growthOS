@@ -76,7 +76,16 @@ export async function POST(req: Request) {
   const logDate = clientDate
   const refDate = new Date(`${clientDate}T00:00:00`)
   const now     = new Date().toISOString()
-  const refIso  = isYesterday ? refDate.toISOString() : now
+  // last_done_at is read back on the *next* completion and day-truncated via
+  // `new Date(lastDoneAt); setHours(0,0,0,0)` in computeStreak (src/lib/habitStreak.ts) —
+  // that truncation happens in whatever timezone the code executing it runs in (UTC on the
+  // server in production). Storing the real request instant (`now`) here would truncate to
+  // the UTC calendar day of the request, which is not necessarily the same as logDate (the
+  // user's actual local day this completion counts for) — e.g. a UTC+5:30 user completing at
+  // 00:30 local has logDate = today, but the real UTC instant is still yesterday at 18:30 UTC.
+  // Anchor to noon UTC of logDate instead, in both the "today" and "yesterday" branches, so it
+  // always truncates back to logDate regardless of the executing runtime's timezone.
+  const refIso  = `${logDate}T12:00:00.000Z`
   const milestones: Milestone[] = []
 
   // Defense-in-depth mirroring markDoneForYesterday's client-side guard:

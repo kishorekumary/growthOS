@@ -798,7 +798,7 @@ export default function HabitTracker() {
     return habit && isKeystoneFor(habit) ? 2 : 1
   }
   const weekDone      = weekLogs.filter(l => l.status === 'done').length
-  const weekMissed    = weekLogs.filter(l => l.status === 'missed').length
+  const weekMissed    = weekLogs.filter(l => l.status === 'missed' || l.status === 'auto_missed').length
   const weightedDone  = weekLogs.filter(l => l.status === 'done').reduce((s, l) => s + habitWeight(l.habit_id), 0)
   const weightedTotal = weekLogs.reduce((s, l) => s + habitWeight(l.habit_id), 0)
   const topStreak  = visibleHabits.reduce((m, h) => Math.max(m, h.streak_count), 0)
