@@ -14,6 +14,8 @@ import { useHabitCelebration } from '@/hooks/useHabitCelebration'
 import { HabitCategory, HABIT_CATEGORY_META } from '@/lib/habitCategories'
 import { cn } from '@/lib/utils'
 import { computeStreak, todayStr, yesterdayStr, isGraceActive } from '@/lib/habitStreak'
+import { completeHabit } from '@/lib/completeHabit'
+import { useReward } from '@/contexts/RewardContext'
 import RichTextEditor from './RichTextEditor'
 
 type Panel = 'voice' | 'meal' | 'workout' | 'habit' | 'finance' | 'journal' | 'task' | 'sleep'
@@ -595,6 +597,7 @@ function HabitPanel() {
   const [catchUpId, setCatchUpId]     = useState<string | null>(null)
   const [bannerDismissed, setBannerDismissedRaw] = useState(false)
   const { celebrate, celebrationNode } = useHabitCelebration()
+  const { celebrateMilestones } = useReward()
 
   const loading = habitsLoading || logsLoading
 
@@ -629,30 +632,20 @@ function HabitPanel() {
   async function markDone(habit: Habit) {
     if (doneIds.has(habit.id) || !!markingId || !userId) return
     setMarkingId(habit.id)
-    const newStreak = computeStreak(habit.streak_count, habit.last_done_at, habit.frequency)
-    const now   = new Date().toISOString()
-    const today = todayStr()
 
     setDoneIds(prev => { const s = new Set(prev); s.add(habit.id); return s })
-    setHabits(prev => prev.map(h => h.id === habit.id
-      ? { ...h, streak_count: newStreak, longest_streak: Math.max(newStreak, h.longest_streak), last_done_at: now }
-      : h
-    ))
 
-    const supabase = createSupabaseBrowserClient()
-    await Promise.all([
-      supabase.from('personality_habits').update({
-        streak_count:   newStreak,
-        longest_streak: Math.max(newStreak, habit.longest_streak),
-        last_done_at:   now,
-        updated_at:     now,
-      }).eq('id', habit.id),
-      supabase.from('habit_logs').upsert(
-        { user_id: userId, habit_id: habit.id, log_date: today, status: 'done' },
-        { onConflict: 'habit_id,user_id,log_date' }
-      ),
-    ])
-    celebrate()
+    try {
+      const { streak_count, milestones } = await completeHabit(habit.id)
+      setHabits(prev => prev.map(h => h.id === habit.id
+        ? { ...h, streak_count, longest_streak: Math.max(streak_count, h.longest_streak), last_done_at: new Date().toISOString() }
+        : h
+      ))
+      celebrate()
+      celebrateMilestones(milestones)
+    } catch {
+      setDoneIds(prev => { const s = new Set(prev); s.delete(habit.id); return s })
+    }
     setMarkingId(null)
   }
 
@@ -679,29 +672,18 @@ function HabitPanel() {
     }
 
     setCatchUpId(habit.id)
-    const yesterdayDate = new Date()
-    yesterdayDate.setDate(yesterdayDate.getDate() - 1)
-    const newStreak = computeStreak(habit.streak_count, habit.last_done_at, habit.frequency, yesterdayDate)
-    const yesterdayIso = yesterdayDate.toISOString()
 
-    setHabits(prev => prev.map(h => h.id === habit.id
-      ? { ...h, streak_count: newStreak, longest_streak: Math.max(newStreak, h.longest_streak), last_done_at: yesterdayIso }
-      : h
-    ))
-
-    const supabase = createSupabaseBrowserClient()
-    const { error } = await supabase.from('habit_logs').upsert(
-      { user_id: userId, habit_id: habit.id, log_date: yesterday, status: 'done' },
-      { onConflict: 'habit_id,user_id,log_date' }
-    )
-    await supabase.from('personality_habits').update({
-      streak_count:   newStreak,
-      longest_streak: Math.max(newStreak, habit.longest_streak),
-      last_done_at:   yesterdayIso,
-      updated_at:     new Date().toISOString(),
-    }).eq('id', habit.id)
-
-    if (!error) celebrate()
+    try {
+      const { streak_count, milestones } = await completeHabit(habit.id, 'yesterday')
+      setHabits(prev => prev.map(h => h.id === habit.id
+        ? { ...h, streak_count, longest_streak: Math.max(streak_count, h.longest_streak), last_done_at: (() => { const d = new Date(); d.setDate(d.getDate() - 1); return d.toISOString() })() }
+        : h
+      ))
+      celebrate()
+      celebrateMilestones(milestones)
+    } catch {
+      // no local state to roll back — nothing was optimistically set before the call
+    }
     refetchYesterday()
     setCatchUpId(null)
   }
