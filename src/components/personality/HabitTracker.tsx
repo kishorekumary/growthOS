@@ -36,6 +36,7 @@ interface Habit {
   last_done_at: string | null
   is_keystone: boolean
   is_global: boolean
+  created_at: string
 }
 
 interface HabitLog {
@@ -268,6 +269,115 @@ function EditHabitModal({ habit, onClose, onSave }: {
   )
 }
 
+// ─── Habit Detail Modal ───────────────────────────────────────
+
+function HabitDetailModal({ habit, onClose }: {
+  habit: Habit
+  onClose: () => void
+}) {
+  const ninetyDaysAgoStr = useMemo(() => {
+    const d = new Date()
+    d.setDate(d.getDate() - 89)
+    return localDateStr(d)
+  }, [])
+
+  const { data: logs, loading } = useCachedQuery<HabitLog[]>(
+    `habit-logs:${habit.id}:90d`,
+    (supabase, userId) => supabase
+      .from('habit_logs')
+      .select('habit_id, log_date, status')
+      .eq('habit_id', habit.id)
+      .eq('user_id', userId)
+      .gte('log_date', ninetyDaysAgoStr),
+    [],
+    [habit.id]
+  )
+
+  const cat = CATEGORY_STYLES[habit.category] ?? CATEGORY_STYLES.health
+  const today = todayStr()
+  const createdAtStr = localDateStr(new Date(habit.created_at))
+
+  const doneDates = useMemo(
+    () => new Set(logs.filter(l => l.status === 'done').map(l => l.log_date)),
+    [logs]
+  )
+
+  // Rolling 90-day window ending today — no "future" state (unlike the
+  // challenge heatmap this mirrors), only done / not-done / before-creation.
+  const days = useMemo(() => {
+    const arr: { dateStr: string; isDone: boolean; beforeCreation: boolean; isToday: boolean }[] = []
+    for (let i = 89; i >= 0; i--) {
+      const d = new Date()
+      d.setDate(d.getDate() - i)
+      const dateStr = localDateStr(d)
+      arr.push({
+        dateStr,
+        isDone: doneDates.has(dateStr),
+        beforeCreation: dateStr < createdAtStr,
+        isToday: dateStr === today,
+      })
+    }
+    return arr
+  }, [doneDates, createdAtStr, today])
+
+  return (
+    <Dialog open onOpenChange={open => { if (!open) onClose() }}>
+      <DialogContent className="max-w-lg">
+        <DialogHeader><DialogTitle>{habit.habit_name}</DialogTitle></DialogHeader>
+        <div className="space-y-4">
+          <div className="flex items-center gap-2">
+            <span className={cn('text-xs px-1.5 py-0.5 rounded-full', cat.badge)}>{cat.label}</span>
+            <span className="text-xs text-slate-600">{FREQUENCY_LABELS[habit.frequency]}</span>
+          </div>
+
+          <div className="grid grid-cols-3 gap-2">
+            <div className="rounded-lg border border-white/8 bg-white/3 p-3 text-center">
+              <div className="text-lg font-bold text-orange-300">{habit.streak_count}</div>
+              <div className="text-[10px] text-slate-500">current streak</div>
+            </div>
+            <div className="rounded-lg border border-white/8 bg-white/3 p-3 text-center">
+              <div className="text-lg font-bold text-amber-300">{habit.longest_streak}</div>
+              <div className="text-[10px] text-slate-500">longest streak</div>
+            </div>
+            <div className="rounded-lg border border-white/8 bg-white/3 p-3 text-center">
+              <div className="text-lg font-bold text-emerald-300">{doneDates.size}</div>
+              <div className="text-[10px] text-slate-500">done / 90d</div>
+            </div>
+          </div>
+
+          <div className="space-y-2">
+            <div className="flex items-center justify-between">
+              <p className="text-xs font-semibold text-slate-400">Last 90 days</p>
+              <div className="flex items-center gap-3 text-[10px] text-slate-600">
+                <span className="flex items-center gap-1"><span className={cn('w-2 h-2 rounded-sm inline-block', cat.badge)} />done</span>
+                <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-sm bg-red-500/15 inline-block" />not done</span>
+                <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-sm bg-white/[0.03] inline-block" />n/a</span>
+              </div>
+            </div>
+            {loading ? (
+              <div className="flex justify-center py-6"><Loader2 className="h-4 w-4 animate-spin text-slate-500" /></div>
+            ) : (
+              <div className="grid gap-1" style={{ gridTemplateColumns: 'repeat(15, 1fr)' }}>
+                {days.map(day => (
+                  <div
+                    key={day.dateStr}
+                    title={day.dateStr}
+                    className={cn(
+                      'aspect-square rounded-sm',
+                      day.beforeCreation ? 'bg-white/[0.03]' : day.isDone ? cat.badge : 'bg-red-500/15',
+                      day.isToday && 'ring-1 ring-white/40'
+                    )}
+                  />
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      </DialogContent>
+    </Dialog>
+  )
+}
+
 // ─── Manage Global Habits Modal ──────────────────────────────────
 
 function ManageGlobalHabitsModal({
@@ -403,6 +513,7 @@ export default function HabitTracker() {
   const [markingId, setMarkingId]         = useState<string | null>(null)
   const [keystoneId, setKeystoneId]       = useState<string | null>(null)
   const [editTarget, setEditTarget]       = useState<Habit | null>(null)
+  const [detailTarget, setDetailTarget]   = useState<Habit | null>(null)
   const [bannerExpanded, setBannerExpanded]     = useState(false)
   const [bannerDismissed, setBannerDismissedRaw] = useState(false)
   const [catchUpId, setCatchUpId]               = useState<string | null>(null)
@@ -428,7 +539,7 @@ export default function HabitTracker() {
     'personality-habits',
     (supabase, userId) => supabase
       .from('personality_habits')
-      .select('id, habit_name, category, frequency, streak_count, longest_streak, last_done_at, is_keystone, is_global')
+      .select('id, habit_name, category, frequency, streak_count, longest_streak, last_done_at, is_keystone, is_global, created_at')
       .or(`user_id.eq.${userId},is_global.eq.true`)
       .order('is_global', { ascending: true })
       .order('created_at', { ascending: true }),
@@ -862,6 +973,14 @@ export default function HabitTracker() {
         />
       )}
 
+      {/* Habit detail modal (controlled) */}
+      {detailTarget && (
+        <HabitDetailModal
+          habit={detailTarget}
+          onClose={() => setDetailTarget(null)}
+        />
+      )}
+
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
@@ -924,8 +1043,21 @@ export default function HabitTracker() {
           return (
             <div
               key={habit.id}
+              onClick={() => setDetailTarget(habit)}
+              role="button"
+              tabIndex={0}
+              onKeyDown={e => {
+                // Only react when the row itself has focus — a nested button
+                // (mark done, edit, etc.) receiving Enter/Space should just
+                // activate normally, not also open the detail modal, since
+                // keydown bubbles here regardless of the button's own
+                // stopPropagation on its click handler.
+                if (e.target !== e.currentTarget) return
+                if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setDetailTarget(habit) }
+              }}
+              aria-label={`View history for ${habit.habit_name}`}
               className={cn(
-                'group flex items-center gap-3 rounded-xl border px-4 py-3.5 transition-all',
+                'group flex items-center gap-3 rounded-xl border px-4 py-3.5 transition-all cursor-pointer',
                 keystone && status === 'pending' && 'border-amber-500/40 bg-gradient-to-r from-amber-500/10 to-transparent shadow-[0_0_12px_-4px_rgba(245,158,11,0.3)]',
                 keystone && status === 'done'    && 'border-amber-500/20 bg-gradient-to-r from-amber-500/5 to-emerald-500/5',
                 !keystone && status === 'done'    && 'border-emerald-500/20 bg-emerald-500/5',
@@ -936,7 +1068,7 @@ export default function HabitTracker() {
               {status === 'pending' ? (
                 <div className="flex items-center gap-1.5 shrink-0">
                   <button
-                    onClick={() => markDone(habit)}
+                    onClick={e => { e.stopPropagation(); markDone(habit) }}
                     disabled={!!markingId}
                     aria-label="Mark done"
                     className="flex h-6 w-6 items-center justify-center rounded-full border-2 border-slate-600 hover:border-emerald-400 hover:bg-emerald-500/20 transition-all"
@@ -946,7 +1078,7 @@ export default function HabitTracker() {
                       : <Check className="h-3 w-3 text-slate-600 hover:text-emerald-400" />}
                   </button>
                   <button
-                    onClick={() => markMissed(habit)}
+                    onClick={e => { e.stopPropagation(); markMissed(habit) }}
                     disabled={!!markingId}
                     aria-label="Not possible today"
                     title="Not possible today"
@@ -957,7 +1089,7 @@ export default function HabitTracker() {
                 </div>
               ) : (
                 <button
-                  onClick={() => undoLog(habit)}
+                  onClick={e => { e.stopPropagation(); undoLog(habit) }}
                   disabled={markingId === habit.id}
                   aria-label="Undo"
                   className={cn(
@@ -1030,7 +1162,7 @@ export default function HabitTracker() {
 
               {/* Crown toggle */}
               <button
-                onClick={() => canMarkKeystone && toggleKeystone(habit)}
+                onClick={e => { e.stopPropagation(); canMarkKeystone && toggleKeystone(habit) }}
                 disabled={!!keystoneId || !canMarkKeystone}
                 aria-label={keystone ? 'Remove keystone' : 'Mark as keystone'}
                 title={
@@ -1056,14 +1188,14 @@ export default function HabitTracker() {
               {!habit.is_global && (
                 <>
                   <button
-                    onClick={() => setEditTarget(habit)}
+                    onClick={e => { e.stopPropagation(); setEditTarget(habit) }}
                     aria-label="Edit habit"
                     className="shrink-0 text-slate-700 opacity-0 group-hover:opacity-100 hover:text-violet-400 transition-all"
                   >
                     <Pencil className="h-4 w-4" />
                   </button>
                   <button
-                    onClick={() => deleteHabit(habit.id)}
+                    onClick={e => { e.stopPropagation(); deleteHabit(habit.id) }}
                     aria-label="Delete habit"
                     className="ml-1 shrink-0 text-slate-700 opacity-0 group-hover:opacity-100 hover:text-red-400 transition-all"
                   >
