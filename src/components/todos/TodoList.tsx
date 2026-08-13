@@ -191,9 +191,12 @@ export default function TodoList({ initialTodos = [] }: { initialTodos?: Todo[] 
     const { data: { user } } = await supabase.auth.getUser()
     if (user && todo) {
       const points = taskPoints({ ...todo, completed_at: now })
-      await supabase.from('user_rewards').upsert({ user_id: user.id }, { onConflict: 'user_id', ignoreDuplicates: true })
-      await supabase.from('reward_points_log').insert({ user_id: user.id, delta: points, reason: `Task: ${todo.title}` })
-      await supabase.rpc('increment_points_balance', { p_user_id: user.id, p_delta: points })
+      const { error: rewardsUpsertErr } = await supabase.from('user_rewards').upsert({ user_id: user.id }, { onConflict: 'user_id', ignoreDuplicates: true })
+      if (rewardsUpsertErr) console.error('Failed to award todo points:', rewardsUpsertErr)
+      const { error: logErr } = await supabase.from('reward_points_log').insert({ user_id: user.id, delta: points, reason: `Task: ${todo.title}` })
+      if (logErr) console.error('Failed to award todo points:', logErr)
+      const { error: rpcErr } = await supabase.rpc('increment_points_balance', { p_user_id: user.id, p_delta: points })
+      if (rpcErr) console.error('Failed to award todo points:', rpcErr)
     }
   }
 
