@@ -1573,7 +1573,7 @@ export default function QuickLog() {
         ref={fab.ref}
         style={fab.style}
         onPointerDown={fab.handlers.onPointerDown}
-        className="fixed bottom-[4.75rem] left-4 z-40 cursor-grab active:cursor-grabbing sm:bottom-6 sm:left-6 md:left-[280px]"
+        className="fixed bottom-[4.75rem] left-4 z-50 cursor-grab active:cursor-grabbing sm:bottom-6 sm:left-6 md:left-[280px]"
       >
         {pinging && <span className="absolute inset-0 rounded-full animate-ping bg-emerald-500/30 pointer-events-none" />}
         <button

@@ -810,7 +810,7 @@ export default function QuickReset({ floatingOnly = false }: { floatingOnly?: bo
             ref={fab.ref}
             style={fab.style}
             onPointerDown={fab.handlers.onPointerDown}
-            className="fixed bottom-[4.75rem] right-4 z-40 cursor-grab active:cursor-grabbing sm:bottom-6 sm:right-6"
+            className="fixed bottom-[4.75rem] right-4 z-50 cursor-grab active:cursor-grabbing sm:bottom-6 sm:right-6"
           >
             {/* Pulse ring — fades after 3 s */}
             {pinging && <span className="absolute inset-0 rounded-full animate-ping bg-violet-500/30 pointer-events-none" />}
