@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
 import {
   Flame, Plus, Trash2, Check, Loader2, AlertCircle,
   RotateCcw, XCircle, Trophy, Pencil, Crown, Globe, X,
@@ -553,11 +553,27 @@ export default function HabitTracker() {
 
   // Mutations below need the user id; the cached queries resolve it internally
   // but don't expose it, so we resolve it once here for write call-sites.
-  useEffect(() => {
-    createSupabaseBrowserClient().auth.getSession().then(({ data: { session } }) => {
-      setUserId(session?.user?.id ?? null)
-    })
-  }, [])
+  // resolveUserId() is what those call-sites actually await: `userId` state
+  // can still be null on the very first click (this effect's getSession()
+  // call races the cached queries' own session fetch, which can flip habits
+  // from "loading" to interactive first) — reading `userId` directly there
+  // would silently swallow that first click. The promise cache in
+  // userIdPromiseRef means only the first caller (whichever runs first, this
+  // effect or a click) pays for the getSession() round-trip.
+  const userIdPromiseRef = useRef<Promise<string | null> | null>(null)
+  const resolveUserId = useCallback((): Promise<string | null> => {
+    if (userId) return Promise.resolve(userId)
+    if (!userIdPromiseRef.current) {
+      userIdPromiseRef.current = createSupabaseBrowserClient().auth.getSession().then(({ data: { session } }) => {
+        const uid = session?.user?.id ?? null
+        setUserId(uid)
+        return uid
+      })
+    }
+    return userIdPromiseRef.current
+  }, [userId])
+
+  useEffect(() => { resolveUserId() }, [resolveUserId])
 
   useEffect(() => {
     try { setBannerDismissedRaw(localStorage.getItem(`habit_grace_dismissed_${todayStr()}`) === '1') } catch {}
@@ -697,8 +713,9 @@ export default function HabitTracker() {
   }
 
   async function markDone(habit: Habit) {
-    if (getStatus(habit.id) !== 'pending' || markingId || !userId) return
+    if (getStatus(habit.id) !== 'pending' || markingId) return
     setMarkingId(habit.id)
+    if (!(await resolveUserId())) { setMarkingId(null); return }
     const newStreak = computeStreak(habit.streak_count, habit.last_done_at, habit.frequency)
     const now   = new Date().toISOString()
     const today = todayStr()
@@ -735,7 +752,7 @@ export default function HabitTracker() {
   }
 
   async function markDoneForYesterday(habit: Habit) {
-    if (catchUpId || !userId) return
+    if (catchUpId) return
 
     // Defense-in-depth: never roll last_done_at backwards. If the habit was
     // already completed today (or otherwise has a last_done_at on/after
@@ -752,6 +769,7 @@ export default function HabitTracker() {
     }
 
     setCatchUpId(habit.id)
+    if (!(await resolveUserId())) { setCatchUpId(null); return }
     const yesterdayDate = new Date()
     yesterdayDate.setDate(yesterdayDate.getDate() - 1)
     const newStreak = computeStreak(habit.streak_count, habit.last_done_at, habit.frequency, yesterdayDate)
@@ -791,8 +809,10 @@ export default function HabitTracker() {
   }
 
   async function markMissed(habit: Habit) {
-    if (getStatus(habit.id) !== 'pending' || markingId || !userId) return
+    if (getStatus(habit.id) !== 'pending' || markingId) return
     setMarkingId(habit.id)
+    const uid = await resolveUserId()
+    if (!uid) { setMarkingId(null); return }
     const today = todayStr()
 
     setWeekLogs(prev => [
@@ -803,7 +823,7 @@ export default function HabitTracker() {
 
     const supabase = createSupabaseBrowserClient()
     const { error } = await supabase.from('habit_logs').upsert(
-      { user_id: userId, habit_id: habit.id, log_date: today, status: 'missed' },
+      { user_id: uid, habit_id: habit.id, log_date: today, status: 'missed' },
       { onConflict: 'habit_id,user_id,log_date' }
     )
     if (error) setLogsUnavail(true)
@@ -870,11 +890,13 @@ export default function HabitTracker() {
   }
 
   async function toggleKeystone(habit: Habit) {
-    if (keystoneId || !userId) return
+    if (keystoneId) return
     const alreadyKeystone = isKeystoneFor(habit)
     const keystoneCount = visibleHabits.filter(isKeystoneFor).length
     if (!alreadyKeystone && keystoneCount >= 2) return  // enforced in UI
     setKeystoneId(habit.id)
+    const uid = await resolveUserId()
+    if (!uid) { setKeystoneId(null); return }
     const supabase = createSupabaseBrowserClient()
 
     if (habit.is_global) {
@@ -883,10 +905,10 @@ export default function HabitTracker() {
         ? [...prev, { habit_id: habit.id }]
         : prev.filter(k => k.habit_id !== habit.id))
       if (next) {
-        await supabase.from('user_habit_keystones').insert({ user_id: userId, habit_id: habit.id })
+        await supabase.from('user_habit_keystones').insert({ user_id: uid, habit_id: habit.id })
       } else {
         await supabase.from('user_habit_keystones').delete()
-          .eq('user_id', userId).eq('habit_id', habit.id)
+          .eq('user_id', uid).eq('habit_id', habit.id)
       }
     } else {
       const next = !habit.is_keystone
@@ -900,14 +922,16 @@ export default function HabitTracker() {
   }
 
   async function hideGlobalHabit(habitId: string) {
-    if (!userId) return
+    const uid = await resolveUserId()
+    if (!uid) return
     setHiddenHabitMarks(prev => prev.some(h => h.habit_id === habitId) ? prev : [...prev, { habit_id: habitId }])
     const supabase = createSupabaseBrowserClient()
-    await supabase.from('user_hidden_habits').insert({ user_id: userId, habit_id: habitId })
+    await supabase.from('user_hidden_habits').insert({ user_id: uid, habit_id: habitId })
   }
 
   async function unhideGlobalHabit(habitId: string) {
-    if (!userId) return
+    const uid = await resolveUserId()
+    if (!uid) return
     const supabase = createSupabaseBrowserClient()
 
     // Product decision: auto-unmark keystone on restore if it would exceed the
@@ -924,9 +948,9 @@ export default function HabitTracker() {
       setGlobalKeystoneMarks(prev => prev.filter(k => k.habit_id !== habitId))
     }
 
-    await supabase.from('user_hidden_habits').delete().eq('user_id', userId).eq('habit_id', habitId)
+    await supabase.from('user_hidden_habits').delete().eq('user_id', uid).eq('habit_id', habitId)
     if (wouldExceedCap) {
-      await supabase.from('user_habit_keystones').delete().eq('user_id', userId).eq('habit_id', habitId)
+      await supabase.from('user_habit_keystones').delete().eq('user_id', uid).eq('habit_id', habitId)
     }
   }
 
