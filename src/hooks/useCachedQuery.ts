@@ -27,8 +27,14 @@ export function useCachedQuery<T>(
   const [isOffline, setIsOffline] = useState(false)
   const userIdRef = useRef<string | null>(null)
   const hydratedRef = useRef(false)
+  // Bumped by setData, so an in-flight load() that started before an optimistic
+  // mutation can detect it landed on a stale snapshot and skip overwriting it —
+  // otherwise a write started right after mount can be silently reverted by the
+  // mount's own still-in-flight fetch resolving afterward.
+  const versionRef = useRef(0)
 
   const load = useCallback(async () => {
+    const startVersion = versionRef.current
     const supabase = createSupabaseBrowserClient()
     const { data: { session } } = await supabase.auth.getSession()
     const userId = session?.user?.id
@@ -38,7 +44,7 @@ export function useCachedQuery<T>(
     if (!hydratedRef.current) {
       hydratedRef.current = true
       const cached = readCache<T>(userId, cacheKey)
-      if (cached !== null) {
+      if (cached !== null && versionRef.current === startVersion) {
         setDataState(cached)
         setLoading(false)
       }
@@ -52,6 +58,7 @@ export function useCachedQuery<T>(
     }
     setIsOffline(false)
     setLoading(false)
+    if (versionRef.current !== startVersion) return
     const value = result ?? defaultValue
     setDataState(value)
     writeCache(userId, cacheKey, value)
@@ -67,6 +74,7 @@ export function useCachedQuery<T>(
   }, [load])
 
   const setData = useCallback((updater: T | ((prev: T) => T)) => {
+    versionRef.current++
     setDataState(prev => {
       const next = typeof updater === 'function' ? (updater as (p: T) => T)(prev) : updater
       if (userIdRef.current) writeCache(userIdRef.current, cacheKey, next)
