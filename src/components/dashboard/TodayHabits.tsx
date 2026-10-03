@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { Check, Crown, Flame, Loader2, ArrowRight, Trophy, Sparkles, Gift, Lock, Snowflake } from 'lucide-react'
 import { useCachedQuery } from '@/hooks/useCachedQuery'
 import { useInFlightIds } from '@/hooks/useInFlightIds'
+import { useHabitLeverage, leverageLine } from '@/hooks/useHabitLeverage'
 import { useHabitCelebration } from '@/hooks/useHabitCelebration'
 import { useReward } from '@/contexts/RewardContext'
 import { completeHabit } from '@/lib/completeHabit'
@@ -100,6 +101,7 @@ export default function TodayHabits() {
   const [openingChest, setOpeningChest] = useState(false)
   const freezes = freezesUnavailable ? 0 : freezeRow?.streak_freezes ?? 0
 
+  const { byHabit: leverage } = useHabitLeverage()
   const { inFlight, begin, end } = useInFlightIds()
   const { celebrate, celebrationNode } = useHabitCelebration()
   const { celebrateMilestones } = useReward()
@@ -252,6 +254,7 @@ export default function TodayHabits() {
           {pending.map(habit => {
             const streak  = liveStreak(habit)
             const frozen  = frozenStreak(habit)
+            const why     = leverageLine(leverage.get(habit.id), today)
             const marking = inFlight.has(habit.id)
             return (
               <li key={habit.id}>
@@ -285,6 +288,7 @@ export default function TodayHabits() {
                         <span className="text-[11px] text-sky-300">🧊 {frozen} — a freeze will save it today</span>
                       )}
                     </span>
+                    {why && <span className="mt-0.5 block text-[11px] italic text-slate-400 line-clamp-1">{why}</span>}
                   </span>
                 </button>
               </li>

@@ -9,6 +9,7 @@ import {
   buildReminder, buildStreakRiskNudge, dueReminderTimes,
   type ReminderHabit, type ReminderMessage,
 } from '@/lib/reminderMessage'
+import { POWER_TAG } from '@/lib/powerQuestions'
 
 type AdminClient = ReturnType<typeof createSupabaseAdminClient>
 
@@ -55,14 +56,17 @@ function lastDoneLocalDate(lastDoneAt: string, timezone: string): string {
   return new Intl.DateTimeFormat('en-CA', { timeZone: timezone }).format(new Date(lastDoneAt))
 }
 
-interface HabitState { pending: ReminderHabit[]; doneCount: number; perfectStreak: number }
+interface HabitState { pending: ReminderHabit[]; doneCount: number; perfectStreak: number; powerDone: Set<string> }
 
 // Today's habit picture for one user: visible daily habits (own + global
 // minus hidden) with no log yet today — same visibility rules as HabitTracker.
 async function loadHabitState(
   admin: AdminClient, userId: string, timezone: string, today: string, yesterday: string,
 ): Promise<HabitState> {
-  const [{ data: habits }, { data: hidden }, { data: keystones }, { data: logs }, { data: rewards }] = await Promise.all([
+  const [
+    { data: habits }, { data: hidden }, { data: keystones }, { data: logs }, { data: rewards },
+    { data: leverageRows }, { data: powerRows },
+  ] = await Promise.all([
     admin.from('personality_habits')
       .select('id, habit_name, streak_count, last_done_at, is_keystone, is_global')
       .or(`user_id.eq.${userId},is_global.eq.true`)
@@ -71,7 +75,13 @@ async function loadHabitState(
     admin.from('user_habit_keystones').select('habit_id').eq('user_id', userId),
     admin.from('habit_logs').select('habit_id, status').eq('user_id', userId).eq('log_date', today),
     admin.from('user_rewards').select('current_perfect_streak, last_perfect_date').eq('user_id', userId).maybeSingle(),
+    // Both optional: habit_leverage needs migration 050; errors just mean no data.
+    admin.from('habit_leverage').select('habit_id, pain, pleasure').eq('user_id', userId),
+    admin.from('journal_entries').select('tags').eq('user_id', userId).eq('entry_date', today)
+      .overlaps('tags', [POWER_TAG.morning, POWER_TAG.evening]),
   ])
+  const leverage = new Map((leverageRows ?? []).map(l => [l.habit_id, (l.pain ?? l.pleasure) as string | null]))
+  const powerDone = new Set((powerRows ?? []).flatMap(r => (r.tags ?? []) as string[]))
 
   const hiddenIds   = new Set((hidden ?? []).map(h => h.habit_id))
   const keystoneIds = new Set((keystones ?? []).map(k => k.habit_id))
@@ -87,6 +97,7 @@ async function loadHabitState(
       is_keystone:  h.is_global ? keystoneIds.has(h.id) : h.is_keystone,
       streakAlive:  !h.is_global && h.streak_count > 0 && !!h.last_done_at
         && lastDoneLocalDate(h.last_done_at, timezone) === yesterday,
+      leverage:     leverage.get(h.id) ?? null,
     }))
 
   const perfectAlive = rewards?.last_perfect_date === yesterday || rewards?.last_perfect_date === today
@@ -94,6 +105,7 @@ async function loadHabitState(
     pending,
     doneCount:     (logs ?? []).filter(l => l.status === 'done').length,
     perfectStreak: perfectAlive ? rewards?.current_perfect_streak ?? 0 : 0,
+    powerDone,
   }
 }
 
@@ -241,6 +253,7 @@ export async function GET(req: NextRequest) {
         todoTitles:    (todos ?? []).map(t => t.title as string),
         isEvening,
         perfectStreak: state.perfectStreak,
+        powerPending:  !state.powerDone.has(isEvening ? POWER_TAG.evening : POWER_TAG.morning),
       })
 
       if (s.push_enabled && pushReady) await sendPush(admin, s.user_id, msg)

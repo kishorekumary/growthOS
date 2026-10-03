@@ -132,10 +132,10 @@ async function completeFromNotification(data) {
       icon:  '/icon-192.png',
       badge: '/icon-96.png',
       tag:   'zenith-habit-done',
-      data:  { url: data.url ?? '/personality/habits' },
+      data:  { url: data.url ?? '/dashboard' },
     })
   } catch {
-    await openUrl(data.url ?? '/personality/habits')
+    await openUrl(data.url ?? '/dashboard')
   }
 }
 

@@ -9,6 +9,7 @@ import {
 import { createSupabaseBrowserClient } from '@/lib/supabase'
 import { useCachedQuery } from '@/hooks/useCachedQuery'
 import { useInFlightIds } from '@/hooks/useInFlightIds'
+import HabitLeverageEditor from './HabitLeverageEditor'
 import { HabitCategory, HABIT_CATEGORY_META } from '@/lib/habitCategories'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -345,6 +346,8 @@ function HabitDetailModal({ habit, onClose }: {
               <div className="text-[10px] text-slate-500">done / 90d</div>
             </div>
           </div>
+
+          <HabitLeverageEditor habitId={habit.id} />
 
           <div className="space-y-2">
             <div className="flex items-center justify-between">

@@ -9,6 +9,9 @@ export interface ReminderHabit {
   // True when the streak is still alive going into today (last done
   // yesterday), so skipping today would actually break it.
   streakAlive:  boolean
+  // The user's own "what skipping this costs me" (or, failing that, "what
+  // it gives me") — quoted back at the moment of choice.
+  leverage?:    string | null
 }
 
 export interface ReminderInput {
@@ -17,6 +20,7 @@ export interface ReminderInput {
   todoTitles:    string[]          // open tasks due today or earlier
   isEvening:     boolean
   perfectStreak: number            // live perfect-day streak (0 if broken)
+  powerPending?: boolean           // this half of the day's power questions not done yet
 }
 
 export interface ReminderMessage {
@@ -28,7 +32,8 @@ export interface ReminderMessage {
   actionHabit?: { id: string; name: string }
 }
 
-export const HABITS_URL = '/personality/habits'
+// The dashboard holds both the one-tap Today's Habits card and Power Questions.
+export const HABITS_URL = '/dashboard'
 
 // Keystone first, then the longest live streak — the habit most worth
 // protecting is the one offered as the notification's one-tap action.
@@ -62,6 +67,13 @@ function topAtRisk(pending: ReminderHabit[]): ReminderHabit | undefined {
 }
 
 export function buildReminder(input: ReminderInput): ReminderMessage {
+  const msg = buildHabitReminder(input)
+  if (!input.powerPending) return msg
+  const half = input.isEvening ? 'evening' : 'morning'
+  return { ...msg, body: `${msg.body} Then 2 min of ${half} power questions.`, url: HABITS_URL }
+}
+
+function buildHabitReminder(input: ReminderInput): ReminderMessage {
   const pending = prioritize(input.pending)
   const first   = pending[0]
   const tasks   = taskLine(input.todoTitles)
@@ -124,7 +136,9 @@ export function buildStreakRiskNudge(pendingHabits: ReminderHabit[]): ReminderMe
   const others = pending.length - 1
   return {
     title: `Last call: ${atRisk.streak_count}-day streak 🔥`,
-    body:  `${atRisk.habit_name} isn't logged yet${others > 0 ? ` (plus ${plural(others, 'other habit')})` : ''}. One tap keeps it alive.`,
+    body:  atRisk.leverage?.trim()
+      ? `${atRisk.habit_name} isn't logged yet. You said: "${atRisk.leverage.trim()}"`
+      : `${atRisk.habit_name} isn't logged yet${others > 0 ? ` (plus ${plural(others, 'other habit')})` : ''}. One tap keeps it alive.`,
     url:   HABITS_URL,
     tag:   'zenith-streak-risk',
     actionHabit: { id: atRisk.id, name: atRisk.habit_name },
