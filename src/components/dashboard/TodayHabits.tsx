@@ -90,7 +90,7 @@ export default function TodayHabits() {
     `today:chest:${today}`,
     (supabase, userId) => supabase
       .from('daily_chest_claims')
-      .select('claim_date, chest_streak, points, freeze, label')
+      .select('claim_date, chest_streak, points, freeze:gave_freeze, label')
       .eq('user_id', userId)
       .eq('claim_date', today)
       .maybeSingle(),

@@ -10,6 +10,8 @@
 --
 -- Daily chest: one claim per user per local day, unlocked by the day's
 -- first completed habit (enforced in /api/rewards/daily-chest).
+--
+-- Safe to re-run: every statement is IF NOT EXISTS / OR REPLACE / drop-then-create.
 -- ============================================================
 
 ALTER TABLE public.user_rewards
@@ -26,6 +28,7 @@ CREATE TABLE IF NOT EXISTS public.streak_freeze_uses (
 
 ALTER TABLE public.streak_freeze_uses ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS "own streak freeze uses" ON public.streak_freeze_uses;
 CREATE POLICY "own streak freeze uses" ON public.streak_freeze_uses
   FOR ALL USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
 
@@ -34,7 +37,7 @@ CREATE TABLE IF NOT EXISTS public.daily_chest_claims (
   claim_date   DATE NOT NULL,
   chest_streak INTEGER NOT NULL,           -- consecutive days claimed, including this one
   points       INTEGER NOT NULL DEFAULT 0,
-  freeze       BOOLEAN NOT NULL DEFAULT FALSE,
+  gave_freeze  BOOLEAN NOT NULL DEFAULT FALSE,  -- not "freeze": reserved word in Postgres
   label        TEXT NOT NULL,
   created_at   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   PRIMARY KEY (user_id, claim_date)
@@ -42,6 +45,7 @@ CREATE TABLE IF NOT EXISTS public.daily_chest_claims (
 
 ALTER TABLE public.daily_chest_claims ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS "own daily chest claims" ON public.daily_chest_claims;
 CREATE POLICY "own daily chest claims" ON public.daily_chest_claims
   FOR ALL USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
 

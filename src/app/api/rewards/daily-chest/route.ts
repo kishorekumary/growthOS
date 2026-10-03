@@ -17,7 +17,8 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: 'date required (YYYY-MM-DD)' }, { status: 400 })
   }
 
-  const columns = 'claim_date, chest_streak, points, freeze, label'
+  // gave_freeze is aliased back to `freeze` for the client ("freeze" is reserved in Postgres).
+  const columns = 'claim_date, chest_streak, points, freeze:gave_freeze, label'
   const { data: existing } = await supabase
     .from('daily_chest_claims').select(columns)
     .eq('user_id', user.id).eq('claim_date', date).maybeSingle()
@@ -41,7 +42,7 @@ export async function POST(req: Request) {
   // concurrent request can't also pay out.
   const { error: insertErr } = await supabase.from('daily_chest_claims').insert({
     user_id: user.id, claim_date: date, chest_streak: chestStreak,
-    points: roll.points, freeze: roll.freeze, label: roll.label,
+    points: roll.points, gave_freeze: roll.freeze, label: roll.label,
   })
   if (insertErr) {
     const { data: raced } = await supabase
@@ -63,7 +64,7 @@ export async function POST(req: Request) {
     if (resolved !== roll) {
       roll = resolved
       await supabase.from('daily_chest_claims')
-        .update({ points: roll.points, freeze: roll.freeze, label: roll.label })
+        .update({ points: roll.points, gave_freeze: roll.freeze, label: roll.label })
         .eq('user_id', user.id).eq('claim_date', date)
     }
   }
