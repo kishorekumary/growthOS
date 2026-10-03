@@ -32,6 +32,24 @@ const CATEGORIES = [
 
 const DURATION_PRESETS = [21, 30, 60, 90, 180, 365]
 
+// One-tap starting points; each just pre-fills the create form.
+const TEMPLATES = [
+  {
+    emoji: '🧠',
+    title: '10-Day Mental Challenge',
+    blurb: 'From Awaken the Giant Within: 10 days without dwelling on a negative thought.',
+    category: 'personal',
+    duration: 10,
+    commitment: 'Catch every negative thought, ask a better question, and move on within minutes.',
+    why: 'To prove I control my focus, and so my feelings, instead of my moods controlling me.',
+    description:
+      'Rules: for 10 days in a row, don\'t indulge any unresourceful thought or feeling. When one shows up, ' +
+      'switch focus right away with a better question ("What\'s great about this? What can I learn?"). ' +
+      'If you catch yourself dwelling on it, start again from day 1 the next morning. Doing all 10 days ' +
+      'is less about the thoughts than about building the habit of choosing your focus.',
+  },
+] as const
+
 const CATEGORY_COLOR: Record<string, string> = {
   fitness: '#ef4444', learning: '#a78bfa', habits: '#f59e0b',
   career: '#3b82f6', health: '#22c55e', personal: '#818cf8', creative: '#f472b6',
@@ -155,6 +173,14 @@ export default function ChallengeApp() {
       setView('detail')
       resetForm()
     }
+  }
+
+  function applyTemplate(t: typeof TEMPLATES[number]) {
+    setTitle(t.title); setCategory(t.category)
+    setStartDate(format(new Date(), 'yyyy-MM-dd'))
+    setDurationDays(t.duration)
+    setDailyCommitment(t.commitment); setWhyMatters(t.why); setDescription(t.description)
+    setView('create')
   }
 
   function resetForm() {
@@ -337,6 +363,22 @@ export default function ChallengeApp() {
         <Plus className="h-4 w-4" />
         Start a new challenge
       </button>
+
+      {/* Templates — hidden while that challenge is already running */}
+      {TEMPLATES.filter(t => !active.some(c => c.title === t.title)).map(t => (
+        <button
+          key={t.title}
+          onClick={() => applyTemplate(t)}
+          className="flex w-full items-start gap-3 rounded-2xl border border-indigo-500/20 bg-indigo-500/5 p-4 text-left hover:border-indigo-500/40 transition-colors"
+        >
+          <span className="text-2xl leading-none">{t.emoji}</span>
+          <span className="flex-1 min-w-0">
+            <span className="block text-sm font-semibold text-white">{t.title}</span>
+            <span className="block text-xs text-slate-400 mt-0.5">{t.blurb}</span>
+          </span>
+          <ChevronRight className="h-4 w-4 text-slate-600 mt-0.5 shrink-0" />
+        </button>
+      ))}
 
       {/* Active */}
       {active.length > 0 && (
