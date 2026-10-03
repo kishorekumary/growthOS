@@ -9,6 +9,7 @@ import TodoWidget from '@/components/todos/TodoWidget'
 import DashboardGoalsCard from '@/components/goals/DashboardGoalsCard'
 import TodayHabits from '@/components/dashboard/TodayHabits'
 import PowerQuestions from '@/components/dashboard/PowerQuestions'
+import DecisionsDue from '@/components/dashboard/DecisionsDue'
 
 export default async function DashboardPage() {
   const supabase = createSupabaseServerClient()
@@ -137,6 +138,11 @@ export default async function DashboardPage() {
 
       <div className="mb-6">
         <PowerQuestions />
+      </div>
+
+      {/* Renders only when a decision check-in is due */}
+      <div className="mb-6 empty:hidden">
+        <DecisionsDue />
       </div>
 
       {/* AI Daily Greeting */}
