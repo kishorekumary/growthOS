@@ -2,6 +2,11 @@ import type { Config } from 'tailwindcss'
 
 const config: Config = {
   darkMode: ['class'],
+  // Scope hover: styles to devices that actually hover. Without this, iOS
+  // Safari treats the first tap on an element whose hover state changes
+  // visibility (e.g. the habit undo icon swap) as a hover only, so the
+  // click needs a second tap.
+  future: { hoverOnlyWhenSupported: true },
   content: [
     './src/pages/**/*.{js,ts,jsx,tsx,mdx}',
     './src/components/**/*.{js,ts,jsx,tsx,mdx}',

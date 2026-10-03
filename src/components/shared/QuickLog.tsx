@@ -9,6 +9,7 @@ import {
 } from 'lucide-react'
 import { createSupabaseBrowserClient } from '@/lib/supabase'
 import { useCachedQuery } from '@/hooks/useCachedQuery'
+import { useInFlightIds } from '@/hooks/useInFlightIds'
 import { useDraggableFab } from '@/hooks/useDraggableFab'
 import { useHabitCelebration } from '@/hooks/useHabitCelebration'
 import { HabitCategory, HABIT_CATEGORY_META } from '@/lib/habitCategories'
@@ -567,7 +568,7 @@ function HabitPanel() {
     [rawHabits, hiddenHabitIds]
   )
 
-  const { data: logs, loading: logsLoading } = useCachedQuery<{ habit_id: string; status: string }[]>(
+  const { data: logs, loading: logsLoading, setData: setLogs } = useCachedQuery<{ habit_id: string; status: string }[]>(
     `habit_logs:${today}`,
     (supabase, userId) => supabase.from('habit_logs')
       .select('habit_id, status')
@@ -592,19 +593,14 @@ function HabitPanel() {
 
   const [doneIds, setDoneIds]     = useState<Set<string>>(new Set())
   const [missedIds, setMissedIds] = useState<Set<string>>(new Set())
-  const [markingId, setMarkingId] = useState<string | null>(null)
-  const [userId, setUserId]       = useState<string | null>(null)
+  // Per-habit lock: a slow completion on one habit must not swallow taps on others.
+  const { inFlight: markingIds, begin: beginMarking, end: endMarking } = useInFlightIds()
   const [catchUpId, setCatchUpId]     = useState<string | null>(null)
   const [bannerDismissed, setBannerDismissedRaw] = useState(false)
   const { celebrate, celebrationNode } = useHabitCelebration()
   const { celebrateMilestones } = useReward()
 
   const loading = habitsLoading || logsLoading
-
-  useEffect(() => {
-    createSupabaseBrowserClient().auth.getSession()
-      .then(({ data: { session } }) => setUserId(session?.user?.id ?? null))
-  }, [])
 
   useEffect(() => {
     try { setBannerDismissedRaw(localStorage.getItem(`habit_grace_dismissed_${today}`) === '1') } catch {}
@@ -635,10 +631,13 @@ function HabitPanel() {
   }, [habits, logs, today])
 
   async function markDone(habit: Habit) {
-    if (doneIds.has(habit.id) || !!markingId || !userId) return
-    setMarkingId(habit.id)
+    if (doneIds.has(habit.id) || !beginMarking(habit.id)) return
 
-    setDoneIds(prev => { const s = new Set(prev); s.add(habit.id); return s })
+    // Optimistic update goes through the cached logs (not doneIds directly):
+    // doneIds is re-derived from logs, so a local-only write would be wiped
+    // the moment the panel's still-in-flight logs fetch lands. setLogs also
+    // tells useCachedQuery to discard that stale fetch result.
+    setLogs(prev => [...prev.filter(l => l.habit_id !== habit.id), { habit_id: habit.id, status: 'done' }])
 
     try {
       const { streak_count, milestones } = await completeHabit(habit.id)
@@ -649,9 +648,9 @@ function HabitPanel() {
       celebrate()
       celebrateMilestones(milestones)
     } catch {
-      setDoneIds(prev => { const s = new Set(prev); s.delete(habit.id); return s })
+      setLogs(prev => prev.filter(l => !(l.habit_id === habit.id && l.status === 'done')))
     }
-    setMarkingId(null)
+    endMarking(habit.id)
   }
 
   function dismissBanner() {
@@ -660,7 +659,7 @@ function HabitPanel() {
   }
 
   async function markDoneForYesterday(habit: Habit) {
-    if (catchUpId || !userId) return
+    if (catchUpId) return
 
     // Defense-in-depth: never roll last_done_at backwards. If the habit was
     // already completed today (or otherwise has a last_done_at on/after
@@ -758,7 +757,7 @@ function HabitPanel() {
             <button
               key={habit.id}
               onClick={() => markDone(habit)}
-              disabled={isDone || !!markingId}
+              disabled={isDone || markingIds.has(habit.id)}
               className={cn(
                 'w-full flex items-start gap-3 rounded-xl border px-4 py-3 text-left transition-all',
                 isDone
@@ -770,7 +769,7 @@ function HabitPanel() {
                 'flex h-6 w-6 shrink-0 items-center justify-center rounded-full border-2 transition-all mt-0.5',
                 isDone ? 'border-emerald-400 bg-emerald-400' : 'border-slate-600',
               )}>
-                {markingId === habit.id
+                {markingIds.has(habit.id)
                   ? <Loader2 className="h-3 w-3 animate-spin text-white" />
                   : isDone
                     ? <Check className="h-3 w-3 text-white" />

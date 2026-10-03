@@ -8,6 +8,7 @@ import {
 } from 'lucide-react'
 import { createSupabaseBrowserClient } from '@/lib/supabase'
 import { useCachedQuery } from '@/hooks/useCachedQuery'
+import { useInFlightIds } from '@/hooks/useInFlightIds'
 import { HabitCategory, HABIT_CATEGORY_META } from '@/lib/habitCategories'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -541,7 +542,8 @@ function WeeklyScoreCard({
 export default function HabitTracker() {
   const [logsUnavailable, setLogsUnavail] = useState(false)
   const [userId, setUserId]               = useState<string | null>(null)
-  const [markingId, setMarkingId]         = useState<string | null>(null)
+  // Per-habit lock: a slow completion on one habit must not swallow taps on others.
+  const { inFlight: markingIds, begin: beginMarking, end: endMarking } = useInFlightIds()
   const [keystoneId, setKeystoneId]       = useState<string | null>(null)
   const [editTarget, setEditTarget]       = useState<Habit | null>(null)
   const [detailTarget, setDetailTarget]   = useState<Habit | null>(null)
@@ -713,9 +715,7 @@ export default function HabitTracker() {
   }
 
   async function markDone(habit: Habit) {
-    if (getStatus(habit.id) !== 'pending' || markingId) return
-    setMarkingId(habit.id)
-    if (!(await resolveUserId())) { setMarkingId(null); return }
+    if (getStatus(habit.id) !== 'pending' || !beginMarking(habit.id)) return
     const newStreak = computeStreak(habit.streak_count, habit.last_done_at, habit.frequency)
     const now   = new Date().toISOString()
     const today = todayStr()
@@ -743,7 +743,7 @@ export default function HabitTracker() {
       // If the write failed, mark logs unavailable so the fallback UI kicks in
       setLogsUnavail(true)
     }
-    setMarkingId(null)
+    endMarking(habit.id)
   }
 
   function dismissBanner() {
@@ -809,10 +809,9 @@ export default function HabitTracker() {
   }
 
   async function markMissed(habit: Habit) {
-    if (getStatus(habit.id) !== 'pending' || markingId) return
-    setMarkingId(habit.id)
+    if (getStatus(habit.id) !== 'pending' || !beginMarking(habit.id)) return
     const uid = await resolveUserId()
-    if (!uid) { setMarkingId(null); return }
+    if (!uid) { endMarking(habit.id); return }
     const today = todayStr()
 
     setWeekLogs(prev => [
@@ -827,13 +826,14 @@ export default function HabitTracker() {
       { onConflict: 'habit_id,user_id,log_date' }
     )
     if (error) setLogsUnavail(true)
-    setMarkingId(null)
+    endMarking(habit.id)
   }
 
   async function undoLog(habit: Habit) {
     const status = getStatus(habit.id)
-    if (status === 'pending' || markingId) return
-    setMarkingId(habit.id)
+    if (status === 'pending' || !beginMarking(habit.id)) return
+    const uid = await resolveUserId()
+    if (!uid) { endMarking(habit.id); return }
     const today = todayStr()
 
     setWeekLogs(prev => prev.filter(l => !(l.habit_id === habit.id && l.log_date === today)))
@@ -846,7 +846,7 @@ export default function HabitTracker() {
         : h
       ))
       const deleteLog = supabase.from('habit_logs').delete()
-        .eq('habit_id', habit.id).eq('user_id', userId!).eq('log_date', today)
+        .eq('habit_id', habit.id).eq('user_id', uid).eq('log_date', today)
       const updateHabit = habit.is_global
         ? Promise.resolve()
         : supabase.from('personality_habits').update({
@@ -876,10 +876,10 @@ export default function HabitTracker() {
     } else {
       writeTodayMissed(readTodayMissed().filter(id => id !== habit.id))
       await supabase.from('habit_logs').delete()
-        .eq('habit_id', habit.id).eq('user_id', userId!).eq('log_date', today)
+        .eq('habit_id', habit.id).eq('user_id', uid).eq('log_date', today)
     }
 
-    setMarkingId(null)
+    endMarking(habit.id)
   }
 
   async function deleteHabit(id: string) {
@@ -1169,17 +1169,21 @@ export default function HabitTracker() {
                 <div className="flex items-center gap-1.5 shrink-0">
                   <button
                     onClick={e => { e.stopPropagation(); markDone(habit) }}
-                    disabled={!!markingId}
+                    disabled={markingIds.has(habit.id)}
                     aria-label="Mark done"
-                    className="flex h-6 w-6 items-center justify-center rounded-full border-2 border-slate-600 hover:border-emerald-400 hover:bg-emerald-500/20 transition-all"
+                    // 40px hit area around the 24px circle — a near-miss on a
+                    // phone otherwise lands on the row and opens the history modal.
+                    className="group/done -m-2 flex h-10 w-10 items-center justify-center rounded-full"
                   >
-                    {markingId === habit.id
-                      ? <Loader2 className="h-3 w-3 animate-spin text-slate-400" />
-                      : <Check className="h-3 w-3 text-slate-600 hover:text-emerald-400" />}
+                    <span className="flex h-6 w-6 items-center justify-center rounded-full border-2 border-slate-600 group-hover/done:border-emerald-400 group-hover/done:bg-emerald-500/20 group-active/done:scale-90 transition-all">
+                      {markingIds.has(habit.id)
+                        ? <Loader2 className="h-3 w-3 animate-spin text-slate-400" />
+                        : <Check className="h-3 w-3 text-slate-600 group-hover/done:text-emerald-400" />}
+                    </span>
                   </button>
                   <button
                     onClick={e => { e.stopPropagation(); markMissed(habit) }}
-                    disabled={!!markingId}
+                    disabled={markingIds.has(habit.id)}
                     aria-label="Not possible today"
                     title="Not possible today"
                     className="flex h-6 w-6 items-center justify-center rounded-full border-2 border-slate-700 hover:border-red-400 hover:bg-red-500/20 transition-all"
@@ -1190,7 +1194,7 @@ export default function HabitTracker() {
               ) : (
                 <button
                   onClick={e => { e.stopPropagation(); undoLog(habit) }}
-                  disabled={markingId === habit.id}
+                  disabled={markingIds.has(habit.id)}
                   aria-label="Undo"
                   className={cn(
                     'group/undo flex h-6 w-6 shrink-0 items-center justify-center rounded-full border-2 transition-all',
@@ -1199,7 +1203,7 @@ export default function HabitTracker() {
                       : 'border-red-400 bg-red-400 hover:bg-slate-700 hover:border-slate-500'
                   )}
                 >
-                  {markingId === habit.id ? (
+                  {markingIds.has(habit.id) ? (
                     <Loader2 className="h-3 w-3 animate-spin text-white" />
                   ) : status === 'done' ? (
                     <>
@@ -1325,12 +1329,12 @@ export default function HabitTracker() {
                 {/* Red X — tap to undo */}
                 <button
                   onClick={() => undoLog(habit)}
-                  disabled={markingId === habit.id}
+                  disabled={markingIds.has(habit.id)}
                   aria-label="Undo — mark as pending"
                   title="Tap to undo"
                   className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full border-2 border-red-400 bg-red-400 hover:bg-slate-700 hover:border-slate-500 transition-all group/undo"
                 >
-                  {markingId === habit.id
+                  {markingIds.has(habit.id)
                     ? <Loader2 className="h-3 w-3 animate-spin text-white" />
                     : <>
                         <XCircle  className="h-3.5 w-3.5 text-white group-hover/undo:hidden" />
