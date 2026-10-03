@@ -24,10 +24,11 @@ async function autoSubscribePush() {
 
   try {
     const reg = await navigator.serviceWorker.ready
-    const existing = await reg.pushManager.getSubscription()
-    if (existing) return // already subscribed on this device
-
-    const sub = await reg.pushManager.subscribe({
+    // Re-send an existing subscription too (the route upserts on endpoint):
+    // the server copy can be missing — pruned after a failed send, or a save
+    // that never landed — while the browser still holds it, and then this
+    // device would silently never receive pushes again.
+    const sub = await reg.pushManager.getSubscription() ?? await reg.pushManager.subscribe({
       userVisibleOnly: true,
       applicationServerKey: urlBase64ToUint8Array(process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY),
     })

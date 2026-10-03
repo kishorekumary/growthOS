@@ -53,6 +53,9 @@ export default function NotificationSettings() {
   const [saving, setSaving]             = useState(false)
   const [subscribing, setSubscribing]   = useState(false)
   const [testing, setTesting]           = useState(false)
+  const [testResult, setTestResult]     = useState<string | null>(null)
+  // iOS only exposes Web Push inside an installed home-screen app.
+  const [iosNeedsInstall, setIosNeedsInstall] = useState(false)
   const [saved, setSaved]               = useState(false)
   const [error, setError]               = useState<string | null>(null)
 
@@ -101,6 +104,14 @@ export default function NotificationSettings() {
         const reg = await navigator.serviceWorker.ready.catch(() => null)
         const sub = await reg?.pushManager.getSubscription().catch(() => null)
         setPushEnabled(!!sub)
+        // Make sure the server still has this device (see ServiceWorkerRegister).
+        if (sub) {
+          fetch('/api/push/subscribe', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(sub.toJSON()),
+          }).catch(() => {})
+        }
       }
     }
     setLoading(false)
@@ -109,6 +120,11 @@ export default function NotificationSettings() {
   useEffect(() => {
     const supported = 'serviceWorker' in navigator && 'PushManager' in window
     setPushSupported(supported)
+    const isIos = /iPad|iPhone|iPod/.test(navigator.userAgent)
+      || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1)
+    const standalone = window.matchMedia('(display-mode: standalone)').matches
+      || (navigator as Navigator & { standalone?: boolean }).standalone === true
+    setIosNeedsInstall(isIos && !standalone)
     setTimezone(Intl.DateTimeFormat().resolvedOptions().timeZone)
     if ('Notification' in window) setPushPermission(Notification.permission)
     loadSettings()
@@ -268,10 +284,22 @@ export default function NotificationSettings() {
   async function sendTestPush() {
     setTesting(true)
     setError(null)
+    setTestResult(null)
     const res = await fetch('/api/push/test', { method: 'POST' })
+    const d = await res.json().catch(() => ({}))
     if (!res.ok) {
-      const d = await res.json().catch(() => ({}))
       setError(d.error ?? 'Failed to send test notification')
+    } else {
+      // The count is across all your devices — if it's lower than the number
+      // of devices you've enabled, the missing one isn't registered.
+      const sent    = Number(d.sent ?? 0)
+      const total   = Number(d.total ?? sent)
+      const expired = Number(d.expired ?? 0)
+      setTestResult(
+        `Delivered to ${sent} of ${total} registered device${total === 1 ? '' : 's'}.` +
+        (expired ? ` ${expired} had expired and ${expired === 1 ? 'was' : 'were'} removed.` : '') +
+        ' Missing a device? Open Zenith there and turn push off and on.'
+      )
     }
     setTesting(false)
   }
@@ -310,7 +338,9 @@ export default function NotificationSettings() {
             <div>
               <p className="text-sm font-semibold text-white">Push Notifications</p>
               <p className="text-xs text-slate-500 mt-0.5">
-                {!pushSupported
+                {iosNeedsInstall
+                  ? 'On iPhone: Share → Add to Home Screen, then enable it from the installed app'
+                  : !pushSupported
                   ? 'Not supported in this browser'
                   : pushPermission === 'denied'
                   ? 'Blocked — enable in browser settings'
@@ -347,6 +377,7 @@ export default function NotificationSettings() {
               : <><Send className="mr-1.5 h-3.5 w-3.5" /> Send test notification</>}
           </Button>
         )}
+        {testResult && <p className="text-xs text-slate-400">{testResult}</p>}
       </div>
 
       {/* Email notifications */}

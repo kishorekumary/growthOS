@@ -46,19 +46,33 @@ export async function POST() {
     url:   '/todos',
   })
 
+  const expired: string[] = []
   const results = await Promise.allSettled(
     subs.map(sub =>
       webpush.sendNotification(
         { endpoint: sub.endpoint, keys: { p256dh: sub.p256dh, auth: sub.auth_key } },
         payload
-      )
+      ).catch((err: { statusCode?: number }) => {
+        // 404/410: the browser dropped this subscription for good.
+        if (err?.statusCode === 404 || err?.statusCode === 410) expired.push(sub.endpoint)
+        throw err
+      })
     )
   )
 
-  const failed = results.filter(r => r.status === 'rejected')
-  if (failed.length === subs.length) {
-    return NextResponse.json({ error: 'All push notifications failed' }, { status: 500 })
+  if (expired.length) {
+    await supabase.from('push_subscriptions').delete().eq('user_id', user.id).in('endpoint', expired)
   }
 
-  return NextResponse.json({ ok: true, sent: subs.length - failed.length })
+  const sent = results.filter(r => r.status === 'fulfilled').length
+  if (sent === 0) {
+    return NextResponse.json({
+      error: expired.length
+        ? 'Every registered device had an expired subscription (now removed). Re-enable push on each device.'
+        : 'All push notifications failed',
+      total: subs.length, expired: expired.length,
+    }, { status: 500 })
+  }
+
+  return NextResponse.json({ ok: true, sent, total: subs.length, expired: expired.length })
 }
