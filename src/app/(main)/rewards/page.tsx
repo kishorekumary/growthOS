@@ -7,7 +7,7 @@ export default async function RewardsPage() {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/login')
 
-  const [{ data: rewards }, { data: catalog }, { data: redemptions }, { data: habits }] = await Promise.all([
+  const [{ data: rewards }, { data: catalog }, { data: redemptions }, { data: habits }, freezeRes] = await Promise.all([
     supabase.from('user_rewards')
       .select('points_balance, current_perfect_streak, longest_perfect_streak')
       .eq('user_id', user.id).maybeSingle(),
@@ -22,6 +22,8 @@ export default async function RewardsPage() {
       .or(`user_id.eq.${user.id},is_global.eq.true`)
       .gt('streak_count', 0)
       .order('streak_count', { ascending: false }),
+    // Separate query: errors (hiding the freeze shop) until migration 049 is applied.
+    supabase.from('user_rewards').select('streak_freezes').eq('user_id', user.id).maybeSingle(),
   ])
 
   return (
@@ -32,6 +34,7 @@ export default async function RewardsPage() {
       catalog={catalog ?? []}
       redemptions={redemptions ?? []}
       streaks={(habits ?? []).filter(h => !h.is_global)}
+      streakFreezes={freezeRes.error ? null : freezeRes.data?.streak_freezes ?? 0}
     />
   )
 }

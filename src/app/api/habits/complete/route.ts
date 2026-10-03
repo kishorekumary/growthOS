@@ -6,29 +6,22 @@ import {
   DAILY_POINTS, DAILY_POINTS_KEYSTONE,
 } from '@/lib/rewardMilestones'
 import { isPerfectDay } from '@/lib/perfectDay'
+import { awardPoints } from '@/lib/awardPoints'
+import { prevDate } from '@/lib/dailyChest'
+import type { RewardMilestone } from '@/lib/completeHabit'
 
 type SupabaseClient = ReturnType<typeof createSupabaseServerClient>
 
-interface Milestone { label: string; points: number }
-
-// Returns whether the points actually landed (both the log insert and the
-// balance RPC succeeded). Callers must not tell the client a milestone was
-// awarded — or persist any "already awarded" marker — when this is false.
-async function awardPoints(supabase: SupabaseClient, userId: string, delta: number, reason: string): Promise<boolean> {
-  const { error: logError } = await supabase.from('reward_points_log').insert({ user_id: userId, delta, reason })
-  if (logError) {
-    console.error('awardPoints: failed to insert reward_points_log', { userId, delta, reason, error: logError })
-    return false
-  }
-  const { error: rpcError } = await supabase.rpc('increment_points_balance', { p_user_id: userId, p_delta: delta })
-  if (rpcError) {
-    console.error('awardPoints: increment_points_balance RPC failed', { userId, delta, reason, error: rpcError })
-    return false
-  }
-  return true
-}
-
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/
+
+// Spends (or reuses) a streak freeze covering `day`. False when the user has
+// none — or migration 049 isn't applied yet, in which case the RPC errors
+// and streaks just behave as they did before freezes existed.
+async function coverWithFreeze(supabase: SupabaseClient, userId: string, day: string): Promise<boolean> {
+  const { data, error } = await supabase.rpc('use_streak_freeze', { p_user_id: userId, p_covered_date: day })
+  if (error) return false
+  return data === true
+}
 
 export async function POST(req: Request) {
   const supabase = createSupabaseServerClient()
@@ -86,7 +79,7 @@ export async function POST(req: Request) {
   // Anchor to noon UTC of logDate instead, in both the "today" and "yesterday" branches, so it
   // always truncates back to logDate regardless of the executing runtime's timezone.
   const refIso  = `${logDate}T12:00:00.000Z`
-  const milestones: Milestone[] = []
+  const milestones: RewardMilestone[] = []
 
   // Defense-in-depth mirroring markDoneForYesterday's client-side guard:
   // never roll last_done_at backwards. If the habit already has a
@@ -133,6 +126,24 @@ export async function POST(req: Request) {
   let newStreak = habit.streak_count
   if (!habit.is_global) {
     newStreak = computeStreak(habit.streak_count, habit.last_done_at, habit.frequency, refDate)
+
+    // Streak freeze: a daily streak that missed exactly one day continues
+    // instead of resetting, if a freeze covers that day. Applied lazily here
+    // (not in the nightly cron) so it's only ever spent when the user
+    // actually comes back, and one freeze covers every habit for that day.
+    if (habit.frequency === 'daily' && habit.streak_count > 0 && habit.last_done_at && newStreak === 1) {
+      const lastMid = new Date(habit.last_done_at); lastMid.setHours(0, 0, 0, 0)
+      const refMid  = new Date(refDate);            refMid.setHours(0, 0, 0, 0)
+      const gapDays = Math.round((refMid.getTime() - lastMid.getTime()) / 86400000)
+      if (gapDays === 2 && await coverWithFreeze(supabase, user.id, prevDate(logDate))) {
+        newStreak = habit.streak_count + 1
+        milestones.push({
+          label:  `Streak freeze saved your ${habit.streak_count}-day ${habit.habit_name} streak`,
+          points: 0,
+          kind:   'freeze',
+        })
+      }
+    }
     const { error: streakUpdateErr } = await supabase.from('personality_habits').update({
       streak_count:   newStreak,
       longest_streak: Math.max(newStreak, habit.longest_streak),
@@ -227,7 +238,14 @@ export async function POST(req: Request) {
     priorDate.setDate(priorDate.getDate() - 1)
     const priorDay = localDateStr(priorDate)
 
-    const newPerfect       = rewards.last_perfect_date === priorDay ? rewards.current_perfect_streak + 1 : 1
+    // Same freeze rule as habit streaks: exactly one missed day in between,
+    // covered by a freeze (possibly already spent for that day above).
+    const perfectContinues = rewards.last_perfect_date === priorDay || (
+      rewards.current_perfect_streak > 0 &&
+      rewards.last_perfect_date === prevDate(priorDay) &&
+      await coverWithFreeze(supabase, user.id, priorDay)
+    )
+    const newPerfect       = perfectContinues ? rewards.current_perfect_streak + 1 : 1
     const longestPerfect   = Math.max(newPerfect, rewards.longest_perfect_streak)
     const overallBaseline  = newPerfect === 1 ? 0 : rewards.last_overall_milestone
     const overallCrossed   = highestMilestoneCrossed(newPerfect)

@@ -1,8 +1,9 @@
 'use client'
 
 import { useState } from 'react'
-import { Coins, Flame, Plus, Trash2, Pencil, Gift, Loader2, AlertCircle, Sparkles } from 'lucide-react'
+import { Coins, Flame, Plus, Trash2, Pencil, Gift, Loader2, AlertCircle, Sparkles, Snowflake } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { FREEZE_COST, FREEZE_MAX } from '@/lib/dailyChest'
 
 interface CatalogItem { id: string; title: string; point_cost: number; created_at: string }
 interface Redemption  { id: string; title: string; point_cost: number; redeemed_at: string }
@@ -18,7 +19,7 @@ const STARTER_CATALOG = [
 
 export default function RewardsClient({
   pointsBalance, currentPerfectStreak, longestPerfectStreak,
-  catalog: initialCatalog, redemptions: initialRedemptions, streaks,
+  catalog: initialCatalog, redemptions: initialRedemptions, streaks, streakFreezes,
 }: {
   pointsBalance: number
   currentPerfectStreak: number
@@ -26,7 +27,10 @@ export default function RewardsClient({
   catalog: CatalogItem[]
   redemptions: Redemption[]
   streaks: HabitStreak[]
+  streakFreezes: number | null   // null: freezes not available (migration 049 not applied)
 }) {
+  const [freezes, setFreezes]         = useState(streakFreezes ?? 0)
+  const [buyingFreeze, setBuyingFreeze] = useState(false)
   const [balance, setBalance]         = useState(pointsBalance)
   const [catalog, setCatalog]         = useState(initialCatalog)
   const [redemptions, setRedemptions] = useState(initialRedemptions)
@@ -129,6 +133,21 @@ export default function RewardsClient({
     setRedeemingId(null)
   }
 
+  async function buyFreeze() {
+    if (buyingFreeze || balance < FREEZE_COST || freezes >= FREEZE_MAX) return
+    setBuyingFreeze(true)
+    setError(null)
+    const res = await fetch('/api/rewards/buy-freeze', { method: 'POST' })
+    if (res.ok) {
+      setBalance(prev => prev - FREEZE_COST)
+      setFreezes(prev => prev + 1)
+    } else {
+      const d = await res.json().catch(() => ({}))
+      setError(d.error ?? 'Could not buy a streak freeze')
+    }
+    setBuyingFreeze(false)
+  }
+
   return (
     <div className="mx-auto max-w-2xl px-4 py-8 md:px-8 space-y-6">
       <div>
@@ -160,6 +179,37 @@ export default function RewardsClient({
           <p className="text-[11px] text-slate-500 mt-0.5">Best: {longestPerfectStreak}</p>
         </div>
       </div>
+
+      {streakFreezes !== null && (
+        <div className="flex items-center gap-3 rounded-xl border border-sky-500/20 bg-sky-500/5 p-4">
+          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-sky-500/15">
+            <Snowflake className="h-5 w-5 text-sky-300" />
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-semibold text-white">
+              Streak freezes <span className="text-sky-300">{freezes}/{FREEZE_MAX}</span>
+            </p>
+            <p className="text-[11px] text-slate-400 leading-snug">
+              Miss one day and a freeze is used automatically when you&apos;re back. It covers every streak, including your perfect-day streak.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={buyFreeze}
+            disabled={buyingFreeze || balance < FREEZE_COST || freezes >= FREEZE_MAX}
+            className={cn(
+              'shrink-0 rounded-lg px-3 py-2 text-xs font-semibold transition-all',
+              balance >= FREEZE_COST && freezes < FREEZE_MAX
+                ? 'bg-sky-600 hover:bg-sky-700 text-white'
+                : 'bg-white/5 text-slate-600',
+            )}
+          >
+            {buyingFreeze
+              ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              : freezes >= FREEZE_MAX ? 'Full' : `Buy · ${FREEZE_COST}`}
+          </button>
+        </div>
+      )}
 
       {streaks.length > 0 && (
         <div className="rounded-xl border border-white/8 bg-white/3 p-4 space-y-2">

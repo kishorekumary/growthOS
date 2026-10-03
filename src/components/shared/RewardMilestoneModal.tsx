@@ -1,6 +1,6 @@
 'use client'
 
-import { Sparkles, X } from 'lucide-react'
+import { Sparkles, Snowflake, Gift, X } from 'lucide-react'
 import { useReward } from '@/contexts/RewardContext'
 
 export default function RewardMilestoneModal() {
@@ -14,12 +14,20 @@ export default function RewardMilestoneModal() {
         <button onClick={dismissCurrent} className="absolute top-3 right-3 text-slate-500 hover:text-white transition-colors">
           <X className="h-4 w-4" />
         </button>
-        <div className="flex h-16 w-16 items-center justify-center rounded-full bg-amber-500/20 border-2 border-amber-500/40 mx-auto">
-          <Sparkles className="h-8 w-8 text-amber-400" />
+        <div className={`flex h-16 w-16 items-center justify-center rounded-full border-2 mx-auto ${
+          current.kind === 'freeze' ? 'bg-sky-500/20 border-sky-500/40' : 'bg-amber-500/20 border-amber-500/40'
+        }`}>
+          {current.kind === 'freeze'
+            ? <Snowflake className="h-8 w-8 text-sky-300" />
+            : current.kind === 'chest'
+            ? <Gift className="h-8 w-8 text-amber-400" />
+            : <Sparkles className="h-8 w-8 text-amber-400" />}
         </div>
         <div>
-          <p className="text-lg font-bold text-white">🎉 {current.label}</p>
-          <p className="text-amber-400 font-semibold mt-1">+{current.points} points</p>
+          <p className="text-lg font-bold text-white">{current.kind ? '' : '🎉 '}{current.label}</p>
+          {current.points > 0 && (
+            <p className="text-amber-400 font-semibold mt-1">+{current.points} points</p>
+          )}
         </div>
         <button
           onClick={dismissCurrent}

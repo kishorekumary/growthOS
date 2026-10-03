@@ -1,6 +1,11 @@
 import { todayStr, yesterdayStr } from '@/lib/habitStreak'
 
-export interface RewardMilestone { label: string; points: number }
+export interface RewardMilestone {
+  label:  string
+  points: number
+  // Non-milestone moments shown through the same popup queue.
+  kind?:  'freeze' | 'chest'
+}
 
 export async function completeHabit(
   habitId: string,

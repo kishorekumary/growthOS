@@ -1,8 +1,8 @@
 'use client'
 
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
 import Link from 'next/link'
-import { Check, Crown, Flame, Loader2, ArrowRight, Trophy, Sparkles } from 'lucide-react'
+import { Check, Crown, Flame, Loader2, ArrowRight, Trophy, Sparkles, Gift, Lock, Snowflake } from 'lucide-react'
 import { useCachedQuery } from '@/hooks/useCachedQuery'
 import { useInFlightIds } from '@/hooks/useInFlightIds'
 import { useHabitCelebration } from '@/hooks/useHabitCelebration'
@@ -10,6 +10,7 @@ import { useReward } from '@/contexts/RewardContext'
 import { completeHabit } from '@/lib/completeHabit'
 import { localDateStr, todayStr, yesterdayStr } from '@/lib/habitStreak'
 import { HABIT_CATEGORY_META, type HabitCategory } from '@/lib/habitCategories'
+import { prevDate } from '@/lib/dailyChest'
 import { cn } from '@/lib/utils'
 
 interface Habit {
@@ -25,6 +26,8 @@ interface Habit {
 interface HabitLog  { habit_id: string; status: string }
 interface IdMark    { habit_id: string }
 interface Rewards   { current_perfect_streak: number; last_perfect_date: string | null }
+interface Freezes   { streak_freezes: number }
+interface ChestClaim { claim_date: string; chest_streak: number; points: number; freeze: boolean; label: string }
 
 type Status = 'pending' | 'done' | 'skipped'
 
@@ -75,6 +78,28 @@ export default function TodayHabits() {
     null,
   )
 
+  // Freezes and chest come from migration 049 — fetched separately so an
+  // unapplied migration only hides these extras (the query errors and
+  // isOffline flips) instead of breaking the rest of the card.
+  const { data: freezeRow, isOffline: freezesUnavailable, refetch: refetchFreezes } = useCachedQuery<Freezes | null>(
+    'today:freezes',
+    (supabase, userId) => supabase.from('user_rewards').select('streak_freezes').eq('user_id', userId).maybeSingle(),
+    null,
+  )
+  const { data: chest, isOffline: chestUnavailable, setData: setChest } = useCachedQuery<ChestClaim | null>(
+    `today:chest:${today}`,
+    (supabase, userId) => supabase
+      .from('daily_chest_claims')
+      .select('claim_date, chest_streak, points, freeze, label')
+      .eq('user_id', userId)
+      .eq('claim_date', today)
+      .maybeSingle(),
+    null,
+    [today],
+  )
+  const [openingChest, setOpeningChest] = useState(false)
+  const freezes = freezesUnavailable ? 0 : freezeRow?.streak_freezes ?? 0
+
   const { inFlight, begin, end } = useInFlightIds()
   const { celebrate, celebrationNode } = useHabitCelebration()
   const { celebrateMilestones } = useReward()
@@ -96,6 +121,11 @@ export default function TodayHabits() {
     if (h.is_global || !h.last_done_at || h.streak_count <= 0) return 0
     const last = localDateStr(new Date(h.last_done_at))
     return last === yesterday || last === today ? h.streak_count : 0
+  }
+  // Missed exactly yesterday: completing today spends a freeze to save it.
+  const frozenStreak = (h: Habit) => {
+    if (h.is_global || !h.last_done_at || h.streak_count <= 0 || freezes === 0) return 0
+    return localDateStr(new Date(h.last_done_at)) === prevDate(yesterday) ? h.streak_count : 0
   }
 
   const visible = habits.filter(h => !h.is_global || !hiddenIds.has(h.id))
@@ -124,10 +154,33 @@ export default function TodayHabits() {
       celebrate()
       celebrateMilestones(milestones)
       refetchRewards()  // may have just completed a perfect day
+      if (milestones.some(m => m.kind === 'freeze')) refetchFreezes()
     } catch {
       setLogs(prev => prev.filter(l => !(l.habit_id === habit.id && l.status === 'done')))
     }
     end(habit.id)
+  }
+
+  async function openChest() {
+    if (openingChest || chest) return
+    setOpeningChest(true)
+    try {
+      const res = await fetch('/api/rewards/daily-chest', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ date: today }),
+      })
+      if (res.ok) {
+        const { claim, alreadyClaimed } = await res.json() as { claim: ChestClaim; alreadyClaimed: boolean }
+        setChest(claim)
+        if (!alreadyClaimed) {
+          celebrateMilestones([{ label: `Day ${claim.chest_streak} chest: ${claim.label}`, points: claim.points, kind: 'chest' }])
+          if (claim.freeze) refetchFreezes()
+        }
+      }
+    } finally {
+      setOpeningChest(false)
+    }
   }
 
   const loading = (habitsLoading || logsLoading) && habits.length === 0
@@ -145,15 +198,26 @@ export default function TodayHabits() {
             <span className="text-xs text-slate-500">{done.length}/{actionable}</span>
           )}
         </div>
-        {perfectStreak > 0 && (
-          <span
-            title="Consecutive days with every daily habit done"
-            className="flex items-center gap-1 rounded-full bg-amber-500/15 px-2 py-0.5 text-[11px] font-medium text-amber-300 shrink-0"
-          >
-            <Trophy className="h-3 w-3" />
-            {perfectStreak}-day perfect
-          </span>
-        )}
+        <div className="flex items-center gap-1.5 shrink-0">
+          {freezes > 0 && (
+            <span
+              title={`${freezes} streak freeze${freezes === 1 ? '' : 's'}: each one saves your streaks if you miss a single day`}
+              className="flex items-center gap-1 rounded-full bg-sky-500/15 px-2 py-0.5 text-[11px] font-medium text-sky-300"
+            >
+              <Snowflake className="h-3 w-3" />
+              {freezes}
+            </span>
+          )}
+          {perfectStreak > 0 && (
+            <span
+              title="Consecutive days with every daily habit done"
+              className="flex items-center gap-1 rounded-full bg-amber-500/15 px-2 py-0.5 text-[11px] font-medium text-amber-300"
+            >
+              <Trophy className="h-3 w-3" />
+              {perfectStreak}-day perfect
+            </span>
+          )}
+        </div>
       </div>
 
       {actionable > 0 && (
@@ -187,6 +251,7 @@ export default function TodayHabits() {
         <ul className="space-y-2">
           {pending.map(habit => {
             const streak  = liveStreak(habit)
+            const frozen  = frozenStreak(habit)
             const marking = inFlight.has(habit.id)
             return (
               <li key={habit.id}>
@@ -216,6 +281,9 @@ export default function TodayHabits() {
                       {streak > 0 && (
                         <span className="text-[11px] text-orange-400">🔥 {streak} — keep it alive</span>
                       )}
+                      {frozen > 0 && (
+                        <span className="text-[11px] text-sky-300">🧊 {frozen} — a freeze will save it today</span>
+                      )}
                     </span>
                   </span>
                 </button>
@@ -234,6 +302,32 @@ export default function TodayHabits() {
             </span>
           ))}
         </div>
+      )}
+
+      {/* Daily chest — unlocked by the day's first completed habit */}
+      {!chestUnavailable && visible.length > 0 && (
+        chest ? (
+          <p className="flex items-center gap-1.5 text-xs text-slate-400">
+            <Gift className="h-3.5 w-3.5 text-amber-400/70" />
+            Today&apos;s chest: {chest.label}
+            <span className="text-slate-600">· {chest.chest_streak}-day chest streak</span>
+          </p>
+        ) : done.length > 0 ? (
+          <button
+            type="button"
+            onClick={openChest}
+            disabled={openingChest}
+            className="w-full flex items-center justify-center gap-2 rounded-xl border border-amber-500/40 bg-gradient-to-r from-amber-500/20 to-orange-500/10 px-4 py-3 text-sm font-semibold text-amber-200 shadow-[0_0_16px_-4px_rgba(245,158,11,0.5)] transition-all active:scale-[0.98] animate-pulse"
+          >
+            {openingChest ? <Loader2 className="h-4 w-4 animate-spin" /> : <Gift className="h-4 w-4" />}
+            Daily chest unlocked — tap to open
+          </button>
+        ) : (
+          <p className="flex items-center gap-1.5 text-xs text-slate-600">
+            <Lock className="h-3 w-3" />
+            Finish one habit to unlock today&apos;s chest
+          </p>
+        )
       )}
 
       <div className="flex items-center justify-between text-xs">
