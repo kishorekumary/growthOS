@@ -68,8 +68,18 @@ self.addEventListener('fetch', event => {
 })
 
 // ─── Push notifications ───────────────────────────────────────────
+// Payload: { title, body, url, tag, habitId?, habitName? } — see
+// src/app/api/cron/reminders/route.ts. With a habitId, the notification
+// offers a one-tap "mark done" action (Chrome/Android; iOS has no actions
+// and simply opens `url` on tap).
 self.addEventListener('push', event => {
   const data = event.data?.json() ?? {}
+  const actions = data.habitId
+    ? [
+        { action: 'habit-done', title: `✓ ${truncate(data.habitName ?? 'Mark done', 24)}` },
+        { action: 'open',       title: 'Open' },
+      ]
+    : []
   event.waitUntil(
     self.registration.showNotification(data.title ?? 'Zenith Reminder', {
       body:    data.body  ?? 'Time to check your tasks!',
@@ -78,20 +88,63 @@ self.addEventListener('push', event => {
       vibrate: [200, 100, 200, 100, 200],
       renotify: true,
       tag:     data.tag ?? 'zenith-timer',
-      data:    { url: data.url ?? '/dashboard' },
+      actions,
+      data:    { url: data.url ?? '/dashboard', habitId: data.habitId, habitName: data.habitName },
     })
   )
 })
 
+function truncate(str, n) {
+  return str.length > n ? `${str.slice(0, n - 1)}…` : str
+}
+
+// Browser-local YYYY-MM-DD — the same "today" the app itself sends
+// (src/lib/habitStreak.ts todayStr), since the server can't know the user's day.
+function localToday() {
+  const d = new Date()
+  return [d.getFullYear(), String(d.getMonth() + 1).padStart(2, '0'), String(d.getDate()).padStart(2, '0')].join('-')
+}
+
+function openUrl(url) {
+  return clients.matchAll({ type: 'window', includeUncontrolled: true }).then(list => {
+    for (const client of list) {
+      if ('focus' in client) { client.navigate(url); return client.focus() }
+    }
+    return clients.openWindow(url)
+  })
+}
+
+// Logs the habit straight from the notification. Same-origin fetch from the
+// worker carries the session cookies, and the middleware refreshes them.
+// On any failure (signed out, offline) fall back to opening the app.
+async function completeFromNotification(data) {
+  try {
+    const res = await fetch('/api/habits/complete', {
+      method: 'POST',
+      credentials: 'same-origin',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ habit_id: data.habitId, for: 'today', date: localToday() }),
+    })
+    if (!res.ok) throw new Error(`status ${res.status}`)
+    const { streak_count } = await res.json()
+    await self.registration.showNotification(`✓ ${data.habitName ?? 'Habit'} done`, {
+      body:  streak_count > 1 ? `🔥 ${streak_count}-day streak. Nice.` : 'Logged. Keep it going tomorrow.',
+      icon:  '/icon-192.png',
+      badge: '/icon-96.png',
+      tag:   'zenith-habit-done',
+      data:  { url: data.url ?? '/personality/habits' },
+    })
+  } catch {
+    await openUrl(data.url ?? '/personality/habits')
+  }
+}
+
 self.addEventListener('notificationclick', event => {
   event.notification.close()
-  const url = event.notification.data?.url ?? '/dashboard'
-  event.waitUntil(
-    clients.matchAll({ type: 'window', includeUncontrolled: true }).then(list => {
-      for (const client of list) {
-        if ('focus' in client) { client.navigate(url); return client.focus() }
-      }
-      return clients.openWindow(url)
-    })
-  )
+  const data = event.notification.data ?? {}
+  if (event.action === 'habit-done' && data.habitId) {
+    event.waitUntil(completeFromNotification(data))
+    return
+  }
+  event.waitUntil(openUrl(data.url ?? '/dashboard'))
 })

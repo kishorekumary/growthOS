@@ -487,6 +487,10 @@ export default function NotificationSettings() {
           </div>
           <span className="text-xs text-slate-500">{times.length}/8</span>
         </div>
+        <p className="text-xs text-slate-500">
+          Each reminder lists the habits you have left. At 9 PM you also get a last call
+          if an active streak would break tonight (push &amp; Telegram only).
+        </p>
 
         <div className="space-y-2">
           {times.map((t, i) => (
