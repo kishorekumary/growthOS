@@ -541,15 +541,13 @@ function HabitPanel() {
     'habits:quicklog',
     (supabase, userId) => supabase.from('personality_habits')
       .select('id, habit_name, category, streak_count, longest_streak, last_done_at, frequency, is_keystone, is_global')
-      .eq('user_id', userId)
+      .or(`user_id.eq.${userId},is_global.eq.true`)
       .order('created_at', { ascending: true }),
     [],
   )
 
-  // A habit row here can be one of the admin's own global habits (global rows
-  // are owned by the creating admin's user_id, so `.eq('user_id', userId)`
-  // above picks them up same as any personal habit) — respect the same
-  // per-user hide state the Habit Tracker's "Manage Global" modal writes to,
+  // Includes global habits (same visibility as the Habit Tracker) — respect
+  // the per-user hide state the Tracker's "Manage Global" modal writes to,
   // so hiding a global habit there also removes it from Quick Log.
   const { data: hiddenHabitMarks } = useCachedQuery<HiddenMark[]>(
     'hidden-global-habits',
@@ -619,8 +617,10 @@ function HabitPanel() {
       if (row.status === 'auto_missed') missed.add(row.habit_id)
     }
     // Fallback: check last_done_at for today
+    // Never for global habits: last_done_at there is one shared column across
+    // every user, so only this user's own habit_logs row can say "done today".
     for (const h of habits) {
-      if (h.last_done_at) {
+      if (h.last_done_at && !h.is_global) {
         const d = new Date(h.last_done_at)
         const ds = [d.getFullYear(), String(d.getMonth() + 1).padStart(2, '0'), String(d.getDate()).padStart(2, '0')].join('-')
         if (ds === today) done.add(h.id)
