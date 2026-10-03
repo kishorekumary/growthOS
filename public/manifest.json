@@ -36,10 +36,24 @@
   ],
   "shortcuts": [
     {
-      "name": "Quick Log",
-      "short_name": "Log",
-      "description": "Log a meal, workout, habit or finance entry",
-      "url": "/dashboard",
+      "name": "Today's Habits",
+      "short_name": "Habits",
+      "description": "Tick off today's habits",
+      "url": "/dashboard#today",
+      "icons": [{ "src": "/icon-96.png", "sizes": "96x96" }]
+    },
+    {
+      "name": "Journal",
+      "short_name": "Journal",
+      "description": "Write today's journal entry",
+      "url": "/journal",
+      "icons": [{ "src": "/icon-96.png", "sizes": "96x96" }]
+    },
+    {
+      "name": "Daily Check-in",
+      "short_name": "Check-in",
+      "description": "Log how today is going",
+      "url": "/checkin",
       "icons": [{ "src": "/icon-96.png", "sizes": "96x96" }]
     },
     {

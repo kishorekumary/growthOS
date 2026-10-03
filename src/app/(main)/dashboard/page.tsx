@@ -7,6 +7,7 @@ import DailyPractice from '@/components/shared/DailyPractice'
 import QuickReset from '@/components/shared/QuickReset'
 import TodoWidget from '@/components/todos/TodoWidget'
 import DashboardGoalsCard from '@/components/goals/DashboardGoalsCard'
+import TodayHabits from '@/components/dashboard/TodayHabits'
 
 export default async function DashboardPage() {
   const supabase = createSupabaseServerClient()
@@ -124,8 +125,13 @@ export default async function DashboardPage() {
       <div className="mb-6">
         <p className="text-sm text-slate-500 mb-1">{today}</p>
         <h1 className="text-2xl font-bold text-white">
-          Your Dashboard
+          Today
         </h1>
+      </div>
+
+      {/* Today's habits first — opening the app should be enough to act */}
+      <div className="mb-6">
+        <TodayHabits />
       </div>
 
       {/* AI Daily Greeting */}
