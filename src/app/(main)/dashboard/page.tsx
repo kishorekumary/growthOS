@@ -10,6 +10,7 @@ import DashboardGoalsCard from '@/components/goals/DashboardGoalsCard'
 import TodayHabits from '@/components/dashboard/TodayHabits'
 import PowerQuestions from '@/components/dashboard/PowerQuestions'
 import DecisionsDue from '@/components/dashboard/DecisionsDue'
+import WorkbookDue from '@/components/dashboard/WorkbookDue'
 
 export default async function DashboardPage() {
   const supabase = createSupabaseServerClient()
@@ -143,6 +144,11 @@ export default async function DashboardPage() {
       {/* Renders only when a decision check-in is due */}
       <div className="mb-6 empty:hidden">
         <DecisionsDue />
+      </div>
+
+      {/* Renders only when a workbook exercise is due */}
+      <div className="mb-6 empty:hidden">
+        <WorkbookDue />
       </div>
 
       {/* AI Daily Greeting */}

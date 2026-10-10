@@ -243,7 +243,7 @@ export default function PowerQuestions() {
           <p className="text-sm text-slate-300 leading-relaxed">
             {kind === 'morning'
               ? 'The quality of your life is the quality of your questions. Seven quick ones to set your focus for the day.'
-              : 'Three questions to close the day: what you gave, what you learned, and how today invested in your future.'}
+              : 'Close the day: what you gave, what you learned, where you fell short of your values, and the one action that matters tomorrow.'}
           </p>
           <button
             type="button"

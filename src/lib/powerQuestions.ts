@@ -27,10 +27,16 @@ export const MORNING_QUESTIONS = [
 // Asked alongside each morning question: the point is to feel it, not list it.
 export const MORNING_FOLLOW_UP = 'What about that makes me feel this way? How does it feel?'
 
+// The first three are Robbins' evening set; the rest fold in the workbook's
+// Daily Review, so the day closes with one ritual instead of two.
 export const EVENING_QUESTIONS = [
   'What have I given today? In what ways have I been a giver?',
   'What did I learn today?',
   'How has today added to the quality of my life? How can I use today as an investment in my future?',
+  'What did I do well today?',
+  'Where did I act against my values? What could I have handled better?',
+  'What am I grateful for today?',
+  'What is the most important action for tomorrow?',
 ]
 
 // Morning set until 4 PM local, evening after — the card opens on whichever
