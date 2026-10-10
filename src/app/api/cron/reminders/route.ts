@@ -10,6 +10,7 @@ import {
   type ReminderHabit, type ReminderMessage,
 } from '@/lib/reminderMessage'
 import { POWER_TAG } from '@/lib/powerQuestions'
+import { WORKBOOK_TAG, workbookStatus } from '@/lib/workbook'
 
 type AdminClient = ReturnType<typeof createSupabaseAdminClient>
 
@@ -56,7 +57,10 @@ function lastDoneLocalDate(lastDoneAt: string, timezone: string): string {
   return new Intl.DateTimeFormat('en-CA', { timeZone: timezone }).format(new Date(lastDoneAt))
 }
 
-interface HabitState { pending: ReminderHabit[]; doneCount: number; perfectStreak: number; powerDone: Set<string> }
+interface HabitState {
+  pending: ReminderHabit[]; doneCount: number; perfectStreak: number; powerDone: Set<string>
+  exerciseDue: string | null
+}
 
 // Today's habit picture for one user: visible daily habits (own + global
 // minus hidden) with no log yet today — same visibility rules as HabitTracker.
@@ -65,7 +69,7 @@ async function loadHabitState(
 ): Promise<HabitState> {
   const [
     { data: habits }, { data: hidden }, { data: keystones }, { data: logs }, { data: rewards },
-    { data: leverageRows }, { data: powerRows },
+    { data: leverageRows }, { data: powerRows }, { data: workbookRows },
   ] = await Promise.all([
     admin.from('personality_habits')
       .select('id, habit_name, streak_count, last_done_at, is_keystone, is_global')
@@ -79,6 +83,7 @@ async function loadHabitState(
     admin.from('habit_leverage').select('habit_id, pain, pleasure').eq('user_id', userId),
     admin.from('journal_entries').select('tags').eq('user_id', userId).eq('entry_date', today)
       .overlaps('tags', [POWER_TAG.morning, POWER_TAG.evening]),
+    admin.from('journal_entries').select('entry_date, tags').eq('user_id', userId).contains('tags', [WORKBOOK_TAG]),
   ])
   const leverage = new Map((leverageRows ?? []).map(l => [l.habit_id, (l.pain ?? l.pleasure) as string | null]))
   const powerDone = new Set((powerRows ?? []).flatMap(r => (r.tags ?? []) as string[]))
@@ -106,6 +111,8 @@ async function loadHabitState(
     doneCount:     (logs ?? []).filter(l => l.status === 'done').length,
     perfectStreak: perfectAlive ? rewards?.current_perfect_streak ?? 0 : 0,
     powerDone,
+    // One line per reminder: the first due exercise (reviews before the program).
+    exerciseDue:   workbookStatus(workbookRows ?? [], today).due[0]?.title ?? null,
   }
 }
 
@@ -254,6 +261,7 @@ export async function GET(req: NextRequest) {
         isEvening,
         perfectStreak: state.perfectStreak,
         powerPending:  !state.powerDone.has(isEvening ? POWER_TAG.evening : POWER_TAG.morning),
+        exerciseDue:   state.exerciseDue,
       })
 
       if (s.push_enabled && pushReady) await sendPush(admin, s.user_id, msg)

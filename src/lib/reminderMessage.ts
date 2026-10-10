@@ -21,6 +21,7 @@ export interface ReminderInput {
   isEvening:     boolean
   perfectStreak: number            // live perfect-day streak (0 if broken)
   powerPending?: boolean           // this half of the day's power questions not done yet
+  exerciseDue?:  string | null     // title of the workbook exercise due today, if any
 }
 
 export interface ReminderMessage {
@@ -68,9 +69,12 @@ function topAtRisk(pending: ReminderHabit[]): ReminderHabit | undefined {
 
 export function buildReminder(input: ReminderInput): ReminderMessage {
   const msg = buildHabitReminder(input)
-  if (!input.powerPending) return msg
-  const half = input.isEvening ? 'evening' : 'morning'
-  return { ...msg, body: `${msg.body} Then 2 min of ${half} power questions.`, url: HABITS_URL }
+  const extras: string[] = []
+  if (input.powerPending) extras.push(`Then 2 min of ${input.isEvening ? 'evening' : 'morning'} power questions.`)
+  if (input.exerciseDue)  extras.push(`Workbook: ${input.exerciseDue}.`)
+  if (!extras.length) return msg
+  // The dashboard holds both cards, so every extra lands in one place.
+  return { ...msg, body: `${msg.body} ${extras.join(' ')}`, url: HABITS_URL }
 }
 
 function buildHabitReminder(input: ReminderInput): ReminderMessage {

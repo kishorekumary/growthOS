@@ -5,7 +5,7 @@ import { usePathname, useRouter } from 'next/navigation'
 import {
   LayoutDashboard, Brain, Dumbbell, Wallet, BookOpen,
   Target, CheckSquare, Timer, Newspaper, CalendarCheck,
-  Flame, NotebookPen, Images, Zap, Settings, LogOut, ShieldCheck, Search, Gift,
+  Flame, NotebookPen, ClipboardList, Images, Zap, Settings, LogOut, ShieldCheck, Search, Gift,
 } from 'lucide-react'
 import { createSupabaseBrowserClient } from '@/lib/supabase'
 import { cn } from '@/lib/utils'
@@ -19,6 +19,7 @@ const NAV_ITEMS = [
   { href: '/books',               label: 'Books',      icon: BookOpen },
   { href: '/goals',               label: 'Goals',      icon: Target },
   { href: '/decisions',           label: 'Decisions',  icon: Zap },
+  { href: '/workbook',            label: 'Workbook',   icon: ClipboardList },
   { href: '/todos',               label: 'Tasks',      icon: CheckSquare },
   { href: '/rewards',             label: 'Rewards',    icon: Gift },
   { href: '/focus',               label: 'Focus',      icon: Timer },
