@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu'
 import { ArrowRight, MoreHorizontal, Pencil, Repeat, Trash2 } from 'lucide-react'
 import { cn } from '@/lib/utils'
@@ -31,12 +31,26 @@ export default function PlannerItemRow({
   const [notes, setNotes]         = useState(item.notes ?? '')
   const [showNotes, setShowNotes] = useState(false)
   const [flash, setFlash]         = useState<number | null>(null)
+  const flashTimer                = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  useEffect(() => () => {
+    if (flashTimer.current) clearTimeout(flashTimer.current)
+  }, [])
 
   async function handleToggle() {
-    const delta = await onToggle()
+    let delta: number
+    try {
+      delta = await onToggle()
+    } catch {
+      return
+    }
     if (delta > 0) {
       setFlash(delta)
-      setTimeout(() => setFlash(null), 900)
+      if (flashTimer.current) clearTimeout(flashTimer.current)
+      flashTimer.current = setTimeout(() => {
+        flashTimer.current = null
+        setFlash(null)
+      }, 900)
     }
   }
 
@@ -111,7 +125,14 @@ export default function PlannerItemRow({
           </DropdownMenu.Trigger>
           <DropdownMenu.Portal>
             <DropdownMenu.Content align="end" sideOffset={4} className="z-50 min-w-[170px] rounded-lg border border-white/10 bg-slate-900 p-1 shadow-xl">
-              <DropdownMenu.Item className={MENU_ITEM} onSelect={() => setEditing(true)}>
+              <DropdownMenu.Item
+                className={MENU_ITEM}
+                onSelect={() => {
+                  setTitle(item.title)
+                  setNotes(item.notes ?? '')
+                  setEditing(true)
+                }}
+              >
                 <Pencil className="h-3.5 w-3.5" /> Edit
               </DropdownMenu.Item>
               <DropdownMenu.Sub>
