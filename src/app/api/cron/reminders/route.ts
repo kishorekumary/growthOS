@@ -9,6 +9,7 @@ import {
   buildReminder, buildStreakRiskNudge, dueReminderTimes,
   type ReminderHabit, type ReminderMessage,
 } from '@/lib/reminderMessage'
+import { fetchReminderTitles } from '@/lib/planner/actions'
 import { POWER_TAG } from '@/lib/powerQuestions'
 import { WORKBOOK_TAG, workbookStatus } from '@/lib/workbook'
 
@@ -243,21 +244,14 @@ export async function GET(req: NextRequest) {
     const updatedSent = { ...sentToday }
 
     if (due.length) {
-      const { data: todos } = await admin
-        .from('user_todos')
-        .select('title')
-        .eq('user_id', s.user_id)
-        .eq('is_completed', false)
-        .lte('due_date', day)
-        .order('due_date', { ascending: true })
-        .limit(10)
+      const todoTitles = await fetchReminderTitles(admin, s.user_id, day)
 
       const isEvening = now.minutes >= 12 * 60
       // Several due at once (e.g. after a scheduler outage) collapse into one message.
       const msg = buildReminder({
         pending:       state.pending,
         doneCount:     state.doneCount,
-        todoTitles:    (todos ?? []).map(t => t.title as string),
+        todoTitles,
         isEvening,
         perfectStreak: state.perfectStreak,
         powerPending:  !state.powerDone.has(isEvening ? POWER_TAG.evening : POWER_TAG.morning),

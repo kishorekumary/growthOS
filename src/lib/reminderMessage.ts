@@ -17,7 +17,7 @@ export interface ReminderHabit {
 export interface ReminderInput {
   pending:       ReminderHabit[]   // today's daily habits not yet logged
   doneCount:     number
-  todoTitles:    string[]          // open tasks due today or earlier
+  todoTitles:    string[]          // open planner items worth nudging about today
   isEvening:     boolean
   perfectStreak: number            // live perfect-day streak (0 if broken)
   powerPending?: boolean           // this half of the day's power questions not done yet
@@ -57,8 +57,8 @@ function plural(n: number, word: string): string {
 
 function taskLine(todoTitles: string[]): string {
   if (!todoTitles.length) return ''
-  if (todoTitles.length === 1) return `Task due: ${todoTitles[0]}.`
-  return `${plural(todoTitles.length, 'task')} due today.`
+  if (todoTitles.length === 1) return `On your plan: ${todoTitles[0]}.`
+  return `${plural(todoTitles.length, 'planner item')} still open.`
 }
 
 function topAtRisk(pending: ReminderHabit[]): ReminderHabit | undefined {
@@ -89,14 +89,14 @@ function buildHabitReminder(input: ReminderInput): ReminderMessage {
         title: input.isEvening ? 'All habits done today 🎉' : 'Habits already done 🎉',
         body:  [input.perfectStreak > 0 ? `Perfect-day streak: ${input.perfectStreak}.` : '', tasks || 'Nothing else due — enjoy it.']
           .filter(Boolean).join(' '),
-        url:   tasks ? '/todos' : HABITS_URL,
+        url:   tasks ? '/planner' : HABITS_URL,
         tag,
       }
     }
     return {
       title: input.isEvening ? 'Evening check-in 🌙' : 'Good morning 🌅',
       body:  tasks || 'Your tasks are clear today. Keep the momentum going!',
-      url:   '/todos',
+      url:   '/planner',
       tag,
     }
   }

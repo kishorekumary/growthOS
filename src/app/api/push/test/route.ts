@@ -43,7 +43,7 @@ export async function POST() {
   const payload = JSON.stringify({
     title: 'Zenith Test ⚡',
     body:  'Push notifications are working!',
-    url:   '/todos',
+    url:   '/planner',
   })
 
   const expired: string[] = []
