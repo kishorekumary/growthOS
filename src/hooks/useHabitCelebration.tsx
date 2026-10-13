@@ -3,6 +3,7 @@
 import { useCallback, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import CoinBurst from '@/components/shared/CoinBurst'
+import { feedbackAllowed, haptic } from '@/lib/effects'
 
 const CELEBRATION_DURATION_MS = 1500
 
@@ -41,12 +42,15 @@ function playCoinChime() {
   }
 }
 
+// Coin burst + chime + light haptic for a single check-off (habits and
+// planner items). Respects the Celebrations setting (src/lib/effects.ts).
 export function useHabitCelebration() {
   const [active, setActive] = useState(false)
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const celebrate = useCallback(() => {
-    playCoinChime()
+    if (feedbackAllowed()) playCoinChime()
+    haptic('tick')
     setActive(true)
     if (timerRef.current) clearTimeout(timerRef.current)
     timerRef.current = setTimeout(() => setActive(false), CELEBRATION_DURATION_MS)

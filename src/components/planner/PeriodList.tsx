@@ -1,8 +1,12 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { ChevronDown, ChevronLeft, ChevronRight, ChevronUp } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { haptic } from '@/lib/effects'
+import { useHabitCelebration } from '@/hooks/useHabitCelebration'
+import ListClearedBurst from '@/components/shared/ListClearedBurst'
 import { periodLabel, periodStart } from '@/lib/planner/periods'
 import { isDoneIn } from '@/lib/planner/visibility'
 import type { ItemPatch } from '@/lib/planner/actions'
@@ -64,10 +68,36 @@ export default function PeriodList(props: PeriodListProps) {
     const n = new Set(prev); n.delete(id); return n
   })
 
+  // Celebrations: coin burst + light haptic per check-off; confetti + success
+  // haptic when that check-off empties the list.
+  const { celebrate, celebrationNode } = useHabitCelebration()
+  const [cleared, setCleared] = useState(false)
+  const clearedTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  useEffect(() => () => { if (clearedTimer.current) clearTimeout(clearedTimer.current) }, [])
+
+  const openCount = () =>
+    items.filter(i => !isDoneIn(i, start, completions)).length + habits.filter(h => !h.done).length
+
+  function celebrateCheck(emptiedList: boolean) {
+    if (!emptiedList) { celebrate(); return }
+    haptic('success')
+    setCleared(true)
+    if (clearedTimer.current) clearTimeout(clearedTimer.current)
+    clearedTimer.current = setTimeout(() => setCleared(false), 2000)
+  }
+
+  function habitDone(habit: PlannerHabit) {
+    if (habit.done) return
+    const emptiesList = openCount() === 1
+    onHabitDone(habit)
+    celebrateCheck(emptiesList)
+  }
+
   async function toggle(item: PlannerItem) {
     // usePlanner updates optimistically before its network await, so mark the
     // row synchronously (before onToggle) to keep it mounted from the tap.
     const wasOpen = !isDoneIn(item, start, completions)
+    const emptiesList = wasOpen && openCount() === 1
     const prior = timers.current.get(item.id)
     if (prior) { clearTimeout(prior); timers.current.delete(item.id) }
     if (wasOpen) setRecentlyDone(prev => new Set(prev).add(item.id))
@@ -81,6 +111,7 @@ export default function PeriodList(props: PeriodListProps) {
     if (wasOpen && delta > 0) {
       const timer = setTimeout(() => { timers.current.delete(item.id); unmark(item.id) }, 700)
       timers.current.set(item.id, timer)
+      celebrateCheck(emptiesList)
     } else {
       unmark(item.id)
     }
@@ -130,6 +161,10 @@ export default function PeriodList(props: PeriodListProps) {
         dragOver && 'border-violet-500/50 bg-violet-500/[0.05]',
       )}
     >
+      {celebrationNode}
+      {cleared && typeof document !== 'undefined' &&
+        createPortal(<ListClearedBurst label={periodLabel(type, start, today)} />, document.body)}
+
       {/* Header */}
       <div className="flex items-center gap-3">
         {variant === 'tab' && <ProgressRing done={done} total={total} />}
@@ -161,7 +196,7 @@ export default function PeriodList(props: PeriodListProps) {
       {/* Open */}
       <div className="space-y-2">
         {openHabits.map(h => (
-          <HabitRow key={h.id} habit={h} busy={habitBusy.has(h.id)} onDone={() => onHabitDone(h)} />
+          <HabitRow key={h.id} habit={h} busy={habitBusy.has(h.id)} onDone={() => habitDone(h)} />
         ))}
         {openItems.map(renderItem)}
         {openHabits.length + openItems.length === 0 && (
@@ -185,7 +220,7 @@ export default function PeriodList(props: PeriodListProps) {
           {showDone && (
             <>
               {doneHabits.map(h => (
-                <HabitRow key={h.id} habit={h} busy={habitBusy.has(h.id)} onDone={() => onHabitDone(h)} />
+                <HabitRow key={h.id} habit={h} busy={habitBusy.has(h.id)} onDone={() => habitDone(h)} />
               ))}
               {doneItems.map(renderItem)}
             </>

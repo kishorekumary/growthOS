@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState, type CSSProperties } from 'react'
+import { motionAllowed } from '@/lib/effects'
 
 interface Coin {
   id: number
@@ -32,7 +33,7 @@ export default function CoinBurst() {
   const [reducedMotion, setReducedMotion] = useState(false)
 
   useEffect(() => {
-    setReducedMotion(window.matchMedia('(prefers-reduced-motion: reduce)').matches)
+    setReducedMotion(!motionAllowed())
   }, [])
 
   if (reducedMotion) {
