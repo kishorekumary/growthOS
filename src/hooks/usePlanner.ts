@@ -20,23 +20,29 @@ export function usePlanner(from: string) {
   const [loading, setLoading]         = useState(true)
   const [error, setError]             = useState<string | null>(null)
   const userIdRef = useRef<string | null>(null)
+  const reqIdRef = useRef(0)
   const { inFlight: busy, begin, end } = useInFlightIds()
   const today = todayStr()
 
   const load = useCallback(async () => {
+    const req = ++reqIdRef.current
     const db = createSupabaseBrowserClient()
     const { data: { session } } = await db.auth.getSession()
+    if (req !== reqIdRef.current) return
     const userId = session?.user?.id
     if (!userId) { setLoading(false); return }
     userIdRef.current = userId
     try {
       const res = await fetchPlanner(db, userId, from)
+      if (req !== reqIdRef.current) return
       setItems(res.items)
       setCompletions(res.completions)
       setError(null)
     } catch {
+      if (req !== reqIdRef.current) return
       setError('Could not load your planner. Check your connection and try again.')
     }
+    if (req !== reqIdRef.current) return
     setLoading(false)
   }, [from])
 

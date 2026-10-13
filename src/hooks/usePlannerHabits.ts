@@ -67,10 +67,13 @@ export function usePlannerHabits() {
     const visible = habits.filter(h => !h.is_global || !hiddenIds.has(h.id))
     const doneOn = (id: string, pred: (l: HabitLog) => boolean) =>
       logs.some(l => l.habit_id === id && l.status === 'done' && pred(l))
+    // A non-'done' log today (skipped/missed) means the habit is not actionable.
+    const skippedToday = (id: string) =>
+      logs.some(l => l.habit_id === id && l.log_date === today && l.status !== 'done')
     const toPlanner = (h: HabitRow, done: boolean): PlannerHabit =>
       ({ id: h.id, habit_name: h.habit_name, streak_count: h.streak_count, frequency: h.frequency, done })
     return {
-      daily: visible.filter(h => h.frequency !== 'weekly').map(h => toPlanner(h,
+      daily: visible.filter(h => h.frequency !== 'weekly' && !skippedToday(h.id)).map(h => toPlanner(h,
         doneOn(h.id, l => l.log_date === today) ||
         // Same fallback as TodayHabits — never for globals (shared column).
         (!h.is_global && !!h.last_done_at && localDateStr(new Date(h.last_done_at)) === today))),
@@ -79,7 +82,10 @@ export function usePlannerHabits() {
   }, [habits, hidden, logs, today])
 
   async function markDone(h: PlannerHabit) {
-    if (h.done || !begin(h.id)) return
+    if (h.done) return
+    if (h.frequency !== 'weekly' &&
+        logs.some(l => l.habit_id === h.id && l.log_date === today && l.status !== 'done')) return
+    if (!begin(h.id)) return
     setLogs(prev => [...prev, { habit_id: h.id, status: 'done', log_date: today }])
     try {
       const { streak_count, milestones } = await completeHabit(h.id)
