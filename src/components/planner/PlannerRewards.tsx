@@ -8,11 +8,9 @@ import {
 import { Leaf, Zap, Flame, Star, Crown, Sparkles, ChevronDown, ChevronUp } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
-export interface Todo {
-  id: string
-  is_completed: boolean
-  completed_at: string | null
-  due_date: string | null
+export interface DoneEntry {
+  completed_at: string
+  points:       number
 }
 
 interface TierDef {
@@ -59,16 +57,6 @@ function getProgress(pts: number, tiers: TierDef[]): number {
   return Math.min(100, Math.round(((pts - tier.min) / (tier.next - tier.min)) * 100))
 }
 
-// Points for a single completed todo
-export function taskPoints(todo: Todo): number {
-  let pts = 10
-  if (todo.due_date && todo.completed_at) {
-    const completedDate = todo.completed_at.slice(0, 10)  // YYYY-MM-DD
-    if (completedDate <= todo.due_date) pts += 5           // on-time bonus
-  }
-  return pts
-}
-
 // ─── Score card sub-component ─────────────────────────────────
 
 function ScoreCard({
@@ -113,7 +101,7 @@ function ScoreCard({
           />
         </div>
         <p className="text-[10px] text-slate-600">
-          {count} task{count !== 1 ? 's' : ''} completed
+          {count} item{count !== 1 ? 's' : ''} completed
           {!isMax && ` · ${tiers[tiers.findIndex(t => t.min === tier.min) + 1]?.min - pts} pts to next tier`}
         </p>
       </div>
@@ -123,26 +111,26 @@ function ScoreCard({
 
 // ─── Main export ──────────────────────────────────────────────
 
-export default function TaskRewards({ todos }: { todos: Todo[] }) {
+export default function PlannerRewards({ done: entries }: { done: DoneEntry[] }) {
   const [collapsed, setCollapsed] = useState(false)
   const today    = new Date()
-  const weekStart = startOfWeek(today, { weekStartsOn: 1 })  // Monday
+  const weekStart = startOfWeek(today, { weekStartsOn: 0 })  // Sunday
 
   const stats = useMemo(() => {
-    const done = todos.filter(t => t.is_completed && t.completed_at)
+    const done = entries
 
     // Today
     const todayDone = done.filter(t => isSameDay(parseISO(t.completed_at!), today))
-    const todayPts  = todayDone.reduce((s, t) => s + taskPoints(t), 0)
+    const todayPts  = todayDone.reduce((s, t) => s + t.points, 0)
 
-    // This week (Mon → today)
+    // This week (Sun → today)
     const weekDone = done.filter(t => {
       const d = parseISO(t.completed_at!)
       return d >= weekStart && d <= endOfDay(today)
     })
-    const weekPts = weekDone.reduce((s, t) => s + taskPoints(t), 0)
+    const weekPts = weekDone.reduce((s, t) => s + t.points, 0)
 
-    // Week grid: 7 cells Mon-Sun
+    // Week grid: 7 cells Sun-Sat
     const weekDays = Array.from({ length: 7 }, (_, i) => {
       const day   = addDays(weekStart, i)
       const count = done.filter(t => isSameDay(parseISO(t.completed_at!), day)).length
@@ -162,7 +150,7 @@ export default function TaskRewards({ todos }: { todos: Todo[] }) {
     }
 
     return { todayPts, weekPts, todayCount: todayDone.length, weekCount: weekDone.length, weekDays, streak }
-  }, [todos])   // eslint-disable-line react-hooks/exhaustive-deps
+  }, [entries])   // eslint-disable-line react-hooks/exhaustive-deps
 
   const { todayPts, weekPts, todayCount, weekCount, weekDays, streak } = stats
 
@@ -255,7 +243,7 @@ export default function TaskRewards({ todos }: { todos: Todo[] }) {
 
           {/* Scoring legend */}
           <div className="flex items-center gap-4 text-[10px] text-slate-600 pt-0.5">
-            <span>10 pts / task</span>
+            <span>10 / 20 / 40 pts per day / week / month item</span>
             <span className="text-amber-600">+5 pts on-time bonus</span>
             <span className="ml-auto">5 tiers total</span>
           </div>

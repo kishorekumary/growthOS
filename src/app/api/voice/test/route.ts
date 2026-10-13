@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createSupabaseServerClient } from '@/lib/supabase-server'
 import twilio from 'twilio'
+import { fetchReminderTitles } from '@/lib/planner/actions'
 
 export async function POST() {
   const supabase = createSupabaseServerClient()
@@ -26,24 +27,17 @@ export async function POST() {
   }
 
   const today = new Date().toISOString().slice(0, 10)
-  const { data: todos } = await supabase
-    .from('user_todos')
-    .select('title')
-    .eq('user_id', user.id)
-    .eq('is_completed', false)
-    .lte('due_date', today)
-    .order('due_date', { ascending: true })
-    .limit(10)
+  const todoTitles = await fetchReminderTitles(supabase, user.id, today)
 
-  const todoCount = todos?.length ?? 0
+  const todoCount = todoTitles.length
   let taskMsg: string
   if (todoCount === 0) {
     taskMsg = 'Your tasks are clear today. Keep the momentum going!'
   } else if (todoCount === 1) {
-    taskMsg = `You have 1 task pending today: ${todos![0].title}. Stay on track!`
+    taskMsg = `You have 1 task pending today: ${todoTitles[0]}. Stay on track!`
   } else {
-    const spoken = (todos!.slice(0, 5) as { title: string }[])
-      .map((t, i) => `${i + 1}. ${t.title}`)
+    const spoken = todoTitles.slice(0, 5)
+      .map((t, i) => `${i + 1}. ${t}`)
       .join('. ')
     const remaining = todoCount > 5 ? ` And ${todoCount - 5} more.` : ''
     taskMsg = `You have ${todoCount} tasks pending today. Here they are: ${spoken}.${remaining} Stay on track!`

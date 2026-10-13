@@ -20,7 +20,7 @@ const NAV_ITEMS = [
   { href: '/goals',               label: 'Goals',      icon: Target },
   { href: '/decisions',           label: 'Decisions',  icon: Zap },
   { href: '/workbook',            label: 'Workbook',   icon: ClipboardList },
-  { href: '/todos',               label: 'Tasks',      icon: CheckSquare },
+  { href: '/planner',             label: 'Planner',    icon: CheckSquare },
   { href: '/rewards',             label: 'Rewards',    icon: Gift },
   { href: '/focus',               label: 'Focus',      icon: Timer },
   { href: '/digest',              label: 'Digest',     icon: Newspaper },

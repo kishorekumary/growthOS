@@ -58,6 +58,14 @@ const config: Config = {
         md: 'calc(var(--radius) - 2px)',
         sm: 'calc(var(--radius) - 4px)',
       },
+      keyframes: {
+        pop:        { '0%': { transform: 'scale(0.8)' }, '60%': { transform: 'scale(1.15)' }, '100%': { transform: 'scale(1)' } },
+        'float-up': { '0%': { opacity: '0', transform: 'translateY(4px)' }, '20%': { opacity: '1' }, '100%': { opacity: '0', transform: 'translateY(-14px)' } },
+      },
+      animation: {
+        pop:        'pop 250ms ease-out',
+        'float-up': 'float-up 900ms ease-out forwards',
+      },
     },
   },
   plugins: [],

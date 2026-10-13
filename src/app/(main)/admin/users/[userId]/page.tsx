@@ -39,8 +39,8 @@ export default async function AdminUserPage({ params }: { params: { userId: stri
       .eq('user_id', userId).order('date', { ascending: false }).limit(10),
     admin.from('user_goals').select('id, title, description, status, target_date')
       .eq('user_id', userId).order('created_at', { ascending: false }),
-    admin.from('user_todos').select('id, title, completed, due_date')
-      .eq('user_id', userId).order('created_at', { ascending: false }).limit(30),
+    admin.from('planner_items').select('id, title, is_completed')
+      .eq('user_id', userId).is('ended_at', null).order('created_at', { ascending: false }).limit(30),
     supabase.auth.getUser(),
   ])
 
@@ -62,7 +62,7 @@ export default async function AdminUserPage({ params }: { params: { userId: stri
       books={books ?? []}
       workouts={workouts ?? []}
       goals={goals ?? []}
-      todos={todos ?? []}
+      todos={(todos ?? []).map(t => ({ id: t.id, title: t.title, completed: t.is_completed }))}
       isSuperadmin={meProfile?.is_superadmin ?? false}
     />
   )
