@@ -134,13 +134,23 @@ export async function uncompleteItem(db: Db, userId: string, item: PlannerItem, 
     if (error) throw error
     points = (data ?? []).reduce((s, c) => s + (c.points_awarded as number), 0)
   } else {
+    // Read the stored amount rather than trusting the caller's copy, which may be stale.
+    const { data: row, error: readErr } = await db.from('planner_items')
+      .select('points_awarded')
+      .eq('id', item.id)
+      .eq('is_completed', true)
+      .maybeSingle()
+    if (readErr) throw readErr
+    if (!row) return 0 // not completed (anymore): nothing to revoke
+    const stored = row.points_awarded as number
     const { data, error } = await db.from('planner_items')
       .update({ is_completed: false, completed_at: null, points_awarded: 0, updated_at: new Date().toISOString() })
       .eq('id', item.id)
       .eq('is_completed', true)
+      .eq('points_awarded', stored)
       .select('id')
     if (error) throw error
-    points = data?.length ? item.points_awarded : 0
+    points = data?.length ? stored : 0
   }
 
   await adjustPoints(db, userId, -points, `Undo: ${item.title}`)
@@ -180,5 +190,10 @@ export async function fetchReminderTitles(db: Db, userId: string, day: string): 
       .eq('user_id', userId)
       .gte('period_start', windowStart(day)),
   ])
+  // Called per user by the cron, so a failed query degrades to "no reminders" instead of throwing.
+  if (items.error || done.error) {
+    console.error('Failed to load planner reminders:', items.error ?? done.error)
+    return []
+  }
   return reminderTitles((items.data ?? []) as ReminderItem[], done.data ?? [], day).slice(0, 10)
 }
