@@ -1,9 +1,9 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { ChevronDown, ChevronLeft, ChevronRight, ChevronUp } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import { periodLabel } from '@/lib/planner/periods'
+import { periodLabel, periodStart } from '@/lib/planner/periods'
 import { isDoneIn } from '@/lib/planner/visibility'
 import type { ItemPatch } from '@/lib/planner/actions'
 import type { PeriodType, PlannerCompletion, PlannerItem } from '@/lib/planner/types'
@@ -50,14 +50,37 @@ export default function PeriodList(props: PeriodListProps) {
   } = props
   const [showDone, setShowDone] = useState(false)
   const [dragOver, setDragOver] = useState(false)
+  // Items just checked off stay in the open list for 700ms so the pop,
+  // strike-through and "+N" flash are visible before they move to Done.
+  const [recentlyDone, setRecentlyDone] = useState<Set<string>>(new Set())
+  const timers = useRef<Set<ReturnType<typeof setTimeout>>>(new Set())
+  useEffect(() => {
+    const t = timers.current
+    return () => { t.forEach(clearTimeout); t.clear() }
+  }, [])
+
+  async function toggle(item: PlannerItem) {
+    const delta = await onToggle(item)
+    if (delta > 0) {
+      setRecentlyDone(prev => new Set(prev).add(item.id))
+      const timer = setTimeout(() => {
+        timers.current.delete(timer)
+        setRecentlyDone(prev => { const n = new Set(prev); n.delete(item.id); return n })
+      }, 700)
+      timers.current.add(timer)
+    }
+    return delta
+  }
 
   const { done, total } = countDone(props)
   const pct = total ? Math.round((done / total) * 100) : 0
-  const openItems  = items.filter(i => !isDoneIn(i, start, completions))
-  const doneItems  = items.filter(i => isDoneIn(i, start, completions))
+  const isDone     = (i: PlannerItem) => isDoneIn(i, start, completions)
+  const openItems  = items.filter(i => !isDone(i) || recentlyDone.has(i.id))
+  const doneItems  = items.filter(i => isDone(i) && !recentlyDone.has(i.id))
   const openHabits = habits.filter(h => !h.done)
   const doneHabits = habits.filter(h => h.done)
   const doneCount  = doneItems.length + doneHabits.length
+  const futureStart = start > periodStart(type, today)
 
   const renderItem = (item: PlannerItem) => (
     <PlannerItemRow
@@ -65,10 +88,11 @@ export default function PeriodList(props: PeriodListProps) {
       item={item}
       done={isDoneIn(item, start, completions)}
       busy={itemBusy.has(`${item.id}:${start}`)}
+      disabled={item.repeats && futureStart}
       today={today}
       draggable={variant === 'column'}
       highlight={highlightId === item.id}
-      onToggle={() => onToggle(item)}
+      onToggle={() => toggle(item)}
       onUpdate={patch => onUpdate(item, patch)}
       onMove={(t, s) => onMove(item, t, s)}
       onDelete={() => onDelete(item)}

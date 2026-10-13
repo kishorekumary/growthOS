@@ -13,11 +13,12 @@ const REPEAT_LABEL: Record<PeriodType, string> = { day: 'daily', week: 'weekly',
 const MENU_ITEM = 'flex cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 text-sm text-slate-200 outline-none data-[highlighted]:bg-white/10'
 
 export default function PlannerItemRow({
-  item, done, busy, today, draggable, highlight, onToggle, onUpdate, onMove, onDelete,
+  item, done, busy, disabled, today, draggable, highlight, onToggle, onUpdate, onMove, onDelete,
 }: {
   item:       PlannerItem
   done:       boolean
   busy:       boolean
+  disabled?:  boolean
   today:      string
   draggable?: boolean
   highlight?: boolean
@@ -98,7 +99,7 @@ export default function PlannerItemRow({
       )}
     >
       <div className="flex items-center gap-3">
-        <CheckCircle checked={done} disabled={busy} label={`${done ? 'Uncheck' : 'Check'} ${item.title}`} onClick={handleToggle} />
+        <CheckCircle checked={done} disabled={busy || disabled} label={`${done ? 'Uncheck' : 'Check'} ${item.title}`} onClick={handleToggle} />
         <button
           type="button"
           onClick={() => item.notes && setShowNotes(s => !s)}
@@ -120,7 +121,7 @@ export default function PlannerItemRow({
           </span>
         )}
         <DropdownMenu.Root>
-          <DropdownMenu.Trigger className="shrink-0 rounded-md p-1 text-slate-500 hover:text-white" aria-label="Item options">
+          <DropdownMenu.Trigger className="-m-2 shrink-0 rounded-md p-3 text-slate-500 hover:text-white" aria-label="Item options">
             <MoreHorizontal className="h-4 w-4" />
           </DropdownMenu.Trigger>
           <DropdownMenu.Portal>
@@ -149,9 +150,15 @@ export default function PlannerItemRow({
                   </DropdownMenu.SubContent>
                 </DropdownMenu.Portal>
               </DropdownMenu.Sub>
-              <DropdownMenu.Item className={MENU_ITEM} onSelect={() => onUpdate({ repeats: !item.repeats })}>
-                <Repeat className="h-3.5 w-3.5" /> {item.repeats ? 'Stop repeating' : `Repeat ${REPEAT_LABEL[item.period_type]}`}
-              </DropdownMenu.Item>
+              {item.repeats ? (
+                <DropdownMenu.Item className={MENU_ITEM} onSelect={() => onUpdate({ ended_at: new Date().toISOString() })}>
+                  <Repeat className="h-3.5 w-3.5" /> Stop repeating
+                </DropdownMenu.Item>
+              ) : !done && (
+                <DropdownMenu.Item className={MENU_ITEM} onSelect={() => onUpdate({ repeats: true })}>
+                  <Repeat className="h-3.5 w-3.5" /> Repeat {REPEAT_LABEL[item.period_type]}
+                </DropdownMenu.Item>
+              )}
               <DropdownMenu.Item className={cn(MENU_ITEM, 'text-red-300')} onSelect={onDelete}>
                 <Trash2 className="h-3.5 w-3.5" /> Delete
               </DropdownMenu.Item>

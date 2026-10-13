@@ -15,6 +15,7 @@ export default function QuickAdd({ placeholder, onAdd }: {
     if (!title.trim()) return
     onAdd(title.trim(), repeats)
     setTitle('')
+    setRepeats(false)
   }
 
   return (
@@ -31,6 +32,7 @@ export default function QuickAdd({ placeholder, onAdd }: {
         type="button"
         onClick={() => setRepeats(r => !r)}
         aria-pressed={repeats}
+        aria-label={repeats ? 'Repeats every period' : 'Make this repeat'}
         title={repeats ? 'Repeats every period' : 'Make this repeat'}
         className={cn(
           'rounded-full px-2 py-0.5 text-xs font-semibold transition-colors',

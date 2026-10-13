@@ -407,9 +407,16 @@ function TasksView() {
 
   async function complete(todo: PlannerItem) {
     setTodos(prev => prev.filter(t => t.id !== todo.id))
-    const supabase = createSupabaseBrowserClient()
-    const { data: { user } } = await supabase.auth.getUser()
-    if (user) await completeItem(supabase, user.id, todo, todo.period_start, todayStr()).catch(() => {})
+    const restore = () => setTodos(prev => (prev.some(t => t.id === todo.id) ? prev : [...prev, todo]))
+    try {
+      const supabase = createSupabaseBrowserClient()
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) { restore(); return }
+      await completeItem(supabase, user.id, todo, todo.period_start, todayStr())
+    } catch (err) {
+      console.error('Failed to complete planner item', err)
+      restore()
+    }
   }
 
   if (loading) {

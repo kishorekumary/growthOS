@@ -6,7 +6,7 @@ import { useInFlightIds } from '@/hooks/useInFlightIds'
 import { useReward } from '@/contexts/RewardContext'
 import { completeHabit } from '@/lib/completeHabit'
 import { localDateStr, todayStr } from '@/lib/habitStreak'
-import { periodStart } from '@/lib/planner/periods'
+import { periodStart, shiftPeriod } from '@/lib/planner/periods'
 
 interface HabitRow {
   id:           string
@@ -70,8 +70,15 @@ export function usePlannerHabits() {
     // A non-'done' log today (skipped/missed) means the habit is not actionable.
     const skippedToday = (id: string) =>
       logs.some(l => l.habit_id === id && l.log_date === today && l.status !== 'done')
+    // Live streak, mirroring TodayHabits.liveStreak (never for globals).
+    const liveStreak = (h: HabitRow) => {
+      if (h.is_global || !h.last_done_at || h.streak_count <= 0) return 0
+      const last = localDateStr(new Date(h.last_done_at))
+      if (h.frequency === 'weekly') return last >= shiftPeriod('day', today, -7) ? h.streak_count : 0
+      return last === today || last === shiftPeriod('day', today, -1) ? h.streak_count : 0
+    }
     const toPlanner = (h: HabitRow, done: boolean): PlannerHabit =>
-      ({ id: h.id, habit_name: h.habit_name, streak_count: h.streak_count, frequency: h.frequency, done })
+      ({ id: h.id, habit_name: h.habit_name, streak_count: liveStreak(h), frequency: h.frequency, done })
     return {
       daily: visible.filter(h => h.frequency !== 'weekly' && !skippedToday(h.id)).map(h => toPlanner(h,
         doneOn(h.id, l => l.log_date === today) ||
