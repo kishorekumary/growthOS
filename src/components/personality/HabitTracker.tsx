@@ -862,7 +862,7 @@ export default function HabitTracker() {
       // bonuses, which stay earned (matches this feature's existing "no
       // streak-loss penalty" principle). A failed reversal must never block
       // or roll back the undo above (already applied) — same non-blocking
-      // error-logging discipline TodoList.tsx already uses for its own
+      // error-logging discipline adjustPoints in src/lib/planner/actions.ts uses for its own
       // points-award/reversal calls.
       if (userId) {
         const delta = -(isKeystoneFor(habit) ? DAILY_POINTS_KEYSTONE : DAILY_POINTS)

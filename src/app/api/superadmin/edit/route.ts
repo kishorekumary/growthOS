@@ -7,7 +7,7 @@ const ALLOWED_TABLES = [
   'personality_habits',
   'reading_log',
   'user_goals',
-  'user_todos',
+  'planner_items',
   'workout_logs',
   'journal_entries',
 ] as const

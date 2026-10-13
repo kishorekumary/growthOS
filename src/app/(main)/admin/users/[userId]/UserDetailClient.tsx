@@ -187,7 +187,7 @@ export default function UserDetailClient({
 
   async function deleteTodo(id: string) {
     setBusy(id)
-    await apiDelete('user_todos', id)
+    await apiDelete('planner_items', id)
     setTodos(p => p.filter(t => t.id !== id))
     setBusy(null)
   }
@@ -195,14 +195,17 @@ export default function UserDetailClient({
   async function toggleTodo(todo: Todo) {
     const next = !todo.completed
     setTodos(p => p.map(t => t.id === todo.id ? { ...t, completed: next } : t))
-    await apiPatch('user_todos', todo.id, { completed: next })
+    await apiPatch('planner_items', todo.id, { is_completed: next, completed_at: next ? new Date().toISOString() : null })
   }
 
   async function addTodo() {
     if (!newTodo.title.trim()) return
     setBusy('new-todo')
-    const { row } = await apiPost('user_todos', { ...newTodo, user_id: userId, completed: false })
-    if (row) setTodos(p => [row, ...p])
+    const { row } = await apiPost('planner_items', {
+      title: newTodo.title.trim(), user_id: userId,
+      period_type: 'day', period_start: new Date().toISOString().slice(0, 10),
+    })
+    if (row) setTodos(p => [{ id: row.id, title: row.title, completed: row.is_completed }, ...p])
     setNewTodo({ title: '' })
     setAddingTodo(false)
     setBusy(null)

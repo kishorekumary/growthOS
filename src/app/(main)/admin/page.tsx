@@ -34,7 +34,7 @@ export default async function AdminPage() {
     adminClient.from('reading_log').select('user_id, status'),
     adminClient.from('workout_logs').select('user_id').gte('date', getWeekStart()),
     adminClient.from('user_goals').select('user_id, status'),
-    adminClient.from('user_todos').select('user_id, completed'),
+    adminClient.from('planner_items').select('user_id, is_completed, repeats, ended_at'),
     adminClient.from('personality_habits').select('id, habit_name, category, frequency, created_at').eq('is_global', true).order('created_at', { ascending: false }),
     adminClient.from('user_gallery').select('id, url, caption, mime_type, storage_path, created_at').eq('is_global', true).order('created_at', { ascending: false }),
     adminClient.from('reading_log').select('id, book_title, author, genre, status, key_lessons, created_at').eq('is_global', true).order('created_at', { ascending: false }),
@@ -74,7 +74,7 @@ export default async function AdminPage() {
 
   const openTodos: Record<string, number> = {}
   for (const t of todos ?? []) {
-    if (!t.completed) openTodos[t.user_id] = (openTodos[t.user_id] ?? 0) + 1
+    if (!t.is_completed && !t.repeats && !t.ended_at) openTodos[t.user_id] = (openTodos[t.user_id] ?? 0) + 1
   }
 
   // Get current admin's own user id + role
