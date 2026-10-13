@@ -10,7 +10,7 @@ const NAV_ITEMS = [
   { href: '/books',     label: 'Books', icon: BookOpen },
   { href: '/focus',     label: 'Focus', icon: Timer },
   { href: '/goals',     label: 'Goals', icon: Target },
-  { href: '/todos',     label: 'Tasks', icon: CheckSquare },
+  { href: '/planner',   label: 'Plan',  icon: CheckSquare },
 ]
 
 export default function BottomNav() {
