@@ -3,7 +3,7 @@
 import Link from 'next/link'
 import { ArrowRight, CheckSquare } from 'lucide-react'
 import { usePlanner } from '@/hooks/usePlanner'
-import { todayStr } from '@/lib/habitStreak'
+import { useToday } from '@/hooks/useToday'
 import { currentPeriods, windowStart } from '@/lib/planner/periods'
 import { isDoneIn, isVisibleIn, leftovers } from '@/lib/planner/visibility'
 import PeriodList from './PeriodList'
@@ -14,8 +14,8 @@ const NO_BUSY: ReadonlySet<string> = new Set()
 // Dashboard card: today's planner list with the same one-tap rows. Habits are
 // left out here because the TodayHabits card sits right above it.
 export default function PlannerWidget() {
-  const planner = usePlanner(windowStart(todayStr()))
-  const { today } = planner
+  const today = useToday()
+  const planner = usePlanner(windowStart(today))
   const now = currentPeriods(today)
 
   const dayItems    = planner.items.filter(i => isVisibleIn(i, 'day', now.day))

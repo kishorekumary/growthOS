@@ -45,6 +45,27 @@ export function windowStart(today: string): string {
   return week < month ? week : month
 }
 
+// When the date changes under an open screen (midnight, or a tab left open
+// overnight), lists still showing the old current period follow to the new
+// one; lists the user navigated elsewhere stay put. Same object back if
+// nothing moved, so React can skip the update.
+export function rollPeriods(
+  starts: Record<PeriodType, string>, prevToday: string, nextToday: string,
+): Record<PeriodType, string> {
+  if (prevToday === nextToday) return starts
+  const prev = currentPeriods(prevToday)
+  const next = currentPeriods(nextToday)
+  const rolled = { ...starts }
+  let changed = false
+  for (const type of Object.keys(starts) as PeriodType[]) {
+    if (starts[type] === prev[type] && prev[type] !== next[type]) {
+      rolled[type] = next[type]
+      changed = true
+    }
+  }
+  return changed ? rolled : starts
+}
+
 const RELATIVE: Record<PeriodType, [string, string, string]> = {
   day:   ['Yesterday', 'Today', 'Tomorrow'],
   week:  ['Last week', 'This week', 'Next week'],

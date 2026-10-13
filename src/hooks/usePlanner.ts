@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { createSupabaseBrowserClient } from '@/lib/supabase'
 import { todayStr } from '@/lib/habitStreak'
+import { useToday } from '@/hooks/useToday'
 import { useInFlightIds } from '@/hooks/useInFlightIds'
 import { periodStart } from '@/lib/planner/periods'
 import { isDoneIn } from '@/lib/planner/visibility'
@@ -22,7 +23,7 @@ export function usePlanner(from: string) {
   const userIdRef = useRef<string | null>(null)
   const reqIdRef = useRef(0)
   const { inFlight: busy, begin, end } = useInFlightIds()
-  const today = todayStr()
+  const today = useToday()
 
   const load = useCallback(async () => {
     const req = ++reqIdRef.current

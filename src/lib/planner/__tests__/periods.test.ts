@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
-  currentPeriods, moveTargets, periodEnd, periodLabel, periodStart, shiftPeriod, windowStart,
+  currentPeriods, moveTargets, periodEnd, periodLabel, periodStart, rollPeriods, shiftPeriod, windowStart,
 } from '@/lib/planner/periods'
 
 describe('periodStart', () => {
@@ -77,5 +77,28 @@ describe('moveTargets', () => {
       { label: 'This month', type: 'month', start: '2026-10-01' },
       { label: 'Next month', type: 'month', start: '2026-11-01' },
     ])
+  })
+})
+
+describe('rollPeriods', () => {
+  it('moves lists that were on the old current period to the new one', () => {
+    const starts = currentPeriods('2026-10-31') // Sat: week of Oct 25, October
+    expect(rollPeriods(starts, '2026-10-31', '2026-11-01')).toEqual({
+      day: '2026-11-01', week: '2026-11-01', month: '2026-11-01',
+    })
+  })
+  it('only moves the lists whose period actually changed', () => {
+    const starts = currentPeriods('2026-10-13')
+    expect(rollPeriods(starts, '2026-10-13', '2026-10-14')).toEqual({
+      day: '2026-10-14', week: '2026-10-11', month: '2026-10-01',
+    })
+  })
+  it('keeps lists the user navigated away from', () => {
+    const starts = { day: '2026-10-20', week: '2026-10-04', month: '2026-12-01' }
+    expect(rollPeriods(starts, '2026-10-17', '2026-10-18')).toEqual(starts)
+  })
+  it('returns the same object when the day did not change', () => {
+    const starts = currentPeriods('2026-10-13')
+    expect(rollPeriods(starts, '2026-10-13', '2026-10-13')).toBe(starts)
   })
 })

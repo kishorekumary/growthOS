@@ -4,11 +4,11 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { X } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import { todayStr } from '@/lib/habitStreak'
+import { useToday } from '@/hooks/useToday'
 import { usePlanner } from '@/hooks/usePlanner'
 import { usePlannerHabits } from '@/hooks/usePlannerHabits'
 import { useIsDesktop } from '@/hooks/useIsDesktop'
-import { currentPeriods, shiftPeriod, windowStart } from '@/lib/planner/periods'
+import { currentPeriods, rollPeriods, shiftPeriod, windowStart } from '@/lib/planner/periods'
 import { isVisibleIn, leftovers } from '@/lib/planner/visibility'
 import { PERIOD_TYPES, type PeriodType } from '@/lib/planner/types'
 import PeriodList, { countDone } from './PeriodList'
@@ -30,15 +30,25 @@ export default function PlannerView() {
   const isDesktop = useIsDesktop()
   const habits    = usePlannerHabits()
 
-  const [starts, setStarts] = useState(() => currentPeriods(todayStr()))
+  const today = useToday()
+  const [starts, setStarts] = useState(() => currentPeriods(today))
   const [tab, setTab]       = useState<PeriodType>('day')
   const [reviewOpen, setReviewOpen] = useState(false)
   const [highlightId, setHighlightId] = useState<string | null>(null)
 
+  // Past midnight (or back on a tab left open overnight): lists showing the
+  // old current period follow to the new one.
+  const prevToday = useRef(today)
+  useEffect(() => {
+    if (prevToday.current === today) return
+    const prev = prevToday.current
+    prevToday.current = today
+    setStarts(s => rollPeriods(s, prev, today))
+  }, [today])
+
   // Load from the earliest period on screen (or the current window).
-  const from = [starts.day, starts.week, starts.month, windowStart(todayStr())].sort()[0]
+  const from = [starts.day, starts.week, starts.month, windowStart(today)].sort()[0]
   const planner = usePlanner(from)
-  const { today } = planner
   const now = currentPeriods(today)
 
   const leftoverItems = useMemo(() => leftovers(planner.items, today), [planner.items, today])

@@ -5,7 +5,8 @@ import { useCachedQuery } from '@/hooks/useCachedQuery'
 import { useInFlightIds } from '@/hooks/useInFlightIds'
 import { useReward } from '@/contexts/RewardContext'
 import { completeHabit } from '@/lib/completeHabit'
-import { localDateStr, todayStr } from '@/lib/habitStreak'
+import { localDateStr } from '@/lib/habitStreak'
+import { useToday } from '@/hooks/useToday'
 import { periodStart, shiftPeriod } from '@/lib/planner/periods'
 
 interface HabitRow {
@@ -31,7 +32,7 @@ export interface PlannerHabit {
 // through completeHabit so streaks, chest and points behave exactly as on the
 // Habits page; undo stays there.
 export function usePlannerHabits() {
-  const today     = todayStr()
+  const today     = useToday()
   const weekStart = periodStart('week', today)
 
   const { data: habits, setData: setHabits } = useCachedQuery<HabitRow[]>(
