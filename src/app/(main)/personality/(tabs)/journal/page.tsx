@@ -22,7 +22,6 @@ export default async function JournalPage() {
   const twoWeekAgo = format(subDays(new Date(), 13), 'yyyy-MM-dd')
 
   const [
-    { data: todos },
     { data: habits },
     { data: focusSessions },
     { data: workouts },
@@ -32,7 +31,6 @@ export default async function JournalPage() {
     { data: sleepLogs },
     { data: expenses },
   ] = await Promise.all([
-    supabase.from('user_todos').select('is_completed,due_date').eq('user_id', uid).gte('due_date', weekStart),
     supabase.from('user_habits').select('streak_count,longest_streak').eq('user_id', uid),
     supabase.from('focus_sessions').select('id').eq('user_id', uid).gte('created_at', weekStart).limit(20),
     supabase.from('workout_logs').select('workout_date').eq('user_id', uid).gte('workout_date', weekStart),

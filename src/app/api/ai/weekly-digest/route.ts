@@ -40,7 +40,7 @@ export async function POST() {
     { data: routineCompletions },
     { data: expenses },
   ] = await Promise.all([
-    admin.from('user_todos').select('is_completed,title,due_date,priority').eq('user_id', uid).gte('due_date', weekStart).lte('due_date', weekEnd),
+    admin.from('planner_items').select('is_completed,title').eq('user_id', uid).eq('repeats', false).is('ended_at', null).gte('period_start', weekStart).lte('period_start', weekEnd),
     admin.from('user_habits').select('habit_name,streak_count,category').eq('user_id', uid),
     admin.from('habit_logs').select('habit_id,status,log_date').eq('user_id', uid).gte('log_date', weekStart),
     admin.from('workout_logs').select('workout_type,duration_minutes,workout_date').eq('user_id', uid).gte('workout_date', weekStart),
@@ -95,7 +95,7 @@ export async function POST() {
   const dataContext = `
 Week: ${weekStart} to ${weekEnd}
 
-TASKS: ${completedTodos.length} completed out of ${todoList.length} due this week.
+TASKS: ${completedTodos.length} completed out of ${todoList.length} planned this week.
 Pending: ${pendingTodos.slice(0, 3).map(t => t.title).join(', ') || 'none'}
 
 HABITS: ${habitsDone} habit check-ins logged this week.

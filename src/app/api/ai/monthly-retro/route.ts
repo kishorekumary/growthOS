@@ -42,7 +42,7 @@ export async function POST() {
     { data: journalEntries },
     { data: books },
   ] = await Promise.all([
-    admin.from('user_todos').select('is_completed,title,priority').eq('user_id', uid).gte('due_date', monthStart).lte('due_date', monthEnd),
+    admin.from('planner_items').select('is_completed,title').eq('user_id', uid).eq('repeats', false).is('ended_at', null).gte('period_start', monthStart).lte('period_start', monthEnd),
     admin.from('user_habits').select('habit_name,streak_count,longest_streak,category').eq('user_id', uid),
     admin.from('habit_logs').select('status,log_date').eq('user_id', uid).gte('log_date', monthStart).lte('log_date', monthEnd),
     admin.from('workout_logs').select('workout_type,duration_minutes,workout_date').eq('user_id', uid).gte('workout_date', monthStart).lte('workout_date', monthEnd),
@@ -105,7 +105,7 @@ export async function POST() {
   const dataContext = `
 Month: ${monthLabel}
 
-TASKS: ${completedTodos} completed out of ${todoList.length} due tasks.
+TASKS: ${completedTodos} completed out of ${todoList.length} planned items.
 
 HABITS: ${habitsDone} habit check-ins done. Active habits: ${(habits ?? []).map(h => `${h.habit_name} (streak: ${h.streak_count}, best: ${h.longest_streak})`).join(', ') || 'none'}
 

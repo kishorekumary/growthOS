@@ -15,7 +15,7 @@ const SECTION_MAP: { keywords: string[]; title: string; subtitle: string; href: 
   { keywords: ['log', 'food', 'meal', 'eat', 'nutrition', 'calori', 'water', 'drink', 'macro', 'protein', 'carb', 'fat'], title: 'Food Log', subtitle: 'Nutrition tracker', href: '/fitness?tab=Nutrition' },
   { keywords: ['log', 'workout', 'exercise', 'gym', 'fitness', 'train', 'run', 'lift', 'cardio'], title: 'Workout Log', subtitle: 'Log a workout', href: '/fitness?tab=Log+Workout' },
   { keywords: ['book', 'read', 'reading', 'library', 'list', 'author'], title: 'Reading List', subtitle: 'Your books', href: '/books?tab=My+List' },
-  { keywords: ['task', 'todo', 'to-do', 'checklist', 'reminder'], title: 'Tasks', subtitle: 'To-do list', href: '/todos' },
+  { keywords: ['task', 'todo', 'to-do', 'checklist', 'reminder', 'plan', 'planner', 'daily', 'weekly', 'monthly'], title: 'Planner', subtitle: 'Daily, weekly & monthly lists', href: '/planner' },
   { keywords: ['goal', 'target', 'objective', 'milestone'], title: 'Goals', subtitle: 'Your goals', href: '/goals' },
   { keywords: ['habit', 'routine', 'streak', 'daily'], title: 'Habits', subtitle: 'Habit tracker', href: '/personality/habits' },
   { keywords: ['journal', 'diary', 'reflect', 'entry', 'mood'], title: 'Journal', subtitle: 'Daily reflections', href: '/personality/journal' },
@@ -57,9 +57,10 @@ export async function GET(req: NextRequest) {
   const p = `%${q}%`
 
   const [todos, books, goals, habits, journals, workouts, nutrition, finance, challenges] = await Promise.all([
-    supabase.from('user_todos')
-      .select('id, title, notes, is_completed, due_date')
+    supabase.from('planner_items')
+      .select('id, title, notes, is_completed, period_type, period_start, repeats')
       .eq('user_id', uid)
+      .is('ended_at', null)
       .or(`title.ilike.${p},notes.ilike.${p}`)
       .limit(5),
 
@@ -122,8 +123,10 @@ export async function GET(req: NextRequest) {
     type: 'task',
     title: t.title,
     subtitle: t.notes ?? undefined,
-    href: `/todos?highlight=${t.id}`,
-    meta: t.is_completed ? 'Done' : (t.due_date ?? undefined),
+    href: `/planner?highlight=${t.id}`,
+    meta: t.is_completed ? 'Done' : t.repeats
+      ? ({ day: 'Daily', week: 'Weekly', month: 'Monthly' } as const)[t.period_type as 'day' | 'week' | 'month']
+      : `${t.period_type} · ${t.period_start}`,
   }))
 
   books.data?.forEach(b => results.push({
