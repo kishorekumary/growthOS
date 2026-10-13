@@ -17,7 +17,7 @@ Replace the Tasks feature (`user_todos`, `/todos`) with a **Planner** that has t
 | Layout | Phone (< `md`): tabs Today · Week · Month. Desktop (≥ `md`): three-column board |
 | Unfinished one-offs | Review sheet when a new period starts: Move to now / Reschedule / Done / Drop |
 | Missed repeating items | Silently reset; never appear in review |
-| Points | day 10, week 20, month 40; +5 if a one-off is completed within its own period |
+| Points | day 10, week 20, month 40; +5 if a one-off is completed on or before the end of its period |
 | Storage approach | Items + completions (no cron materialization) |
 | Week | Sunday–Saturday |
 | "Today" | Device-local date (same as Habits) |
@@ -40,6 +40,7 @@ Replace the Tasks feature (`user_todos`, `/todos`) with a **Planner** that has t
 | `carry_count` | int not null default 0 | Incremented by "Move to now" in review |
 | `ended_at` | timestamptz | Set on Drop (one-off) or stopping a repeat. Hidden from lists; kept for history |
 | `sort_order` | int not null default 0 | |
+| `points_awarded` | int not null default 0 | One-off items: points granted on completion, so unchecking revokes exactly that amount |
 | `legacy_todo_id` | uuid | Source `user_todos.id` for migrated rows |
 | `created_at`, `updated_at` | timestamptz default now() | |
 
@@ -66,7 +67,7 @@ Both tables: RLS enabled, single "own data" policy (`auth.uid() = user_id`) for 
 
 ### Data migration (same file)
 
-- `user_todos` with `due_date` → `period_type='day'`, `period_start=due_date`, copy `title`, `notes`, `is_completed`, `completed_at`, `created_at`, `legacy_todo_id=id`.
+- `user_todos` with `due_date` → `period_type='day'`, `period_start=due_date`, copy `title`, `notes`, `is_completed`, `completed_at`, `created_at`, `legacy_todo_id=id`. Completed rows get `points_awarded` = 10 (+5 if completed on/before due date), matching what the old system granted.
 - `user_todos` without `due_date` → `period_type='week'`, `period_start` = Sunday of `current_date`.
 - Idempotent: skip rows whose `id` already exists as a `legacy_todo_id`.
 - `user_todos` is **not** dropped; a later migration drops it after verification.
@@ -87,7 +88,7 @@ Pure, framework-free modules (unit-tested):
   - `leftovers(items, today)`: one-off, not completed, not ended, `period_start < currentPeriod(type)`.
 - `points.ts`
   - `BASE = { day: 10, week: 20, month: 40 }`, `ON_TIME_BONUS = 5`.
-  - `pointsFor(item, completedOn, { fromReview })`: base + bonus if one-off and `completedOn` falls within the item's period and not `fromReview`. Repeating: base only.
+  - `pointsFor(item, completedOn)`: base + bonus if one-off and `completedOn <= periodEnd`. Repeating: base only. (Review "Done" naturally gets no bonus because leftovers are always past their period end.)
 - `queries.ts` — shared Supabase query helpers taking a client (server or browser): `fetchPlannerRange(client, userId, today)`, `insertItem`, `updateItem`, `toggleItem`, `moveItem`, `endItem`.
 - `rewards.ts` — award / revoke points through existing `user_rewards`, `reward_points_log`, `increment_points_balance` (logic lifted from `TodoList.tsx`, with source label `planner`).
 
@@ -100,7 +101,7 @@ Components in `src/components/planner/`:
 - **`PlannerView`** (client) — responsive container.
   - `< md`: tabs **Today · Week · Month** with "done/total" counts; active tab shows progress ring + `PeriodList`.
   - `≥ md`: three `PeriodList` columns with progress bars.
-  - Header ‹ date › navigator shifts the anchor date (desktop: all columns shift together; phone: the active tab's period).
+  - Each list has its own ‹ label › navigator in its header (e.g. Week can go to next week while Today stays on today). Habit rows show only on the current period.
 - **`PeriodList`** — progress, `QuickAdd` at top, open items (habits first, then items by `sort_order`), collapsible "Done (n)" group.
 - **`PlannerItemRow`** — 28px round checkbox (≥44px hit area), title, ↻ badge if repeating, "↪ n×" if `carry_count > 0`, ⋯ menu: Edit, Move to…, Repeat on/off, Delete. Notes expand inline.
 - **`HabitRow`** — habit due today (daily habits in Today; weekly habits in Week) with same checkbox + 🔥 streak badge; toggling calls existing `completeHabit()` (`src/lib/completeHabit.ts`). Hidden habits excluded. Not editable here; links to Habits page.
@@ -114,7 +115,7 @@ Desktop drag-and-drop between columns uses native HTML5 DnD (no new dependency);
 
 ## 4. Review sheet (leftovers)
 
-- **Trigger:** `leftovers(items, today)` non-empty. Shown on Planner page open (bottom sheet on phone, dialog on desktop). Dashboard `PlannerWidget` shows "N leftovers to review" banner opening the same sheet.
+- **Trigger:** `leftovers(items, today)` non-empty. Shown on Planner page open (bottom sheet on phone, dialog on desktop). Dashboard `PlannerWidget` shows "N leftovers to review" banner linking to `/planner?review=1`, which opens the sheet.
 - **"Later"** dismisses for the browser session (`sessionStorage`, wrapped in try/catch); reappears next session while leftovers remain.
 - **Grouped:** Yesterday & earlier (day), Last week(s) (week), Last month(s) (month).
 - **Per item:** Move to now (current period of same type, `carry_count += 1`), Reschedule (MoveMenu), Done (complete with base points, no bonus), Drop (`ended_at = now()`).
@@ -125,7 +126,7 @@ Desktop drag-and-drop between columns uses native HTML5 DnD (no new dependency);
 
 | File(s) | Change |
 |---|---|
-| `src/app/(main)/dashboard/page.tsx`, `src/components/todos/TodoWidget.tsx` | New `PlannerWidget`: today's items + habits, big checkboxes, quick-add, "View week/month" link, leftovers banner |
+| `src/app/(main)/dashboard/page.tsx`, `src/components/todos/TodoWidget.tsx` | New client `PlannerWidget` (local date, not server UTC): today's planner items, big checkboxes, quick-add, "N open this week" link, leftovers banner. Habits are not repeated here because the `TodayHabits` card sits directly above it on the dashboard |
 | `src/components/shared/QuickLog.tsx`, `QuickReset.tsx` | "Task" creation inserts a day item for today |
 | `src/components/shared/OpeningBriefingModal.tsx` | Today's planner items; still gated by `show_tasks` |
 | `src/app/api/cron/reminders/route.ts`, `src/lib/reminderMessage.ts` | Open items for today; week items on Sunday and Wednesday; month items in the last 3 days of the month |
