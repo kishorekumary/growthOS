@@ -271,11 +271,71 @@ function EditHabitModal({ habit, onClose, onSave }: {
   )
 }
 
+// ─── Confirm Delete Modal ─────────────────────────────────────
+
+// Deleting a habit also removes its logs (ON DELETE CASCADE), so it always
+// asks first — a stray tap shouldn't cost months of streak history.
+function ConfirmDeleteHabitModal({ habit, onCancel, onConfirm }: {
+  habit: Habit
+  onCancel: () => void
+  onConfirm: () => Promise<void>
+}) {
+  const [deleting, setDeleting] = useState(false)
+  const [error, setError]       = useState<string | null>(null)
+
+  async function handleDelete() {
+    setDeleting(true)
+    setError(null)
+    try {
+      await onConfirm()
+    } catch {
+      setError('Could not delete this habit. Check your connection and try again.')
+      setDeleting(false)
+    }
+  }
+
+  return (
+    <Dialog open onOpenChange={open => { if (!open && !deleting) onCancel() }}>
+      <DialogContent>
+        <DialogHeader><DialogTitle>Delete habit?</DialogTitle></DialogHeader>
+        <div className="space-y-4">
+          <p className="text-sm text-slate-300">
+            <span className="font-semibold text-white">&ldquo;{habit.habit_name}&rdquo;</span> will be
+            permanently deleted, along with its streak
+            {habit.streak_count > 0 && <> ({habit.streak_count} day{habit.streak_count === 1 ? '' : 's'})</>} and
+            its full history. This can&apos;t be undone.
+          </p>
+          {error && (
+            <p className="flex items-center gap-1.5 text-xs text-red-300">
+              <AlertCircle className="h-3.5 w-3.5 shrink-0" /> {error}
+            </p>
+          )}
+          <div className="flex justify-end gap-2">
+            <Button variant="ghost" onClick={onCancel} disabled={deleting}>Cancel</Button>
+            <Button
+              onClick={handleDelete}
+              disabled={deleting}
+              className="bg-red-600 text-white hover:bg-red-500"
+            >
+              {deleting ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Delete'}
+            </Button>
+          </div>
+        </div>
+      </DialogContent>
+    </Dialog>
+  )
+}
+
 // ─── Habit Detail Modal ───────────────────────────────────────
 
-function HabitDetailModal({ habit, onClose }: {
+// onEdit / onDelete are passed only for the user's own habits. They're the
+// touch-friendly path: the row's edit/delete icons only appear on hover.
+function HabitDetailModal({ habit, onClose, onEdit, onDelete, keystone }: {
   habit: Habit
   onClose: () => void
+  onEdit?: () => void
+  onDelete?: () => void
+  keystone: { on: boolean; canTurnOn: boolean; busy: boolean; onToggle: () => void }
 }) {
   const ninetyDaysAgoStr = useMemo(() => {
     const d = new Date()
@@ -347,6 +407,38 @@ function HabitDetailModal({ habit, onClose }: {
             </div>
           </div>
 
+          {/* Keystone switch — the one clear place to change it */}
+          <div className="flex items-center gap-3 rounded-lg border border-white/8 bg-white/3 p-3">
+            <Crown className={cn('h-5 w-5 shrink-0', keystone.on ? 'text-amber-400' : 'text-slate-600')} />
+            <div className="min-w-0 flex-1">
+              <p className="text-sm font-medium text-white">Keystone habit</p>
+              <p className="text-[11px] text-slate-500">
+                {keystone.on || keystone.canTurnOn
+                  ? 'Counts 2× in your daily score · up to 2 keystone habits'
+                  : 'You already have 2 keystone habits — turn one off first'}
+              </p>
+            </div>
+            <button
+              type="button"
+              role="switch"
+              aria-checked={keystone.on}
+              aria-label="Keystone habit"
+              onClick={keystone.onToggle}
+              disabled={keystone.busy || (!keystone.on && !keystone.canTurnOn)}
+              className={cn(
+                'relative h-6 w-11 shrink-0 rounded-full transition-colors disabled:opacity-40',
+                keystone.on ? 'bg-amber-500' : 'bg-white/15',
+              )}
+            >
+              <span className={cn(
+                'absolute top-0.5 left-0.5 flex h-5 w-5 items-center justify-center rounded-full bg-white transition-transform',
+                keystone.on && 'translate-x-5',
+              )}>
+                {keystone.busy && <Loader2 className="h-3 w-3 animate-spin text-slate-500" />}
+              </span>
+            </button>
+          </div>
+
           <HabitLeverageEditor habitId={habit.id} />
 
           <div className="space-y-2">
@@ -376,6 +468,29 @@ function HabitDetailModal({ habit, onClose }: {
               </div>
             )}
           </div>
+
+          {(onEdit || onDelete) && (
+            <div className="flex items-center justify-between gap-2 border-t border-white/8 pt-4">
+              {onDelete && (
+                <button
+                  type="button"
+                  onClick={onDelete}
+                  className="flex items-center gap-1.5 rounded-lg px-3 py-2 text-sm font-medium text-red-300 hover:bg-red-500/10 transition-colors"
+                >
+                  <Trash2 className="h-4 w-4" /> Delete habit
+                </button>
+              )}
+              {onEdit && (
+                <button
+                  type="button"
+                  onClick={onEdit}
+                  className="ml-auto flex items-center gap-1.5 rounded-lg px-3 py-2 text-sm font-medium text-slate-300 hover:bg-white/10 transition-colors"
+                >
+                  <Pencil className="h-4 w-4" /> Edit
+                </button>
+              )}
+            </div>
+          )}
         </div>
       </DialogContent>
     </Dialog>
@@ -549,6 +664,7 @@ export default function HabitTracker() {
   const { inFlight: markingIds, begin: beginMarking, end: endMarking } = useInFlightIds()
   const [keystoneId, setKeystoneId]       = useState<string | null>(null)
   const [editTarget, setEditTarget]       = useState<Habit | null>(null)
+  const [deleteTarget, setDeleteTarget]   = useState<Habit | null>(null)
   const [detailTarget, setDetailTarget]   = useState<Habit | null>(null)
   const [bannerExpanded, setBannerExpanded]     = useState(false)
   const [bannerDismissed, setBannerDismissedRaw] = useState(false)
@@ -885,9 +1001,11 @@ export default function HabitTracker() {
     endMarking(habit.id)
   }
 
+  // Throws on failure so the confirm dialog can stay open and say so.
   async function deleteHabit(id: string) {
     const supabase = createSupabaseBrowserClient()
-    await supabase.from('personality_habits').delete().eq('id', id)
+    const { error } = await supabase.from('personality_habits').delete().eq('id', id)
+    if (error) throw error
     setHabits(prev => prev.filter(h => h.id !== id))
     setWeekLogs(prev => prev.filter(l => l.habit_id !== id))
   }
@@ -1073,6 +1191,23 @@ export default function HabitTracker() {
         <HabitDetailModal
           habit={detailTarget}
           onClose={() => setDetailTarget(null)}
+          onEdit={detailTarget.is_global ? undefined : () => { setEditTarget(detailTarget); setDetailTarget(null) }}
+          onDelete={detailTarget.is_global ? undefined : () => { setDeleteTarget(detailTarget); setDetailTarget(null) }}
+          keystone={{
+            on:        isKeystoneFor(detailTarget),
+            canTurnOn: keystoneCount < 2,
+            busy:      keystoneId === detailTarget.id,
+            onToggle:  () => toggleKeystone(detailTarget),
+          }}
+        />
+      )}
+
+      {/* Delete confirmation (controlled) */}
+      {deleteTarget && (
+        <ConfirmDeleteHabitModal
+          habit={deleteTarget}
+          onCancel={() => setDeleteTarget(null)}
+          onConfirm={async () => { await deleteHabit(deleteTarget.id); setDeleteTarget(null) }}
         />
       )}
 
@@ -1280,13 +1415,16 @@ export default function HabitTracker() {
                   : canMarkKeystone ? 'Mark as keystone (2× score weight)'
                   : 'Maximum 2 keystone habits'
                 }
+                // Touch screens have no hover, so this control would sit invisible
+                // yet tappable. There: hide it unless keystone, and make the
+                // keystone crown a plain badge — toggling lives in the detail modal.
                 className={cn(
                   'shrink-0 transition-all opacity-0 group-hover:opacity-100',
                   keystone
-                    ? 'text-amber-400 opacity-100 hover:text-amber-300'
+                    ? 'text-amber-400 opacity-100 hover:text-amber-300 [@media(hover:none)]:pointer-events-none'
                     : canMarkKeystone
-                      ? 'text-slate-600 hover:text-amber-400'
-                      : 'text-slate-800 cursor-not-allowed',
+                      ? 'text-slate-600 hover:text-amber-400 [@media(hover:none)]:hidden'
+                      : 'text-slate-800 cursor-not-allowed [@media(hover:none)]:hidden',
                 )}
               >
                 {keystoneId === habit.id
@@ -1294,20 +1432,21 @@ export default function HabitTracker() {
                   : <Crown className="h-4 w-4" />}
               </button>
 
-              {/* Edit / Delete — hidden for global habits */}
+              {/* Edit / Delete — hidden for global habits. Hover-only, so removed
+                  on touch screens; there they live in the detail modal. */}
               {!habit.is_global && (
                 <>
                   <button
                     onClick={e => { e.stopPropagation(); setEditTarget(habit) }}
                     aria-label="Edit habit"
-                    className="shrink-0 text-slate-700 opacity-0 group-hover:opacity-100 hover:text-violet-400 transition-all"
+                    className="shrink-0 text-slate-700 opacity-0 group-hover:opacity-100 hover:text-violet-400 transition-all [@media(hover:none)]:hidden"
                   >
                     <Pencil className="h-4 w-4" />
                   </button>
                   <button
-                    onClick={e => { e.stopPropagation(); deleteHabit(habit.id) }}
+                    onClick={e => { e.stopPropagation(); setDeleteTarget(habit) }}
                     aria-label="Delete habit"
-                    className="ml-1 shrink-0 text-slate-700 opacity-0 group-hover:opacity-100 hover:text-red-400 transition-all"
+                    className="ml-1 shrink-0 text-slate-700 opacity-0 group-hover:opacity-100 hover:text-red-400 transition-all [@media(hover:none)]:hidden"
                   >
                     <Trash2 className="h-4 w-4" />
                   </button>
