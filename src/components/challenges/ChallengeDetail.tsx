@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { Flame, CheckCircle2, ChevronLeft, Sparkles, Loader2, Trophy, Lock, Pencil } from 'lucide-react'
+import { Flame, CheckCircle2, ChevronLeft, Sparkles, Loader2, Trophy, Lock, Pencil, Trash2, AlertCircle } from 'lucide-react'
 import { createSupabaseBrowserClient } from '@/lib/supabase'
 import { useCachedQuery } from '@/hooks/useCachedQuery'
 import { format, parseISO, differenceInDays, addDays, subDays } from 'date-fns'
@@ -45,6 +45,7 @@ interface Props {
   onBack: () => void
   onComplete: (id: string) => void
   onUpdate: (challenge: Challenge) => void
+  onDeleted: (id: string) => void
 }
 
 const CATEGORY_COLOR: Record<string, string> = {
@@ -85,7 +86,7 @@ function ProgressRing({ day, totalDays }: { day: number; totalDays: number }) {
   )
 }
 
-export default function ChallengeDetail({ challenge, onBack, onComplete, onUpdate }: Props) {
+export default function ChallengeDetail({ challenge, onBack, onComplete, onUpdate, onDeleted }: Props) {
   const supabase = createSupabaseBrowserClient()
   const [reflection, setReflection] = useState('')
   const [saving, setSaving] = useState(false)
@@ -94,6 +95,7 @@ export default function ChallengeDetail({ challenge, onBack, onComplete, onUpdat
   const [milestoneMsg, setMilestoneMsg] = useState<string | null>(null)
   const [milestoneLoading, setMilestoneLoading] = useState(false)
   const [editOpen, setEditOpen] = useState(false)
+  const [deleteOpen, setDeleteOpen] = useState(false)
   const [editingDate, setEditingDate] = useState<string | null>(null)
   const [checkinError, setCheckinError] = useState<string | null>(null)
 
@@ -250,11 +252,26 @@ export default function ChallengeDetail({ challenge, onBack, onComplete, onUpdat
         <span className="text-xs text-slate-500">{phase} Phase</span>
         <button
           onClick={() => setEditOpen(true)}
-          className="ml-auto flex items-center gap-1 text-xs text-slate-500 hover:text-white transition-colors"
+          className="ml-auto flex items-center gap-1 rounded-md px-2 py-1.5 text-xs text-slate-400 hover:text-white transition-colors"
         >
           <Pencil className="h-3.5 w-3.5" /> Edit
         </button>
+        <button
+          onClick={() => setDeleteOpen(true)}
+          className="flex items-center gap-1 rounded-md px-2 py-1.5 text-xs text-red-300/80 hover:text-red-300 transition-colors"
+        >
+          <Trash2 className="h-3.5 w-3.5" /> Delete
+        </button>
       </div>
+
+      {deleteOpen && (
+        <DeleteChallengeModal
+          challenge={challenge}
+          checkinCount={Object.values(checkins).filter(c => c.completed).length}
+          onClose={() => setDeleteOpen(false)}
+          onDeleted={() => { setDeleteOpen(false); onDeleted(challenge.id) }}
+        />
+      )}
 
       {editOpen && (
         <EditChallengeModal
@@ -471,6 +488,59 @@ export default function ChallengeDetail({ challenge, onBack, onComplete, onUpdat
         </div>
       )}
     </div>
+  )
+}
+
+// ─── Delete Challenge Modal ─────────────────────────────────────
+
+// Check-ins and milestones go with it (ON DELETE CASCADE), so always confirm.
+function DeleteChallengeModal({ challenge, checkinCount, onClose, onDeleted }: {
+  challenge: Challenge
+  checkinCount: number
+  onClose: () => void
+  onDeleted: () => void
+}) {
+  const [deleting, setDeleting] = useState(false)
+  const [error, setError]       = useState<string | null>(null)
+
+  async function handleDelete() {
+    setDeleting(true)
+    setError(null)
+    const supabase = createSupabaseBrowserClient()
+    const { error: err } = await supabase.from('ninety_day_challenges').delete().eq('id', challenge.id)
+    if (err) {
+      setError('Could not delete this challenge. Check your connection and try again.')
+      setDeleting(false)
+      return
+    }
+    onDeleted()
+  }
+
+  return (
+    <Dialog open onOpenChange={open => { if (!open && !deleting) onClose() }}>
+      <DialogContent>
+        <DialogHeader><DialogTitle>Delete challenge?</DialogTitle></DialogHeader>
+        <div className="space-y-4">
+          <p className="text-sm text-slate-300">
+            <span className="font-semibold text-white">&ldquo;{challenge.title}&rdquo;</span> will be
+            permanently deleted, along with
+            {checkinCount > 0 ? ` its ${checkinCount} check-in${checkinCount === 1 ? '' : 's'},` : ' its check-ins,'} reflections
+            and milestones. This can&apos;t be undone.
+          </p>
+          {error && (
+            <p className="flex items-center gap-1.5 text-xs text-red-300">
+              <AlertCircle className="h-3.5 w-3.5 shrink-0" /> {error}
+            </p>
+          )}
+          <div className="flex justify-end gap-2">
+            <Button variant="ghost" onClick={onClose} disabled={deleting}>Cancel</Button>
+            <Button onClick={handleDelete} disabled={deleting} className="bg-red-600 text-white hover:bg-red-500">
+              {deleting ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Delete'}
+            </Button>
+          </div>
+        </div>
+      </DialogContent>
+    </Dialog>
   )
 }
 

@@ -229,6 +229,11 @@ export default function ChallengeApp() {
         onBack={() => setView('list')}
         onComplete={handleComplete}
         onUpdate={handleUpdate}
+        onDeleted={id => {
+          setChallenges(prev => prev.filter(c => c.id !== id))
+          setSelected(null)
+          setView('list')
+        }}
       />
     )
   }
