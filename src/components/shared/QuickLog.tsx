@@ -16,6 +16,7 @@ import { HabitCategory, HABIT_CATEGORY_META } from '@/lib/habitCategories'
 import { cn } from '@/lib/utils'
 import { computeStreak, todayStr, yesterdayStr, isGraceActive } from '@/lib/habitStreak'
 import { completeHabit } from '@/lib/completeHabit'
+import { insertItem } from '@/lib/planner/actions'
 import { useReward } from '@/contexts/RewardContext'
 import RichTextEditor from './RichTextEditor'
 
@@ -1435,12 +1436,15 @@ function TaskPanel({ onDone }: { onDone: () => void }) {
     const supabase = createSupabaseBrowserClient()
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) { setSaving(false); return }
-    await supabase.from('user_todos').insert({
-      user_id:  user.id,
-      title:    title.trim(),
-      notes:    notes.trim() || null,
-      due_date: dueDate || null,
-    })
+    // A date puts it on that day; no date puts it on this week's list.
+    try {
+      await insertItem(supabase, user.id, dueDate
+        ? { title, notes, period_type: 'day', period_start: dueDate }
+        : { title, notes, period_type: 'week', period_start: todayStr() })
+    } catch {
+      setSaving(false)
+      return
+    }
     setSaving(false); setSaved(true)
     setTimeout(onDone, 900)
   }

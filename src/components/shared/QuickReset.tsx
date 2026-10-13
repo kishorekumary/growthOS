@@ -2,7 +2,11 @@
 
 import { useState, useEffect, useRef, useCallback, type TouchEvent } from 'react'
 import { Wind, Sparkles, Brain, X, ChevronLeft, ChevronRight, Loader2, RefreshCw, Zap, Target, CheckSquare, Circle, ScrollText, Leaf } from 'lucide-react'
-import { differenceInDays, isBefore, parseISO, startOfDay } from 'date-fns'
+import { differenceInDays, parseISO } from 'date-fns'
+import { completeItem, openNowQuery } from '@/lib/planner/actions'
+import { periodStart } from '@/lib/planner/periods'
+import type { PlannerItem } from '@/lib/planner/types'
+import { todayStr } from '@/lib/habitStreak'
 import { createSupabaseBrowserClient } from '@/lib/supabase'
 import { useCachedQuery } from '@/hooks/useCachedQuery'
 import { useDraggableFab } from '@/hooks/useDraggableFab'
@@ -393,35 +397,19 @@ function GoalsView() {
 }
 
 // ─── Tasks view ──────────────────────────────────────────────────
-interface Todo {
-  id: string
-  title: string
-  due_date: string | null
-  is_completed: boolean
-}
-
 function TasksView() {
-  const { data: todos, loading, isOffline, setData: setTodos } = useCachedQuery<Todo[]>(
-    'quick-reset:todos',
-    (supabase, userId) => supabase
-      .from('user_todos')
-      .select('id, title, due_date, is_completed')
-      .eq('user_id', userId)
-      .eq('is_completed', false)
-      .order('due_date', { ascending: true, nullsFirst: false })
-      .order('created_at', { ascending: false }),
+  const { data: todos, loading, isOffline, setData: setTodos } = useCachedQuery<PlannerItem[]>(
+    'quick-reset:planner',
+    (supabase, userId) => openNowQuery(supabase, userId, todayStr()),
     [],
     []
   )
 
-  async function complete(id: string) {
-    setTodos(prev => prev.filter(t => t.id !== id))
+  async function complete(todo: PlannerItem) {
+    setTodos(prev => prev.filter(t => t.id !== todo.id))
     const supabase = createSupabaseBrowserClient()
-    const now = new Date().toISOString()
-    await supabase
-      .from('user_todos')
-      .update({ is_completed: true, completed_at: now, updated_at: now })
-      .eq('id', id)
+    const { data: { user } } = await supabase.auth.getUser()
+    if (user) await completeItem(supabase, user.id, todo, todo.period_start, todayStr()).catch(() => {})
   }
 
   if (loading) {
@@ -453,13 +441,11 @@ function TasksView() {
       </p>
       <div className="space-y-1.5 max-h-[55vh] overflow-y-auto pr-1">
         {todos.map(todo => {
-          const overdue = todo.due_date
-            ? isBefore(parseISO(todo.due_date), startOfDay(new Date()))
-            : false
+          const overdue = todo.period_start < periodStart(todo.period_type, todayStr())
           return (
             <button
               key={todo.id}
-              onClick={() => complete(todo.id)}
+              onClick={() => complete(todo)}
               className="group w-full flex items-center gap-3 rounded-xl bg-white/5 hover:bg-sky-500/10 px-3 py-3 text-left transition-colors"
             >
               <Circle className="h-4 w-4 shrink-0 text-slate-600 group-hover:text-sky-400 transition-colors" />
