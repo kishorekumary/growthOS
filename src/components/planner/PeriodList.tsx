@@ -53,21 +53,36 @@ export default function PeriodList(props: PeriodListProps) {
   // Items just checked off stay in the open list for 700ms so the pop,
   // strike-through and "+N" flash are visible before they move to Done.
   const [recentlyDone, setRecentlyDone] = useState<Set<string>>(new Set())
-  const timers = useRef<Set<ReturnType<typeof setTimeout>>>(new Set())
+  const timers = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map())
   useEffect(() => {
     const t = timers.current
     return () => { t.forEach(clearTimeout); t.clear() }
   }, [])
 
+  const unmark = (id: string) => setRecentlyDone(prev => {
+    if (!prev.has(id)) return prev
+    const n = new Set(prev); n.delete(id); return n
+  })
+
   async function toggle(item: PlannerItem) {
-    const delta = await onToggle(item)
-    if (delta > 0) {
-      setRecentlyDone(prev => new Set(prev).add(item.id))
-      const timer = setTimeout(() => {
-        timers.current.delete(timer)
-        setRecentlyDone(prev => { const n = new Set(prev); n.delete(item.id); return n })
-      }, 700)
-      timers.current.add(timer)
+    // usePlanner updates optimistically before its network await, so mark the
+    // row synchronously (before onToggle) to keep it mounted from the tap.
+    const wasOpen = !isDoneIn(item, start, completions)
+    const prior = timers.current.get(item.id)
+    if (prior) { clearTimeout(prior); timers.current.delete(item.id) }
+    if (wasOpen) setRecentlyDone(prev => new Set(prev).add(item.id))
+    let delta = 0
+    try {
+      delta = await onToggle(item)
+    } catch (err) {
+      unmark(item.id)
+      throw err
+    }
+    if (wasOpen && delta > 0) {
+      const timer = setTimeout(() => { timers.current.delete(item.id); unmark(item.id) }, 700)
+      timers.current.set(item.id, timer)
+    } else {
+      unmark(item.id)
     }
     return delta
   }

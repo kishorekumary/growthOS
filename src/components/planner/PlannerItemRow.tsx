@@ -121,7 +121,7 @@ export default function PlannerItemRow({
           </span>
         )}
         <DropdownMenu.Root>
-          <DropdownMenu.Trigger className="-m-2 shrink-0 rounded-md p-3 text-slate-500 hover:text-white" aria-label="Item options">
+          <DropdownMenu.Trigger className="-m-3.5 shrink-0 rounded-md p-3.5 text-slate-500 hover:text-white" aria-label="Item options">
             <MoreHorizontal className="h-4 w-4" />
           </DropdownMenu.Trigger>
           <DropdownMenu.Portal>
