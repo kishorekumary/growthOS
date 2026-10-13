@@ -330,11 +330,12 @@ function ConfirmDeleteHabitModal({ habit, onCancel, onConfirm }: {
 
 // onEdit / onDelete are passed only for the user's own habits. They're the
 // touch-friendly path: the row's edit/delete icons only appear on hover.
-function HabitDetailModal({ habit, onClose, onEdit, onDelete, keystone }: {
+function HabitDetailModal({ habit, onClose, onEdit, onDelete, onHide, keystone }: {
   habit: Habit
   onClose: () => void
   onEdit?: () => void
   onDelete?: () => void
+  onHide?: () => void   // global habits: can't delete, can hide
   keystone: { on: boolean; canTurnOn: boolean; busy: boolean; onToggle: () => void }
 }) {
   const ninetyDaysAgoStr = useMemo(() => {
@@ -384,7 +385,9 @@ function HabitDetailModal({ habit, onClose, onEdit, onDelete, keystone }: {
 
   return (
     <Dialog open onOpenChange={open => { if (!open) onClose() }}>
-      <DialogContent className="max-w-lg">
+      {/* Capped and scrollable: on a phone the 90-day grid alone can be
+          taller than the screen, and the dialog is centered with no scroll. */}
+      <DialogContent className="max-w-lg max-h-[90dvh] overflow-y-auto">
         <DialogHeader><DialogTitle>{habit.habit_name}</DialogTitle></DialogHeader>
         <div className="space-y-4">
           <div className="flex items-center gap-2">
@@ -439,6 +442,45 @@ function HabitDetailModal({ habit, onClose, onEdit, onDelete, keystone }: {
             </button>
           </div>
 
+          {/* Actions sit up here, not after the 90-day grid, so they're on
+              screen without scrolling on a phone. */}
+          {(onEdit || onDelete || onHide) && (
+            <div className="flex items-center gap-2">
+              {onEdit && (
+                <button
+                  type="button"
+                  onClick={onEdit}
+                  className="flex flex-1 items-center justify-center gap-1.5 rounded-lg border border-white/10 px-3 py-2.5 text-sm font-medium text-slate-200 hover:bg-white/10 transition-colors"
+                >
+                  <Pencil className="h-4 w-4" /> Edit
+                </button>
+              )}
+              {onDelete && (
+                <button
+                  type="button"
+                  onClick={onDelete}
+                  className="flex flex-1 items-center justify-center gap-1.5 rounded-lg border border-red-500/30 px-3 py-2.5 text-sm font-medium text-red-300 hover:bg-red-500/10 transition-colors"
+                >
+                  <Trash2 className="h-4 w-4" /> Delete habit
+                </button>
+              )}
+              {onHide && (
+                <div className="flex-1 space-y-1">
+                  <button
+                    type="button"
+                    onClick={onHide}
+                    className="flex w-full items-center justify-center gap-1.5 rounded-lg border border-white/10 px-3 py-2.5 text-sm font-medium text-slate-200 hover:bg-white/10 transition-colors"
+                  >
+                    <EyeOff className="h-4 w-4" /> Hide from my list
+                  </button>
+                  <p className="text-center text-[11px] text-slate-500">
+                    Shared habit, so it can&apos;t be deleted. Bring it back from Manage Global Habits.
+                  </p>
+                </div>
+              )}
+            </div>
+          )}
+
           <HabitLeverageEditor habitId={habit.id} />
 
           <div className="space-y-2">
@@ -468,29 +510,6 @@ function HabitDetailModal({ habit, onClose, onEdit, onDelete, keystone }: {
               </div>
             )}
           </div>
-
-          {(onEdit || onDelete) && (
-            <div className="flex items-center justify-between gap-2 border-t border-white/8 pt-4">
-              {onDelete && (
-                <button
-                  type="button"
-                  onClick={onDelete}
-                  className="flex items-center gap-1.5 rounded-lg px-3 py-2 text-sm font-medium text-red-300 hover:bg-red-500/10 transition-colors"
-                >
-                  <Trash2 className="h-4 w-4" /> Delete habit
-                </button>
-              )}
-              {onEdit && (
-                <button
-                  type="button"
-                  onClick={onEdit}
-                  className="ml-auto flex items-center gap-1.5 rounded-lg px-3 py-2 text-sm font-medium text-slate-300 hover:bg-white/10 transition-colors"
-                >
-                  <Pencil className="h-4 w-4" /> Edit
-                </button>
-              )}
-            </div>
-          )}
         </div>
       </DialogContent>
     </Dialog>
@@ -1193,6 +1212,7 @@ export default function HabitTracker() {
           onClose={() => setDetailTarget(null)}
           onEdit={detailTarget.is_global ? undefined : () => { setEditTarget(detailTarget); setDetailTarget(null) }}
           onDelete={detailTarget.is_global ? undefined : () => { setDeleteTarget(detailTarget); setDetailTarget(null) }}
+          onHide={detailTarget.is_global ? () => { hideGlobalHabit(detailTarget.id); setDetailTarget(null) } : undefined}
           keystone={{
             on:        isKeystoneFor(detailTarget),
             canTurnOn: keystoneCount < 2,
