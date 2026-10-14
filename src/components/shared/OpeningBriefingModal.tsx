@@ -14,6 +14,7 @@ import { cn } from '@/lib/utils'
 
 const SHOW_AFTER_MS = 3000
 const MAX_ITEMS = 5
+const MAX_PER_PERIOD = 3
 
 type GoalCategory = 'fitness' | 'finance' | 'books' | 'general' | 'career'
 
@@ -25,7 +26,8 @@ interface Goal {
 }
 
 // openNowQuery returns open one-offs for the current day, week AND month,
-// so the plan is grouped by period rather than all shown as "today".
+// so the plan is grouped by period rather than all shown as "today", each
+// with its own limit.
 const PERIOD_GROUPS: { type: PeriodType; label: string }[] = [
   { type: 'day',   label: 'Today' },
   { type: 'week',  label: 'This week' },
@@ -132,11 +134,6 @@ function TodosSection({ onNavigate }: { onNavigate: () => void }) {
     }
   }
 
-  // Today's tasks first, then the week's, then the month's.
-  const shown = PERIOD_GROUPS
-    .flatMap(({ type }) => todos.filter(t => t.period_type === type))
-    .slice(0, MAX_ITEMS)
-
   return (
     <div className="space-y-2">
       <div className="flex items-center gap-2">
@@ -158,7 +155,10 @@ function TodosSection({ onNavigate }: { onNavigate: () => void }) {
       ) : (
         <div className="space-y-1.5">
           {PERIOD_GROUPS.map(({ type, label }) => {
-            const group = shown.filter(t => t.period_type === type)
+            // Each period gets its own limit so a busy day can't push the
+            // week's and month's tasks out of view.
+            const all   = todos.filter(t => t.period_type === type)
+            const group = all.slice(0, MAX_PER_PERIOD)
             if (group.length === 0) return null
             return (
               <div key={type} className="space-y-1.5">
@@ -179,18 +179,15 @@ function TodosSection({ onNavigate }: { onNavigate: () => void }) {
                     </button>
                   )
                 })}
+                {all.length > MAX_PER_PERIOD && (
+                  <p className="px-1 text-xs text-slate-500">+{all.length - MAX_PER_PERIOD} more</p>
+                )}
               </div>
             )
           })}
-          {todos.length > MAX_ITEMS ? (
-            <Link href="/planner" onClick={onNavigate} className="block text-center text-xs text-slate-500 hover:text-violet-400 transition-colors pt-0.5">
-              +{todos.length - MAX_ITEMS} more · Open planner →
-            </Link>
-          ) : (
-            <Link href="/planner" onClick={onNavigate} className="block text-center text-xs text-slate-500 hover:text-violet-400 transition-colors pt-0.5">
-              Open planner →
-            </Link>
-          )}
+          <Link href="/planner" onClick={onNavigate} className="block text-center text-xs text-slate-500 hover:text-violet-400 transition-colors pt-0.5">
+            Open planner →
+          </Link>
         </div>
       )}
     </div>
