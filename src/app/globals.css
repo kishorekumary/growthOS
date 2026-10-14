@@ -153,3 +153,61 @@
 .list-cleared-card {
   animation: list-cleared-card 2s ease-out forwards;
 }
+
+/* Perfect day (PerfectDayCelebration): full-screen confetti rain + trophy. */
+@keyframes perfect-day-overlay {
+  0%   { opacity: 0; }
+  8%   { opacity: 1; }
+  88%  { opacity: 1; }
+  100% { opacity: 0; }
+}
+
+.perfect-day-overlay {
+  animation: perfect-day-overlay 4.2s ease-out forwards;
+}
+
+@keyframes perfect-day-fall {
+  0%   { transform: translate(0, 0) rotate(0deg); opacity: 1; }
+  85%  { opacity: 1; }
+  100% { transform: translate(var(--pd-drift), 110vh) rotate(var(--pd-rotate)); opacity: 0; }
+}
+
+.perfect-day-piece {
+  animation-name: perfect-day-fall;
+  animation-timing-function: cubic-bezier(0.25, 0.4, 0.6, 1);
+  animation-fill-mode: both;
+}
+
+@keyframes perfect-day-glow {
+  0%   { transform: translate(-50%, -50%) scale(0.4); opacity: 0; }
+  30%  { transform: translate(-50%, -50%) scale(1.05); opacity: 1; }
+  100% { transform: translate(-50%, -50%) scale(1); opacity: 0.8; }
+}
+
+.perfect-day-glow {
+  animation: perfect-day-glow 1.6s ease-out forwards;
+}
+
+@keyframes perfect-day-card {
+  0%   { transform: scale(0.6) translateY(24px); opacity: 0; }
+  12%  { transform: scale(1.06) translateY(0); opacity: 1; }
+  20%  { transform: scale(1); }
+  100% { transform: scale(1); opacity: 1; }
+}
+
+.perfect-day-card {
+  animation: perfect-day-card 4.2s ease-out forwards;
+}
+
+@keyframes perfect-day-trophy {
+  0%, 10% { transform: scale(0) rotate(-30deg); }
+  22%     { transform: scale(1.3) rotate(10deg); }
+  30%     { transform: scale(1) rotate(-4deg); }
+  38%     { transform: scale(1) rotate(0deg); }
+  100%    { transform: scale(1) rotate(0deg); }
+}
+
+.perfect-day-trophy {
+  display: inline-block;
+  animation: perfect-day-trophy 4.2s ease-out forwards;
+}

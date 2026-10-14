@@ -15,6 +15,7 @@ import QuickReset from '@/components/shared/QuickReset'
 import OpeningBriefingModal from '@/components/shared/OpeningBriefingModal'
 import { RewardProvider } from '@/contexts/RewardContext'
 import RewardMilestoneModal from '@/components/shared/RewardMilestoneModal'
+import PerfectDayCelebration from '@/components/shared/PerfectDayCelebration'
 import GlobalSearch from '@/components/shared/GlobalSearch'
 import AdminMessageBanner from '@/components/layout/AdminMessageBanner'
 import OfflineBanner from '@/components/layout/OfflineBanner'
@@ -68,6 +69,7 @@ export default async function MainLayout({ children }: { children: React.ReactNo
       <QuickLog />
       <QuickReset floatingOnly />
       <RewardMilestoneModal />
+      <PerfectDayCelebration />
       <OpeningBriefingModal />
       <AdminMessageBanner />
       <OfflineBanner />

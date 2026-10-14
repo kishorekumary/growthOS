@@ -230,6 +230,10 @@ export async function POST(req: Request) {
   const hiddenIds   = new Set((hiddenMarks ?? []).map(h => h.habit_id))
   const dailyHabits = (dailyHabitsRaw ?? []).filter(h => !h.is_global || !hiddenIds.has(h.id))
 
+  // Set only on the completion that makes the day perfect, so the client
+  // plays its full-screen celebration once per day.
+  let perfectDay: { date: string; streak: number; habits: number } | null = null
+
   if (rewards && isPerfectDay(dailyHabits, logsForDay ?? []) && rewards.last_perfect_date !== logDate) {
     // Calendar day immediately before logDate, computed by pure local-date
     // arithmetic on the client-supplied date (never via server "now") — same
@@ -272,7 +276,8 @@ export async function POST(req: Request) {
     if (overallAwarded) {
       milestones.push({ label: `Perfect Day Streak — ${overallCrossed} days!`, points: overallPoints })
     }
+    perfectDay = { date: logDate, streak: newPerfect, habits: dailyHabits.length }
   }
 
-  return NextResponse.json({ streak_count: newStreak, milestones })
+  return NextResponse.json({ streak_count: newStreak, milestones, perfect_day: perfectDay })
 }
