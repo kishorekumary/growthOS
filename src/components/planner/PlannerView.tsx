@@ -10,7 +10,7 @@ import { usePlannerHabits } from '@/hooks/usePlannerHabits'
 import { useIsDesktop } from '@/hooks/useIsDesktop'
 import { currentPeriods, rollPeriods, shiftPeriod, windowStart } from '@/lib/planner/periods'
 import { isVisibleIn, leftovers } from '@/lib/planner/visibility'
-import { PERIOD_TYPES, type PeriodType } from '@/lib/planner/types'
+import { PERIOD_TYPES, type PeriodType, type Priority } from '@/lib/planner/types'
 import PeriodList, { countDone } from './PeriodList'
 import ReviewSheet from './ReviewSheet'
 import PlannerRewards, { type DoneEntry } from './PlannerRewards'
@@ -102,7 +102,8 @@ export default function PlannerView() {
       itemBusy:    planner.busy,
       highlightId,
       onNavigate:  (delta: number) => setStarts(s => ({ ...s, [type]: shiftPeriod(type, s[type], delta) })),
-      onAdd:       (title: string, repeats: boolean) => planner.add({ title, period_type: type, period_start: start, repeats }),
+      onAdd:       (title: string, repeats: boolean, priority: Priority | null) =>
+        planner.add({ title, period_type: type, period_start: start, repeats, priority }),
       onToggle:    (item: Parameters<typeof planner.toggle>[0]) => planner.toggle(item, start),
       onUpdate:    planner.update,
       onMove:      planner.move,

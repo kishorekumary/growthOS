@@ -51,7 +51,7 @@ export default function PlannerWidget() {
         habits={NO_HABITS}
         habitBusy={NO_BUSY}
         itemBusy={planner.busy}
-        onAdd={(title, repeats) => planner.add({ title, period_type: 'day', period_start: now.day, repeats })}
+        onAdd={(title, repeats, priority) => planner.add({ title, period_type: 'day', period_start: now.day, repeats, priority })}
         onToggle={item => planner.toggle(item, now.day)}
         onUpdate={planner.update}
         onMove={planner.move}

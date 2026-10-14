@@ -11,7 +11,7 @@ import { periodLabel, periodStart } from '@/lib/planner/periods'
 import { isDoneIn } from '@/lib/planner/visibility'
 import { byPriority } from '@/lib/planner/priority'
 import type { ItemPatch } from '@/lib/planner/actions'
-import type { PeriodType, PlannerCompletion, PlannerItem } from '@/lib/planner/types'
+import type { PeriodType, PlannerCompletion, PlannerItem, Priority } from '@/lib/planner/types'
 import type { PlannerHabit } from '@/hooks/usePlannerHabits'
 import PlannerItemRow from './PlannerItemRow'
 import HabitRow from './HabitRow'
@@ -30,7 +30,7 @@ export interface PeriodListProps {
   itemBusy:    ReadonlySet<string>
   highlightId?: string | null
   onNavigate?: (delta: number) => void
-  onAdd:       (title: string, repeats: boolean) => void
+  onAdd:       (title: string, repeats: boolean, priority: Priority | null) => void
   onToggle:    (item: PlannerItem) => Promise<number>
   onUpdate:    (item: PlannerItem, patch: ItemPatch) => void
   onMove:      (item: PlannerItem, type: PeriodType, start: string) => void
