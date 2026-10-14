@@ -22,7 +22,7 @@ function ScoreRing({ score }: { score: number }) {
   return (
     <div className="relative flex items-center justify-center w-20 h-20">
       <svg className="absolute inset-0 -rotate-90" width="80" height="80">
-        <circle cx="40" cy="40" r={r} fill="none" stroke="rgba(255,255,255,0.05)" strokeWidth="6" />
+        <circle cx="40" cy="40" r={r} fill="none" stroke="rgb(var(--c-white) / 0.05)" strokeWidth="6" />
         <circle
           cx="40" cy="40" r={r} fill="none"
           stroke={color} strokeWidth="6"
@@ -75,7 +75,7 @@ export default function WeeklyDigest() {
         <button
           onClick={() => generate()}
           disabled={loading}
-          className="flex items-center gap-2 rounded-xl bg-purple-600 hover:bg-purple-500 disabled:opacity-50 px-6 py-2.5 text-sm font-medium text-white transition-colors"
+          className="flex items-center gap-2 rounded-xl bg-purple-600 hover:bg-purple-500 disabled:opacity-50 px-6 py-2.5 text-sm font-medium text-snow transition-colors"
         >
           {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
           {loading ? 'Analyzing your week…' : 'Generate Digest'}

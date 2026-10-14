@@ -214,7 +214,7 @@ export default function SleepTracker() {
           />
 
           <button onClick={submit} disabled={saving}
-            className="w-full rounded-xl bg-indigo-600 hover:bg-indigo-700 disabled:opacity-40 py-2.5 text-sm font-medium text-white transition-colors flex items-center justify-center gap-2">
+            className="w-full rounded-xl bg-indigo-600 hover:bg-indigo-700 disabled:opacity-40 py-2.5 text-sm font-medium text-snow transition-colors flex items-center justify-center gap-2">
             {saving && <Loader2 className="h-4 w-4 animate-spin" />}
             {saving ? 'Saving...' : 'Log Sleep'}
           </button>
@@ -241,10 +241,10 @@ export default function SleepTracker() {
                   <stop offset="95%" stopColor="#6366f1" stopOpacity={0} />
                 </linearGradient>
               </defs>
-              <XAxis dataKey="date" tick={{ fill: '#64748b', fontSize: 10 }} axisLine={false} tickLine={false} />
-              <YAxis domain={[0, 12]} tick={{ fill: '#64748b', fontSize: 10 }} axisLine={false} tickLine={false} />
+              <XAxis dataKey="date" tick={{ fill: 'rgb(var(--c-slate-500))', fontSize: 10 }} axisLine={false} tickLine={false} />
+              <YAxis domain={[0, 12]} tick={{ fill: 'rgb(var(--c-slate-500))', fontSize: 10 }} axisLine={false} tickLine={false} />
               <Tooltip
-                contentStyle={{ background: '#1e293b', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 8, fontSize: 11 }}
+                contentStyle={{ background: 'rgb(var(--c-slate-800))', border: '1px solid rgb(var(--c-white) / 0.1)', borderRadius: 8, fontSize: 11 }}
                 formatter={(v: number) => [`${v}h`, 'Sleep']}
               />
               <Area type="monotone" dataKey="hours" stroke="#6366f1" strokeWidth={2} fill="url(#sleepGrad)" dot={{ fill: '#6366f1', r: 3 }} />

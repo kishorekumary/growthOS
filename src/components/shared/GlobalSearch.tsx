@@ -144,7 +144,7 @@ export default function GlobalSearch() {
       <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
 
       {/* Panel */}
-      <div className="relative w-full max-w-2xl rounded-2xl border border-white/[0.08] bg-[#0d0d1a] shadow-2xl overflow-hidden">
+      <div className="relative w-full max-w-2xl rounded-2xl border border-white/[0.08] bg-surface shadow-2xl overflow-hidden">
         {/* Search input */}
         <div className="flex items-center gap-3 px-4 py-3.5 border-b border-white/[0.06]">
           {loading

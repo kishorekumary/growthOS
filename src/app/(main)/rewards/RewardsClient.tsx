@@ -200,7 +200,7 @@ export default function RewardsClient({
             className={cn(
               'shrink-0 rounded-lg px-3 py-2 text-xs font-semibold transition-all',
               balance >= FREEZE_COST && freezes < FREEZE_MAX
-                ? 'bg-sky-600 hover:bg-sky-700 text-white'
+                ? 'bg-sky-600 hover:bg-sky-700 text-snow'
                 : 'bg-white/5 text-slate-600',
             )}
           >
@@ -270,7 +270,7 @@ export default function RewardsClient({
                       disabled={balance < item.point_cost || redeemingId === item.id}
                       className={cn(
                         'flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-medium transition-all',
-                        balance >= item.point_cost ? 'bg-amber-600 hover:bg-amber-700 text-white' : 'bg-white/5 text-slate-600'
+                        balance >= item.point_cost ? 'bg-amber-600 hover:bg-amber-700 text-snow' : 'bg-white/5 text-slate-600'
                       )}
                     >
                       {redeemingId === item.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Gift className="h-3.5 w-3.5" />}
@@ -288,7 +288,7 @@ export default function RewardsClient({
             className="flex-1 rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-white placeholder-slate-600" />
           <input placeholder="Cost" type="number" value={newCost} onChange={e => setNewCost(e.target.value)}
             className="w-20 rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-white placeholder-slate-600" />
-          <button onClick={addReward} disabled={adding} className="p-2 rounded-lg bg-amber-600 hover:bg-amber-700 text-white disabled:opacity-50">
+          <button onClick={addReward} disabled={adding} className="p-2 rounded-lg bg-amber-600 hover:bg-amber-700 text-snow disabled:opacity-50">
             {adding ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
           </button>
         </div>

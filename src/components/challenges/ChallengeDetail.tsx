@@ -69,7 +69,7 @@ function ProgressRing({ day, totalDays }: { day: number; totalDays: number }) {
   return (
     <div className="relative flex items-center justify-center w-24 h-24 shrink-0">
       <svg className="absolute inset-0 -rotate-90" width="96" height="96">
-        <circle cx="48" cy="48" r={r} fill="none" stroke="rgba(255,255,255,0.06)" strokeWidth="7" />
+        <circle cx="48" cy="48" r={r} fill="none" stroke="rgb(var(--c-white) / 0.06)" strokeWidth="7" />
         <circle
           cx="48" cy="48" r={r} fill="none"
           stroke="#a78bfa" strokeWidth="7"
@@ -534,7 +534,7 @@ function DeleteChallengeModal({ challenge, checkinCount, onClose, onDeleted }: {
           )}
           <div className="flex justify-end gap-2">
             <Button variant="ghost" onClick={onClose} disabled={deleting}>Cancel</Button>
-            <Button onClick={handleDelete} disabled={deleting} className="bg-red-600 text-white hover:bg-red-500">
+            <Button onClick={handleDelete} disabled={deleting} className="bg-red-600 text-snow hover:bg-red-500">
               {deleting ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Delete'}
             </Button>
           </div>
@@ -663,7 +663,7 @@ function EditChallengeModal({ challenge, onClose, onSaved }: {
             </div>
           )}
 
-          <Button className="w-full bg-purple-600 hover:bg-purple-700 text-white"
+          <Button className="w-full bg-purple-600 hover:bg-purple-700 text-snow"
             onClick={handleSave} disabled={saving || !title.trim()}>
             {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
             Save Changes
@@ -702,7 +702,7 @@ function DayEditModal({ date, dayNumber, checkin, saving, onSave, onClose }: {
             {checkin?.completed ? (
               <>
                 <Button
-                  className="flex-1 bg-purple-600 hover:bg-purple-700 text-white"
+                  className="flex-1 bg-purple-600 hover:bg-purple-700 text-snow"
                   disabled={saving}
                   onClick={() => onSave(true, reflection)}
                 >
@@ -719,7 +719,7 @@ function DayEditModal({ date, dayNumber, checkin, saving, onSave, onClose }: {
               </>
             ) : (
               <Button
-                className="flex-1 bg-purple-600 hover:bg-purple-700 text-white"
+                className="flex-1 bg-purple-600 hover:bg-purple-700 text-snow"
                 disabled={saving}
                 onClick={() => onSave(true, reflection)}
               >

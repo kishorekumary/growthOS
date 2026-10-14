@@ -1056,7 +1056,7 @@ export default function BookMindMap({ bookId, bookTitle, initialJson, onClose, r
   ]
 
   return (
-    <div className="fixed inset-0 z-[60] flex flex-col" style={{ background: '#090912' }}>
+    <div className="fixed inset-0 z-[60] flex flex-col" style={{ background: 'rgb(var(--c-surface-deep))' }}>
 
       {/* ── Header ── */}
       <div className="flex items-center gap-2 px-3 py-2.5 border-b border-white/8 bg-black/40 backdrop-blur shrink-0">
@@ -1107,8 +1107,8 @@ export default function BookMindMap({ bookId, bookTitle, initialJson, onClose, r
                 className={cn(
                   'flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium transition-all',
                   savedFlash
-                    ? 'bg-emerald-600 text-white'
-                    : 'bg-violet-600 hover:bg-violet-700 text-white disabled:opacity-50'
+                    ? 'bg-emerald-600 text-snow'
+                    : 'bg-violet-600 hover:bg-violet-700 text-snow disabled:opacity-50'
                 )}
               >
                 {saving ? <Loader2 className="h-3 w-3 animate-spin" />
@@ -1448,7 +1448,7 @@ export default function BookMindMap({ bookId, bookTitle, initialJson, onClose, r
               <button
                 onClick={handleImportAdd}
                 disabled={!importText.trim()}
-                className="flex-1 rounded-lg bg-violet-600 hover:bg-violet-700 disabled:opacity-40 py-2 text-xs font-medium text-white transition-colors"
+                className="flex-1 rounded-lg bg-violet-600 hover:bg-violet-700 disabled:opacity-40 py-2 text-xs font-medium text-snow transition-colors"
               >
                 Add branches
               </button>
@@ -1465,7 +1465,7 @@ export default function BookMindMap({ bookId, bookTitle, initialJson, onClose, r
           style={{
             width: canvasW,
             height: canvasH,
-            backgroundImage: 'radial-gradient(circle, rgba(255,255,255,0.035) 1px, transparent 1px)',
+            backgroundImage: 'radial-gradient(circle, rgb(var(--c-white) / 0.035) 1px, transparent 1px)',
             backgroundSize: '28px 28px',
           }}
           onDoubleClick={handleCanvasDoubleClick}
@@ -1807,7 +1807,7 @@ export default function BookMindMap({ bookId, bookTitle, initialJson, onClose, r
       </div>
 
       {/* ── Tree navigation bar (all screen sizes) ── */}
-      <div className="flex flex-col border-t border-white/8 bg-[#06060f]/95 backdrop-blur shrink-0">
+      <div className="flex flex-col border-t border-white/8 bg-surface-deep/95 backdrop-blur shrink-0">
         {traversalIdx === null ? (
           /* Dormant state — slim trigger */
           <button
@@ -1896,7 +1896,7 @@ export default function BookMindMap({ bookId, bookTitle, initialJson, onClose, r
       {summaryNode && (
         <div className="fixed inset-0 z-[55] flex pointer-events-none">
           <div className="pointer-events-auto fixed inset-0" onClick={() => setSummaryNode(null)} />
-          <div className="pointer-events-auto relative ml-auto w-80 h-full bg-[#0d0d1a] border-l border-white/[0.08] flex flex-col shadow-2xl">
+          <div className="pointer-events-auto relative ml-auto w-80 h-full bg-surface border-l border-white/[0.08] flex flex-col shadow-2xl">
             <div className="flex items-center gap-3 px-4 py-3 border-b border-white/[0.08] shrink-0">
               <Sparkles className="h-3.5 w-3.5 text-violet-400 shrink-0" />
               <span className="text-sm font-semibold text-white truncate flex-1">{summaryNode.label}</span>
@@ -1951,7 +1951,7 @@ export default function BookMindMap({ bookId, bookTitle, initialJson, onClose, r
               </button>
               <button
                 onClick={async () => { setShowCloseConfirm(false); await save(); onClose() }}
-                className="flex-1 rounded-xl bg-violet-600 hover:bg-violet-500 py-2 text-sm font-medium text-white transition-colors"
+                className="flex-1 rounded-xl bg-violet-600 hover:bg-violet-500 py-2 text-sm font-medium text-snow transition-colors"
               >
                 Save & Close
               </button>

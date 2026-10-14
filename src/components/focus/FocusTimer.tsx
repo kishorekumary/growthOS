@@ -52,7 +52,7 @@ function CircularTimer({ progress, label, seconds, color }: {
   return (
     <div className="relative">
       <svg width="210" height="210" className="-rotate-90">
-        <circle cx="105" cy="105" r={r} fill="none" stroke="rgba(255,255,255,0.05)" strokeWidth="12" />
+        <circle cx="105" cy="105" r={r} fill="none" stroke="rgb(var(--c-white) / 0.05)" strokeWidth="12" />
         <circle cx="105" cy="105" r={r} fill="none" stroke="currentColor" strokeWidth="12" strokeLinecap="round"
           strokeDasharray={circ} strokeDashoffset={offset}
           className={cn('transition-[stroke-dashoffset] duration-500', color)}
@@ -154,7 +154,7 @@ function SubTimerPanel() {
         <div className="flex items-center gap-3">
           <div className="relative shrink-0">
             <svg width="50" height="50" className="-rotate-90">
-              <circle cx="25" cy="25" r={r} fill="none" stroke="rgba(255,255,255,0.06)" strokeWidth="4" />
+              <circle cx="25" cy="25" r={r} fill="none" stroke="rgb(var(--c-white) / 0.06)" strokeWidth="4" />
               <circle cx="25" cy="25" r={r} fill="none"
                 stroke={sub.done ? '#10b981' : sub.running ? '#f59e0b' : '#64748b'}
                 strokeWidth="4" strokeLinecap="round"
@@ -556,7 +556,7 @@ export default function FocusTimer() {
             </div>
             <p className="text-xl font-bold text-white">Session Complete!</p>
             <p className="text-sm text-slate-400">All {runSeq.steps.length} steps finished 🎉</p>
-            <Button onClick={stopTimer} className="mt-2 bg-violet-600 hover:bg-violet-700 text-white px-8">Done</Button>
+            <Button onClick={stopTimer} className="mt-2 bg-violet-600 hover:bg-violet-700 text-snow px-8">Done</Button>
           </div>
         ) : (
           <>
@@ -679,7 +679,7 @@ export default function FocusTimer() {
         )}
 
         <Button onClick={saveSequence} disabled={saving || !canSave}
-          className="w-full bg-violet-600 hover:bg-violet-700 text-white">
+          className="w-full bg-violet-600 hover:bg-violet-700 text-snow">
           {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
           {editingId ? 'Save Changes' : 'Save Sequence'}
         </Button>
@@ -694,7 +694,7 @@ export default function FocusTimer() {
         <p className="text-xs text-slate-500">
           {sequences.length} saved sequence{sequences.length !== 1 ? 's' : ''}
         </p>
-        <Button size="sm" onClick={openNew} className="bg-violet-600 hover:bg-violet-700 text-white gap-1.5">
+        <Button size="sm" onClick={openNew} className="bg-violet-600 hover:bg-violet-700 text-snow gap-1.5">
           <Plus className="h-4 w-4" /> New Sequence
         </Button>
       </div>
@@ -768,7 +768,7 @@ export default function FocusTimer() {
                       <Trash2 className="h-3.5 w-3.5" />
                     </button>
                     <Button size="sm" onClick={() => startSequence(seq)}
-                      className="bg-violet-600 hover:bg-violet-700 text-white gap-1 ml-1">
+                      className="bg-violet-600 hover:bg-violet-700 text-snow gap-1 ml-1">
                       <Play className="h-3.5 w-3.5" /> Start
                     </Button>
                   </div>

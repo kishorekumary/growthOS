@@ -322,7 +322,7 @@ function MealPanel({ onDone }: { onDone: () => void }) {
       )}
 
       <button onClick={handleSave} disabled={saving || !foodName.trim() || !calories}
-        className="w-full flex items-center justify-center gap-2 rounded-xl bg-amber-600 hover:bg-amber-700 disabled:opacity-50 disabled:cursor-not-allowed px-4 py-3 text-sm font-semibold text-white transition-all">
+        className="w-full flex items-center justify-center gap-2 rounded-xl bg-amber-600 hover:bg-amber-700 disabled:opacity-50 disabled:cursor-not-allowed px-4 py-3 text-sm font-semibold text-snow transition-all">
         {saving && <Loader2 className="h-4 w-4 animate-spin" />}
         Log Intake
       </button>
@@ -428,7 +428,7 @@ function WorkoutPanel({ onDone }: { onDone: () => void }) {
       <button
         onClick={handleSave}
         disabled={saving || (workoutType !== 'rest' && !duration)}
-        className="w-full flex items-center justify-center gap-2 rounded-xl bg-sky-600 hover:bg-sky-700 disabled:opacity-50 disabled:cursor-not-allowed px-4 py-3 text-sm font-semibold text-white transition-all"
+        className="w-full flex items-center justify-center gap-2 rounded-xl bg-sky-600 hover:bg-sky-700 disabled:opacity-50 disabled:cursor-not-allowed px-4 py-3 text-sm font-semibold text-snow transition-all"
       >
         {saving && <Loader2 className="h-4 w-4 animate-spin" />}
         Log Workout
@@ -521,7 +521,7 @@ function SleepPanel({ onDone }: { onDone: () => void }) {
       </div>
 
       <button onClick={handleSave} disabled={saving}
-        className="w-full flex items-center justify-center gap-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed px-4 py-3 text-sm font-semibold text-white transition-all">
+        className="w-full flex items-center justify-center gap-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed px-4 py-3 text-sm font-semibold text-snow transition-all">
         {saving && <Loader2 className="h-4 w-4 animate-spin" />}
         Log Sleep
       </button>
@@ -738,7 +738,7 @@ function HabitPanel() {
               <button
                 onClick={() => markDoneForYesterday(habit)}
                 disabled={catchUpId === habit.id}
-                className="shrink-0 flex items-center gap-1 rounded-md bg-amber-600 hover:bg-amber-700 px-2 py-1 text-[11px] font-medium text-white transition-colors disabled:opacity-50"
+                className="shrink-0 flex items-center gap-1 rounded-md bg-amber-600 hover:bg-amber-700 px-2 py-1 text-[11px] font-medium text-snow transition-colors disabled:opacity-50"
               >
                 {catchUpId === habit.id ? <Loader2 className="h-3 w-3 animate-spin" /> : <Check className="h-3 w-3" />}
                 Mark done
@@ -892,7 +892,7 @@ function FinancePanel({ onDone }: { onDone: () => void }) {
       <button
         onClick={handleSave}
         disabled={saving || !amount || Number(amount) <= 0}
-        className="w-full flex items-center justify-center gap-2 rounded-xl bg-violet-600 hover:bg-violet-700 disabled:opacity-50 disabled:cursor-not-allowed px-4 py-3 text-sm font-semibold text-white transition-all"
+        className="w-full flex items-center justify-center gap-2 rounded-xl bg-violet-600 hover:bg-violet-700 disabled:opacity-50 disabled:cursor-not-allowed px-4 py-3 text-sm font-semibold text-snow transition-all"
       >
         {saving && <Loader2 className="h-4 w-4 animate-spin" />}
         Log Transaction
@@ -980,7 +980,7 @@ function JournalPanel({ onDone }: { onDone: () => void }) {
       <button
         onClick={handleSave}
         disabled={saving || !content.trim()}
-        className="w-full flex items-center justify-center gap-2 rounded-xl bg-rose-600 hover:bg-rose-700 disabled:opacity-50 disabled:cursor-not-allowed px-4 py-3 text-sm font-semibold text-white transition-all"
+        className="w-full flex items-center justify-center gap-2 rounded-xl bg-rose-600 hover:bg-rose-700 disabled:opacity-50 disabled:cursor-not-allowed px-4 py-3 text-sm font-semibold text-snow transition-all"
       >
         {saving && <Loader2 className="h-4 w-4 animate-spin" />}
         Save Entry
@@ -1387,7 +1387,7 @@ function VoicePanel({ onDone }: { onDone: () => void }) {
           <div className="flex gap-2">
             <button
               onClick={confirmLog}
-              className="flex-1 flex items-center justify-center gap-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 px-4 py-3 text-sm font-semibold text-white transition-all"
+              className="flex-1 flex items-center justify-center gap-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 px-4 py-3 text-sm font-semibold text-snow transition-all"
             >
               <Check className="h-4 w-4" /> Log it
             </button>
@@ -1487,7 +1487,7 @@ function TaskPanel({ onDone }: { onDone: () => void }) {
       <button
         onClick={handleSave}
         disabled={saving || !title.trim()}
-        className="w-full flex items-center justify-center gap-2 rounded-xl bg-orange-600 hover:bg-orange-700 disabled:opacity-50 disabled:cursor-not-allowed px-4 py-3 text-sm font-semibold text-white transition-all"
+        className="w-full flex items-center justify-center gap-2 rounded-xl bg-orange-600 hover:bg-orange-700 disabled:opacity-50 disabled:cursor-not-allowed px-4 py-3 text-sm font-semibold text-snow transition-all"
       >
         {saving && <Loader2 className="h-4 w-4 animate-spin" />}
         Add Task

@@ -48,7 +48,7 @@ export default async function RootPage() {
         <div className="flex flex-col gap-3 sm:flex-row sm:justify-center">
           <Link
             href="/login"
-            className="rounded-xl bg-indigo-600 px-8 py-3 text-sm font-semibold text-white hover:bg-indigo-500 transition-colors shadow-lg shadow-indigo-500/20"
+            className="rounded-xl bg-indigo-600 px-8 py-3 text-sm font-semibold text-snow hover:bg-indigo-500 transition-colors shadow-lg shadow-indigo-500/20"
           >
             Log in
           </Link>

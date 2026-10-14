@@ -117,7 +117,7 @@ function AddBookModal({ onAdd }: { onAdd: () => void }) {
   return (
     <Dialog open={open} onOpenChange={v => { setOpen(v); if (!v) setError(null) }}>
       <DialogTrigger asChild>
-        <Button size="sm" className="bg-violet-600 hover:bg-violet-700 text-white gap-1.5">
+        <Button size="sm" className="bg-violet-600 hover:bg-violet-700 text-snow gap-1.5">
           <Plus className="h-4 w-4" /> Add Book
         </Button>
       </DialogTrigger>
@@ -176,7 +176,7 @@ function AddBookModal({ onAdd }: { onAdd: () => void }) {
           )}
 
           <Button
-            className="w-full bg-violet-600 hover:bg-violet-700 text-white"
+            className="w-full bg-violet-600 hover:bg-violet-700 text-snow"
             onClick={handleAdd}
             disabled={saving || !title.trim()}
           >
@@ -528,7 +528,7 @@ export default function ReadingList() {
             onClick={() => setActiveStatus(value)}
             className={cn(
               'flex-1 rounded-lg py-2 text-center text-xs font-medium transition-all',
-              activeStatus === value ? 'bg-violet-600 text-white shadow-sm' : 'text-slate-400 hover:text-white'
+              activeStatus === value ? 'bg-violet-600 text-snow shadow-sm' : 'text-slate-400 hover:text-white'
             )}
           >
             {icon} {label}
@@ -743,7 +743,7 @@ export default function ReadingList() {
               Cancel
             </Button>
             <Button
-              className="flex-1 bg-red-600 hover:bg-red-700 text-white"
+              className="flex-1 bg-red-600 hover:bg-red-700 text-snow"
               onClick={handleDelete}
               disabled={deleting}
             >

@@ -629,7 +629,7 @@ export default function AdminDashboard({
               <button
                 onClick={addGlobalHabit}
                 disabled={addingHabit || !newHabit.habit_name.trim()}
-                className="flex items-center gap-1.5 px-4 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white text-sm font-medium transition-colors"
+                className="flex items-center gap-1.5 px-4 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-snow text-sm font-medium transition-colors"
               >
                 {addingHabit ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
                 Add
@@ -680,7 +680,7 @@ export default function AdminDashboard({
       {/* Message compose modal */}
       {msgTarget && (
         <div className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-          <div className="w-full max-w-md rounded-2xl border border-white/10 bg-[#0d0d1a] shadow-2xl p-5 space-y-4">
+          <div className="w-full max-w-md rounded-2xl border border-white/10 bg-surface shadow-2xl p-5 space-y-4">
             <div className="flex items-center justify-between">
               <div>
                 <h3 className="text-base font-semibold text-white">Send Message</h3>
@@ -726,7 +726,7 @@ export default function AdminDashboard({
                 <button
                   onClick={sendMessage}
                   disabled={msgSending || !msgTitle.trim() || !msgBody.trim()}
-                  className="w-full flex items-center justify-center gap-2 rounded-xl bg-violet-600 hover:bg-violet-500 disabled:opacity-40 disabled:cursor-not-allowed px-4 py-3 text-sm font-medium text-white transition-colors"
+                  className="w-full flex items-center justify-center gap-2 rounded-xl bg-violet-600 hover:bg-violet-500 disabled:opacity-40 disabled:cursor-not-allowed px-4 py-3 text-sm font-medium text-snow transition-colors"
                 >
                   {msgSending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
                   {msgSending ? 'Sending…' : 'Send Message'}
@@ -740,7 +740,7 @@ export default function AdminDashboard({
       {/* Edit global habit modal */}
       {editingHabit && (
         <div className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-          <div className="w-full max-w-md rounded-2xl border border-white/10 bg-[#0d0d1a] shadow-2xl p-5 space-y-4">
+          <div className="w-full max-w-md rounded-2xl border border-white/10 bg-surface shadow-2xl p-5 space-y-4">
             <div className="flex items-center justify-between">
               <h3 className="text-base font-semibold text-white">Edit Global Habit</h3>
               <button onClick={() => { setEditingHabit(null); setEditError(null) }} className="text-slate-500 hover:text-white transition-colors">
@@ -790,7 +790,7 @@ export default function AdminDashboard({
             <button
               onClick={() => saveGlobalHabitEdit(editingHabit)}
               disabled={savingEdit || !editingHabit.habit_name.trim()}
-              className="w-full flex items-center justify-center gap-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 disabled:opacity-40 disabled:cursor-not-allowed px-4 py-3 text-sm font-medium text-white transition-colors"
+              className="w-full flex items-center justify-center gap-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 disabled:opacity-40 disabled:cursor-not-allowed px-4 py-3 text-sm font-medium text-snow transition-colors"
             >
               {savingEdit ? <Loader2 className="h-4 w-4 animate-spin" /> : <Pencil className="h-4 w-4" />}
               {savingEdit ? 'Saving…' : 'Save Changes'}

@@ -82,7 +82,7 @@ export default function PlannerItemRow({
         />
         <div className="flex justify-end gap-2">
           <button type="button" onClick={() => setEditing(false)} className="px-2 py-1 text-xs text-slate-500 hover:text-white">Cancel</button>
-          <button type="button" onClick={save} className="rounded-md bg-violet-600 px-3 py-1 text-xs font-medium text-white hover:bg-violet-500">Save</button>
+          <button type="button" onClick={save} className="rounded-md bg-violet-600 px-3 py-1 text-xs font-medium text-snow hover:bg-violet-500">Save</button>
         </div>
       </div>
     )

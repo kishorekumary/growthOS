@@ -14,7 +14,7 @@ export default function CheckInPrompt({ decision, checkIn, onAnswer }: {
       <p className="text-xs text-amber-200">{CHECK_IN_PROMPT[checkIn]}</p>
       <div className="flex gap-1.5">
         <button type="button" onClick={() => onAnswer(decision, checkIn, true)}
-          className="rounded-md bg-emerald-600 hover:bg-emerald-700 px-2.5 py-1 text-[11px] font-semibold text-white">
+          className="rounded-md bg-emerald-600 hover:bg-emerald-700 px-2.5 py-1 text-[11px] font-semibold text-snow">
           {yes}
         </button>
         <button type="button" onClick={() => onAnswer(decision, checkIn, false)}

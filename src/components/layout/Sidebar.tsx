@@ -50,7 +50,7 @@ export default function Sidebar({ userName, userEmail, avatarUrl, isAdmin = fals
   const initials = userName.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase()
 
   return (
-    <aside className="hidden md:flex fixed inset-y-0 left-0 z-50 w-64 flex-col bg-[#06060f] border-r border-white/[0.06]">
+    <aside className="hidden md:flex fixed inset-y-0 left-0 z-50 w-64 flex-col bg-surface-deep border-r border-white/[0.06]">
       {/* Logo */}
       <Link
         href="/dashboard"

@@ -39,12 +39,12 @@ function scoreLabel(s: number) {
   return 'In Great Shape'
 }
 
-const TICK = { fill: '#94a3b8', fontSize: 11 }
+const TICK = { fill: 'rgb(var(--c-slate-400))', fontSize: 11 }
 const TOOLTIP_STYLE = {
-  backgroundColor: '#0f172a',
-  border: '1px solid rgba(255,255,255,0.1)',
+  backgroundColor: 'rgb(var(--c-slate-900))',
+  border: '1px solid rgb(var(--c-white) / 0.1)',
   borderRadius: 8,
-  color: '#e2e8f0',
+  color: 'rgb(var(--c-slate-200))',
   fontSize: 12,
 }
 const BAR_COLORS = ['#a78bfa', '#818cf8', '#6366f1', '#4f46e5', '#4338ca', '#3730a3']

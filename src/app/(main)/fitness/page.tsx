@@ -51,7 +51,7 @@ export default function FitnessPage() {
             className={cn(
               'flex-shrink-0 rounded-lg px-3 py-2 text-center text-sm font-medium transition-all whitespace-nowrap',
               tab === t
-                ? 'bg-violet-600 text-white shadow-sm'
+                ? 'bg-violet-600 text-snow shadow-sm'
                 : 'text-slate-400 hover:text-white'
             )}
           >

@@ -79,7 +79,7 @@ export default function MonthlyRetro() {
           <button
             onClick={() => generate()}
             disabled={loading}
-            className="flex items-center gap-2 rounded-xl bg-rose-600 hover:bg-rose-500 disabled:opacity-50 px-6 py-2.5 text-sm font-medium text-white transition-colors"
+            className="flex items-center gap-2 rounded-xl bg-rose-600 hover:bg-rose-500 disabled:opacity-50 px-6 py-2.5 text-sm font-medium text-snow transition-colors"
           >
             <Sparkles className="h-4 w-4" />
             Generate Retrospective

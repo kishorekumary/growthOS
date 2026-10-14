@@ -74,7 +74,7 @@ export default function DecisionLog() {
           type="button"
           onClick={save}
           disabled={!statement.trim() || !action.trim() || saving}
-          className="flex items-center gap-1.5 rounded-lg bg-amber-600 hover:bg-amber-700 disabled:opacity-40 px-4 py-2 text-sm font-semibold text-white"
+          className="flex items-center gap-1.5 rounded-lg bg-amber-600 hover:bg-amber-700 disabled:opacity-40 px-4 py-2 text-sm font-semibold text-snow"
         >
           {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Zap className="h-4 w-4" />}
           Commit to this decision

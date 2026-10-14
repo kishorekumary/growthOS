@@ -111,7 +111,7 @@ export default function PerfectDayCelebration() {
       role="dialog"
       aria-label="Perfect day"
       onClick={close}
-      className="perfect-day-overlay fixed inset-0 z-[400] flex items-center justify-center overflow-hidden bg-[#06060f]/80 p-4 backdrop-blur-sm"
+      className="perfect-day-overlay fixed inset-0 z-[400] flex items-center justify-center overflow-hidden bg-surface-deep/80 p-4 backdrop-blur-sm"
     >
       {motion && (
         <>

@@ -273,7 +273,7 @@ function EntryEditor({
           size="sm"
           onClick={handleSave}
           disabled={saving || !content.trim()}
-          className="bg-violet-600 hover:bg-violet-700 text-white"
+          className="bg-violet-600 hover:bg-violet-700 text-snow"
         >
           {saving
             ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
@@ -419,7 +419,7 @@ export default function Journal() {
           <Button
             size="sm"
             onClick={() => setEditing(true)}
-            className="bg-violet-600 hover:bg-violet-700 text-white gap-1.5"
+            className="bg-violet-600 hover:bg-violet-700 text-snow gap-1.5"
           >
             <Pencil className="h-4 w-4" /> New Entry
           </Button>

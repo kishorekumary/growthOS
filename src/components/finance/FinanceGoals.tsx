@@ -62,7 +62,7 @@ function AddGoalModal({ onAdd }: { onAdd: () => void }) {
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        <Button size="sm" className="bg-violet-600 hover:bg-violet-700 text-white gap-1.5">
+        <Button size="sm" className="bg-violet-600 hover:bg-violet-700 text-snow gap-1.5">
           <Plus className="h-4 w-4" /> Add Goal
         </Button>
       </DialogTrigger>
@@ -124,7 +124,7 @@ function AddGoalModal({ onAdd }: { onAdd: () => void }) {
             </div>
           </div>
           <Button
-            className="w-full bg-violet-600 hover:bg-violet-700 text-white"
+            className="w-full bg-violet-600 hover:bg-violet-700 text-snow"
             onClick={handleAdd}
             disabled={saving || !name.trim() || !target}
           >
@@ -197,7 +197,7 @@ function AddMoneyModal({ goal, onUpdate }: { goal: Goal; onUpdate: () => void })
             />
           </div>
           <Button
-            className="w-full bg-violet-600 hover:bg-violet-700 text-white"
+            className="w-full bg-violet-600 hover:bg-violet-700 text-snow"
             onClick={handleAdd}
             disabled={saving || !amount}
           >

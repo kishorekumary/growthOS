@@ -363,7 +363,7 @@ export default function RoutineBuilder() {
           </div>
           <div className="flex gap-2">
             <button onClick={() => setCreating(false)} className="flex-1 rounded-lg border border-white/10 py-2 text-xs text-slate-400 hover:bg-white/5 transition-colors">Cancel</button>
-            <button onClick={createRoutine} disabled={!newName.trim()} className="flex-1 rounded-lg bg-violet-600 hover:bg-violet-700 disabled:opacity-40 py-2 text-xs font-medium text-white transition-colors">Create</button>
+            <button onClick={createRoutine} disabled={!newName.trim()} className="flex-1 rounded-lg bg-violet-600 hover:bg-violet-700 disabled:opacity-40 py-2 text-xs font-medium text-snow transition-colors">Create</button>
           </div>
         </div>
       ) : (

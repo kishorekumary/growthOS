@@ -85,7 +85,7 @@ function BreathingExercise() {
           <div className="absolute w-16 h-16 rounded-full bg-blue-400/25 border border-blue-300/40" />
         </div>
 
-        <Button onClick={() => { setCycles(0); setRunning(true) }} className="bg-blue-600 hover:bg-blue-700 text-white px-8">
+        <Button onClick={() => { setCycles(0); setRunning(true) }} className="bg-blue-600 hover:bg-blue-700 text-snow px-8">
           <Wind className="mr-2 h-4 w-4" /> Begin
         </Button>
       </div>
@@ -283,7 +283,7 @@ function AIResetMessage() {
         <Button
           onClick={generate}
           disabled={loading}
-          className="bg-violet-600 hover:bg-violet-700 text-white"
+          className="bg-violet-600 hover:bg-violet-700 text-snow"
         >
           {loading
             ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Thinking...</>
@@ -585,7 +585,7 @@ function GroundingExercise() {
           </div>
         ))}
       </div>
-      <Button onClick={advance} className="bg-teal-600 hover:bg-teal-700 text-white px-10">
+      <Button onClick={advance} className="bg-teal-600 hover:bg-teal-700 text-snow px-10">
         Begin
       </Button>
     </div>
@@ -657,7 +657,7 @@ function GroundingExercise() {
       <Button
         onClick={advance}
         disabled={!canAdvance()}
-        className="w-full bg-teal-600 hover:bg-teal-700 disabled:opacity-40 text-white"
+        className="w-full bg-teal-600 hover:bg-teal-700 disabled:opacity-40 text-snow"
       >
         {isLast ? '✓ Complete' : `Next →`}
       </Button>

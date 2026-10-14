@@ -1,6 +1,8 @@
 import type { Metadata, Viewport } from 'next'
 import { Plus_Jakarta_Sans } from 'next/font/google'
 import './globals.css'
+import ThemeWatcher from '@/components/layout/ThemeWatcher'
+import { THEME_COLOR, THEME_INIT_SCRIPT } from '@/lib/theme'
 
 const jakarta = Plus_Jakarta_Sans({
   subsets: ['latin'],
@@ -29,7 +31,10 @@ export const metadata: Metadata = {
 }
 
 export const viewport: Viewport = {
-  themeColor: '#07071a',
+  themeColor: [
+    { media: '(prefers-color-scheme: dark)',  color: THEME_COLOR.dark },
+    { media: '(prefers-color-scheme: light)', color: THEME_COLOR.light },
+  ],
   width: 'device-width',
   initialScale: 1,
   minimumScale: 1,
@@ -38,8 +43,16 @@ export const viewport: Viewport = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en" className={jakarta.variable}>
-      <body className="font-sans" suppressHydrationWarning>{children}</body>
+    // suppressHydrationWarning: THEME_INIT_SCRIPT adds the theme class
+    // before React hydrates.
+    <html lang="en" className={jakarta.variable} suppressHydrationWarning>
+      <head>
+        <script dangerouslySetInnerHTML={{ __html: THEME_INIT_SCRIPT }} />
+      </head>
+      <body className="font-sans" suppressHydrationWarning>
+        <ThemeWatcher />
+        {children}
+      </body>
     </html>
   )
 }

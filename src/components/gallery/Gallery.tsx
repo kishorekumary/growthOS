@@ -235,7 +235,7 @@ export default function Gallery({ initialItems, userId, isAdmin = false }: { ini
         <button
           onClick={() => fileRef.current?.click()}
           disabled={uploading}
-          className="flex shrink-0 items-center gap-2 rounded-xl bg-violet-600 hover:bg-violet-700 disabled:opacity-50 px-4 py-2 text-sm font-medium text-white transition-colors"
+          className="flex shrink-0 items-center gap-2 rounded-xl bg-violet-600 hover:bg-violet-700 disabled:opacity-50 px-4 py-2 text-sm font-medium text-snow transition-colors"
         >
           {uploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
           Upload
@@ -490,7 +490,7 @@ export default function Gallery({ initialItems, userId, isAdmin = false }: { ini
                 <iframe
                   src={lightboxItem.url}
                   title={lightboxItem.caption ?? 'PDF'}
-                  className="w-full rounded-xl border border-white/10 bg-white"
+                  className="w-full rounded-xl border border-white/10 bg-snow"
                   style={{ height: '65vh' }}
                 />
                 <a

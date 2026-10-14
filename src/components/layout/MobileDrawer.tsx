@@ -77,7 +77,7 @@ export default function MobileDrawer({ userName, userEmail, avatarUrl, isAdmin }
       {/* Drawer panel */}
       <aside
         className={cn(
-          'fixed inset-y-0 left-0 z-[61] flex w-72 flex-col bg-[#06060f] border-r border-white/[0.06] shadow-2xl transition-transform duration-300 ease-[cubic-bezier(0.32,0.72,0,1)] md:hidden',
+          'fixed inset-y-0 left-0 z-[61] flex w-72 flex-col bg-surface-deep border-r border-white/[0.06] shadow-2xl transition-transform duration-300 ease-[cubic-bezier(0.32,0.72,0,1)] md:hidden',
           open ? 'translate-x-0' : '-translate-x-full',
         )}
       >

@@ -348,7 +348,7 @@ export default function ChallengeApp() {
           <button
             onClick={createChallenge}
             disabled={saving || !title.trim()}
-            className="flex w-full items-center justify-center gap-2 rounded-xl bg-purple-600 hover:bg-purple-500 disabled:opacity-50 py-3 text-sm font-semibold text-white transition-colors"
+            className="flex w-full items-center justify-center gap-2 rounded-xl bg-purple-600 hover:bg-purple-500 disabled:opacity-50 py-3 text-sm font-semibold text-snow transition-colors"
           >
             {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Flame className="h-4 w-4" />}
             {saving ? 'Starting challenge…' : `Start ${durationDays}-Day Challenge`}
@@ -432,7 +432,7 @@ export default function ChallengeApp() {
           </p>
           <button
             onClick={() => setView('create')}
-            className="mt-2 inline-flex items-center gap-2 rounded-xl bg-purple-600 hover:bg-purple-500 px-5 py-2.5 text-sm font-medium text-white transition-colors"
+            className="mt-2 inline-flex items-center gap-2 rounded-xl bg-purple-600 hover:bg-purple-500 px-5 py-2.5 text-sm font-medium text-snow transition-colors"
           >
             <Flame className="h-4 w-4" />
             Start your first challenge

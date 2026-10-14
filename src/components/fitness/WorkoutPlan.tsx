@@ -154,7 +154,7 @@ export default function WorkoutPlan() {
             'gap-1.5',
             plan
               ? 'border border-white/20 bg-white/5 text-white hover:bg-white/10'
-              : 'bg-violet-600 hover:bg-violet-700 text-white'
+              : 'bg-violet-600 hover:bg-violet-700 text-snow'
           )}
           variant={plan ? 'outline' : 'default'}
         >

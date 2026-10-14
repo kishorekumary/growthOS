@@ -216,7 +216,7 @@ function TxnModal({ initial, onSave, trigger }: {
             />
           </div>
           {error && <p className="rounded-lg border border-red-500/20 bg-red-500/10 px-3 py-2 text-xs text-red-400">{error}</p>}
-          <Button className="w-full bg-violet-600 hover:bg-violet-700 text-white" onClick={handleSave} disabled={saving || !amount}>
+          <Button className="w-full bg-violet-600 hover:bg-violet-700 text-snow" onClick={handleSave} disabled={saving || !amount}>
             {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
             {isEdit ? 'Save Changes' : 'Add Transaction'}
           </Button>
@@ -295,7 +295,7 @@ function SyncBankEmailsModal({ onSynced }: { onSynced: () => void }) {
           )}
 
           <Button
-            className="w-full bg-violet-600 hover:bg-violet-700 text-white"
+            className="w-full bg-violet-600 hover:bg-violet-700 text-snow"
             onClick={runSync}
             disabled={syncing || !days || Number(days) < 1}
           >
@@ -360,7 +360,7 @@ export default function ExpenseTracker({ start, end }: { start: string; end: str
         <div className="flex items-center gap-2">
           <SyncBankEmailsModal onSynced={fetchTxns} />
           <TxnModal onSave={fetchTxns} trigger={
-            <Button size="sm" className="bg-violet-600 hover:bg-violet-700 text-white gap-1.5">
+            <Button size="sm" className="bg-violet-600 hover:bg-violet-700 text-snow gap-1.5">
               <Plus className="h-4 w-4" /> Add Transaction
             </Button>
           } />

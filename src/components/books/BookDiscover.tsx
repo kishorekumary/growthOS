@@ -110,7 +110,7 @@ export default function BookDiscover() {
         <Button
           onClick={getRecommendations}
           disabled={loading}
-          className="bg-violet-600 hover:bg-violet-700 text-white gap-1.5"
+          className="bg-violet-600 hover:bg-violet-700 text-snow gap-1.5"
         >
           {loading
             ? <><Loader2 className="h-4 w-4 animate-spin" /> Finding books...</>
@@ -160,7 +160,7 @@ export default function BookDiscover() {
                     ? 'bg-emerald-600/20 text-emerald-300 border border-emerald-500/30 cursor-default'
                     : saveErrors[i]
                       ? 'bg-red-600/20 text-red-300 border border-red-500/30'
-                      : 'bg-violet-600 hover:bg-violet-700 text-white'
+                      : 'bg-violet-600 hover:bg-violet-700 text-snow'
                 )}
               >
                 {saving === i

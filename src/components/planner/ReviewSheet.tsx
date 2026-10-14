@@ -53,7 +53,7 @@ export default function ReviewSheet({
                       <span className="shrink-0 text-[11px] text-slate-500">{periodLabel(type, item.period_start, today)}</span>
                     </div>
                     <div className="flex flex-wrap gap-1.5">
-                      <button type="button" onClick={() => onMoveToNow(item)} className={`${BTN} bg-violet-600 text-white hover:bg-violet-500`}>
+                      <button type="button" onClick={() => onMoveToNow(item)} className={`${BTN} bg-violet-600 text-snow hover:bg-violet-500`}>
                         Move to now
                       </button>
                       <DropdownMenu.Root>

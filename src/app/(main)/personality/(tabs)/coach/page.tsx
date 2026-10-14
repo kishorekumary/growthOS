@@ -50,7 +50,7 @@ export default function CoachPage() {
         </div>
         <Button
           onClick={() => router.push('/personality/assessment')}
-          className="bg-violet-600 hover:bg-violet-700 text-white gap-2"
+          className="bg-violet-600 hover:bg-violet-700 text-snow gap-2"
         >
           Take the assessment
           <ArrowRight className="h-4 w-4" />

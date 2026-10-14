@@ -263,7 +263,7 @@ export default function DailyPractice() {
         <p className="text-slate-400 text-sm leading-relaxed max-w-sm mx-auto">
           Set your personal pledge, affirmations, and gratitude — words that ground and inspire you every day.
         </p>
-        <Button onClick={openEdit} className="bg-violet-600 hover:bg-violet-700 text-white mt-1">
+        <Button onClick={openEdit} className="bg-violet-600 hover:bg-violet-700 text-snow mt-1">
           <Plus className="mr-2 h-4 w-4" /> Set Up Daily Practice
         </Button>
       </div>
@@ -336,7 +336,7 @@ export default function DailyPractice() {
         </div>
 
         <div className="flex gap-2 pt-1">
-          <Button onClick={save} disabled={saving} className="bg-violet-600 hover:bg-violet-700 text-white flex-1">
+          <Button onClick={save} disabled={saving} className="bg-violet-600 hover:bg-violet-700 text-snow flex-1">
             {saving ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Saving...</>
                     : <><Save className="mr-2 h-4 w-4" /> Save</>}
           </Button>

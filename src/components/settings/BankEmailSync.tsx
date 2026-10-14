@@ -115,7 +115,7 @@ export default function BankEmailSync() {
               <Button
                 size="sm"
                 onClick={() => { window.location.href = '/api/integrations/gmail/connect' }}
-                className="bg-violet-600 hover:bg-violet-700 text-white text-xs h-8"
+                className="bg-violet-600 hover:bg-violet-700 text-snow text-xs h-8"
               >
                 <RefreshCw className="mr-1.5 h-3.5 w-3.5" /> Reconnect Gmail
               </Button>
@@ -138,7 +138,7 @@ export default function BankEmailSync() {
           <Button
             size="sm"
             onClick={() => { window.location.href = '/api/integrations/gmail/connect' }}
-            className="bg-violet-600 hover:bg-violet-700 text-white text-xs h-8"
+            className="bg-violet-600 hover:bg-violet-700 text-snow text-xs h-8"
           >
             <Mail className="mr-1.5 h-3.5 w-3.5" /> Connect Gmail
           </Button>

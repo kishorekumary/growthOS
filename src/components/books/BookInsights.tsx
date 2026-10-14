@@ -199,7 +199,7 @@ export default function BookInsights({
     : activeStoryEdit && !stories.some(s => s.id === editingId)
 
   return (
-    <div className="fixed inset-0 z-50 flex flex-col bg-[#07070f]/97 backdrop-blur-md">
+    <div className="fixed inset-0 z-50 flex flex-col bg-surface-deep/97 backdrop-blur-md">
       {/* ── Header ── */}
       <div className="shrink-0 border-b border-white/8">
         {/* Row 1: title + close — always one row, close always reachable */}

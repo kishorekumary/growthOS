@@ -184,7 +184,7 @@ function AddGoalModal({
     <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogTrigger asChild>
         {trigger ?? (
-          <Button size="sm" className="bg-violet-600 hover:bg-violet-700 text-white gap-1.5">
+          <Button size="sm" className="bg-violet-600 hover:bg-violet-700 text-snow gap-1.5">
             <Plus className="h-4 w-4" /> Add Goal
           </Button>
         )}
@@ -296,7 +296,7 @@ function AddGoalModal({
           )}
 
           <Button
-            className="w-full bg-violet-600 hover:bg-violet-700 text-white"
+            className="w-full bg-violet-600 hover:bg-violet-700 text-snow"
             onClick={handleAdd}
             disabled={saving || !title.trim()}
           >
@@ -473,7 +473,7 @@ function EditGoalModal({
           )}
 
           <Button
-            className="w-full bg-violet-600 hover:bg-violet-700 text-white"
+            className="w-full bg-violet-600 hover:bg-violet-700 text-snow"
             onClick={handleSave}
             disabled={saving || !title.trim()}
           >
@@ -622,7 +622,7 @@ function GoalVisionModal({ goal, onImageSaved }: { goal: Goal; onImageSaved: (ur
           <Button
             onClick={generate}
             disabled={generating}
-            className="w-full bg-violet-600 hover:bg-violet-700 text-white gap-2"
+            className="w-full bg-violet-600 hover:bg-violet-700 text-snow gap-2"
           >
             {generating
               ? <><Loader2 className="h-4 w-4 animate-spin" /> Generating...</>
@@ -1088,7 +1088,7 @@ export default function GoalsList() {
             className={cn(
               'flex-1 rounded-md py-1.5 text-xs font-medium transition-all',
               tab === t.value
-                ? 'bg-violet-600 text-white shadow'
+                ? 'bg-violet-600 text-snow shadow'
                 : 'text-slate-400 hover:text-white'
             )}
           >

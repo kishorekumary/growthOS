@@ -50,7 +50,7 @@ export default function BooksPage() {
             className={cn(
               'flex-1 rounded-lg py-2 text-center text-sm font-medium transition-all',
               tab === t
-                ? 'bg-violet-600 text-white shadow-sm'
+                ? 'bg-violet-600 text-snow shadow-sm'
                 : 'text-slate-400 hover:text-white'
             )}
           >

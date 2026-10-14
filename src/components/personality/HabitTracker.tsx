@@ -120,7 +120,7 @@ function AddHabitModal({ onAdd }: { onAdd: () => void }) {
   return (
     <Dialog open={open} onOpenChange={(v) => { setOpen(v); if (!v) setError(null) }}>
       <DialogTrigger asChild>
-        <Button size="sm" className="bg-violet-600 hover:bg-violet-700 text-white gap-1.5">
+        <Button size="sm" className="bg-violet-600 hover:bg-violet-700 text-snow gap-1.5">
           <Plus className="h-4 w-4" /> Add Habit
         </Button>
       </DialogTrigger>
@@ -172,7 +172,7 @@ function AddHabitModal({ onAdd }: { onAdd: () => void }) {
               <p className="text-xs text-red-400">{error}</p>
             </div>
           )}
-          <Button className="w-full bg-violet-600 hover:bg-violet-700 text-white"
+          <Button className="w-full bg-violet-600 hover:bg-violet-700 text-snow"
             onClick={handleAdd} disabled={saving || !name.trim()}>
             {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
             Create Habit
@@ -260,7 +260,7 @@ function EditHabitModal({ habit, onClose, onSave }: {
               <p className="text-xs text-red-400">{error}</p>
             </div>
           )}
-          <Button className="w-full bg-violet-600 hover:bg-violet-700 text-white"
+          <Button className="w-full bg-violet-600 hover:bg-violet-700 text-snow"
             onClick={handleSave} disabled={saving || !name.trim()}>
             {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
             Save Changes
@@ -315,7 +315,7 @@ function ConfirmDeleteHabitModal({ habit, onCancel, onConfirm }: {
             <Button
               onClick={handleDelete}
               disabled={deleting}
-              className="bg-red-600 text-white hover:bg-red-500"
+              className="bg-red-600 text-snow hover:bg-red-500"
             >
               {deleting ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Delete'}
             </Button>
@@ -434,7 +434,7 @@ function HabitDetailModal({ habit, onClose, onEdit, onDelete, onHide, keystone }
               )}
             >
               <span className={cn(
-                'absolute top-0.5 left-0.5 flex h-5 w-5 items-center justify-center rounded-full bg-white transition-transform',
+                'absolute top-0.5 left-0.5 flex h-5 w-5 items-center justify-center rounded-full bg-snow transition-transform',
                 keystone.on && 'translate-x-5',
               )}>
                 {keystone.busy && <Loader2 className="h-3 w-3 animate-spin text-slate-500" />}
@@ -569,7 +569,7 @@ function ManageGlobalHabitsModal({
                   className={cn(
                     'shrink-0 flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-medium transition-all',
                     hidden
-                      ? 'bg-violet-600 hover:bg-violet-700 text-white'
+                      ? 'bg-violet-600 hover:bg-violet-700 text-snow'
                       : 'bg-white/10 hover:bg-white/15 text-slate-300'
                   )}
                 >
@@ -1184,7 +1184,7 @@ export default function HabitTracker() {
                   <button
                     onClick={() => markDoneForYesterday(habit)}
                     disabled={catchUpId === habit.id}
-                    className="shrink-0 flex items-center gap-1 rounded-lg bg-amber-600 hover:bg-amber-700 px-3 py-1.5 text-xs font-medium text-white transition-colors disabled:opacity-50"
+                    className="shrink-0 flex items-center gap-1 rounded-lg bg-amber-600 hover:bg-amber-700 px-3 py-1.5 text-xs font-medium text-snow transition-colors disabled:opacity-50"
                   >
                     {catchUpId === habit.id ? <Loader2 className="h-3 w-3 animate-spin" /> : <Check className="h-3 w-3" />}
                     Mark done

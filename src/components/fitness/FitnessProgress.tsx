@@ -63,12 +63,12 @@ function buildWeeklyData(logs: WorkoutLog[]) {
   return weeks
 }
 
-const TICK_STYLE = { fill: '#94a3b8', fontSize: 11 }
+const TICK_STYLE = { fill: 'rgb(var(--c-slate-400))', fontSize: 11 }
 const TOOLTIP_STYLE = {
-  backgroundColor: '#0f172a',
-  border: '1px solid rgba(255,255,255,0.1)',
+  backgroundColor: 'rgb(var(--c-slate-900))',
+  border: '1px solid rgb(var(--c-white) / 0.1)',
   borderRadius: 8,
-  color: '#e2e8f0',
+  color: 'rgb(var(--c-slate-200))',
   fontSize: 12,
 }
 
@@ -173,10 +173,10 @@ export default function FitnessProgress() {
         </p>
         <ResponsiveContainer width="100%" height={140}>
           <BarChart data={weeklyData} barSize={28}>
-            <CartesianGrid vertical={false} stroke="rgba(255,255,255,0.05)" />
+            <CartesianGrid vertical={false} stroke="rgb(var(--c-white) / 0.05)" />
             <XAxis dataKey="week" tick={TICK_STYLE} axisLine={false} tickLine={false} />
             <YAxis allowDecimals={false} tick={TICK_STYLE} axisLine={false} tickLine={false} width={20} />
-            <Tooltip contentStyle={TOOLTIP_STYLE} cursor={{ fill: 'rgba(255,255,255,0.04)' }} />
+            <Tooltip contentStyle={TOOLTIP_STYLE} cursor={{ fill: 'rgb(var(--c-white) / 0.04)' }} />
             <Bar dataKey="count" name="Workouts" fill="#34d399" radius={[4, 4, 0, 0]} />
           </BarChart>
         </ResponsiveContainer>
@@ -191,7 +191,7 @@ export default function FitnessProgress() {
         {weightData.length > 1 ? (
           <ResponsiveContainer width="100%" height={160}>
             <LineChart data={weightData}>
-              <CartesianGrid stroke="rgba(255,255,255,0.05)" />
+              <CartesianGrid stroke="rgb(var(--c-white) / 0.05)" />
               <XAxis dataKey="date" tick={TICK_STYLE} axisLine={false} tickLine={false} />
               <YAxis
                 domain={['auto', 'auto']}
@@ -237,7 +237,7 @@ export default function FitnessProgress() {
           <Button
             onClick={logWeight}
             disabled={savingWeight || !newWeight}
-            className="bg-violet-600 hover:bg-violet-700 text-white shrink-0"
+            className="bg-violet-600 hover:bg-violet-700 text-snow shrink-0"
           >
             {savingWeight ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Log'}
           </Button>

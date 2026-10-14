@@ -44,7 +44,7 @@ export default async function MainLayout({ children }: { children: React.ReactNo
       />
 
       {/* Mobile top bar */}
-      <header className="fixed top-0 left-0 right-0 z-40 flex h-14 items-center justify-between border-b border-white/[0.06] bg-[#06060f]/95 backdrop-blur-md px-4 md:hidden">
+      <header className="fixed top-0 left-0 right-0 z-40 flex h-14 items-center justify-between border-b border-white/[0.06] bg-surface-deep/95 backdrop-blur-md px-4 md:hidden">
         <MobileMenuButton />
         <div className="flex items-center gap-1">
           <MobileSearchButton />

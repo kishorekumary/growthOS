@@ -87,7 +87,7 @@ export default function FitnessCoach() {
             <div className={cn(
               'max-w-[85%] rounded-2xl px-4 py-2.5 text-sm leading-relaxed',
               msg.role === 'user'
-                ? 'bg-violet-600 text-white rounded-br-sm'
+                ? 'bg-violet-600 text-snow rounded-br-sm'
                 : 'bg-white/10 text-slate-200 rounded-bl-sm'
             )}>
               {msg.content}
@@ -119,7 +119,7 @@ export default function FitnessCoach() {
           onClick={() => send()}
           disabled={loading || !input.trim()}
           size="icon"
-          className="bg-violet-600 hover:bg-violet-700 text-white shrink-0"
+          className="bg-violet-600 hover:bg-violet-700 text-snow shrink-0"
         >
           <Send className="h-4 w-4" />
         </Button>

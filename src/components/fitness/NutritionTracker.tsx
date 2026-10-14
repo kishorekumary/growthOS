@@ -169,7 +169,7 @@ function CalorieRing({ consumed, goal }: { consumed: number; goal: number }) {
     <div className="flex flex-col items-center gap-1">
       <div className="relative">
         <svg width="130" height="130" className="-rotate-90">
-          <circle cx="65" cy="65" r={r} fill="none" stroke="rgba(255,255,255,0.05)" strokeWidth="10" />
+          <circle cx="65" cy="65" r={r} fill="none" stroke="rgb(var(--c-white) / 0.05)" strokeWidth="10" />
           <circle cx="65" cy="65" r={r} fill="none" stroke="currentColor" strokeWidth="10" strokeLinecap="round"
             strokeDasharray={circ} strokeDashoffset={offset}
             className={cn('transition-all duration-700', ringColor)} />
@@ -200,7 +200,7 @@ function BMIGauge({ bmiVal }: { bmiVal: number }) {
       <div className="relative h-3 w-full rounded-full overflow-hidden"
         style={{ background: 'linear-gradient(to right, #38bdf8 0%, #34d399 30%, #fbbf24 60%, #f87171 85%)' }}>
         {/* Marker */}
-        <div className="absolute top-0 h-full w-0.5 bg-white shadow"
+        <div className="absolute top-0 h-full w-0.5 bg-snow shadow"
           style={{ left: `${pos}%`, transform: 'translateX(-50%)' }} />
       </div>
       <div className="flex justify-between text-[10px] text-slate-600">
@@ -576,7 +576,7 @@ function AddMealModal({ onSave, onClose }: {
             onChange={e => { if (e.target.files?.[0]) { handleFile(e.target.files[0]); e.target.value = '' } }} />
 
           {preview && !result && (
-            <Button onClick={analyze} disabled={analyzing} className="w-full bg-violet-600 hover:bg-violet-700 text-white">
+            <Button onClick={analyze} disabled={analyzing} className="w-full bg-violet-600 hover:bg-violet-700 text-snow">
               {analyzing ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Analysing…</>
                          : <><Zap className="mr-2 h-4 w-4" /> Analyse with AI</>}
             </Button>
@@ -663,7 +663,7 @@ function AddMealModal({ onSave, onClose }: {
         {/* ── Sticky Save button — always visible above safe area ── */}
         <div className="px-5 pt-3 pb-[max(1.25rem,env(safe-area-inset-bottom))] border-t border-white/8 bg-slate-900 rounded-b-2xl shrink-0">
           <Button onClick={handleSave} disabled={saving || !foodName.trim() || !calories}
-            className="w-full bg-violet-600 hover:bg-violet-700 text-white h-12 text-sm font-semibold">
+            className="w-full bg-violet-600 hover:bg-violet-700 text-snow h-12 text-sm font-semibold">
             {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null} Save Meal
           </Button>
         </div>
@@ -773,7 +773,7 @@ function BodyTab({ userId }: { userId: string }) {
             </div>
           ))}
         </div>
-        <Button onClick={saveStats} disabled={saving} className="w-full bg-violet-600 hover:bg-violet-700 text-white gap-2">
+        <Button onClick={saveStats} disabled={saving} className="w-full bg-violet-600 hover:bg-violet-700 text-snow gap-2">
           {saving  ? <Loader2 className="h-4 w-4 animate-spin" />
           : saved   ? <CheckCircle2 className="h-4 w-4 text-emerald-400" />
           :           <Save className="h-4 w-4" />}
@@ -787,11 +787,11 @@ function BodyTab({ userId }: { userId: string }) {
           <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Weight History</p>
           <ResponsiveContainer width="100%" height={180}>
             <LineChart data={chartData} margin={{ top: 4, right: 8, bottom: 0, left: -20 }}>
-              <XAxis dataKey="date" tick={{ fill: '#64748b', fontSize: 10 }} tickLine={false} axisLine={false} />
-              <YAxis domain={[yMin, yMax]} tick={{ fill: '#64748b', fontSize: 10 }} tickLine={false} axisLine={false} />
+              <XAxis dataKey="date" tick={{ fill: 'rgb(var(--c-slate-500))', fontSize: 10 }} tickLine={false} axisLine={false} />
+              <YAxis domain={[yMin, yMax]} tick={{ fill: 'rgb(var(--c-slate-500))', fontSize: 10 }} tickLine={false} axisLine={false} />
               <Tooltip
-                contentStyle={{ background: '#1e293b', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 8, fontSize: 12 }}
-                labelStyle={{ color: '#94a3b8' }} itemStyle={{ color: '#a78bfa' }}
+                contentStyle={{ background: 'rgb(var(--c-slate-800))', border: '1px solid rgb(var(--c-white) / 0.1)', borderRadius: 8, fontSize: 12 }}
+                labelStyle={{ color: 'rgb(var(--c-slate-400))' }} itemStyle={{ color: '#a78bfa' }}
                 formatter={(v: number) => [`${v} kg`, 'Weight']}
               />
               {stats.target_weight_kg && (
@@ -859,7 +859,7 @@ function InsightsTab() {
           <Zap className="h-8 w-8 text-violet-400 mx-auto" />
           <p className="text-sm text-white font-medium">AI Nutrition Insights</p>
           <p className="text-xs text-slate-400">Analyses your last 14 days of meals and gives personalised recommendations based on your goals and body stats.</p>
-          <Button onClick={fetchInsights} disabled={loading} className="bg-violet-600 hover:bg-violet-700 text-white">
+          <Button onClick={fetchInsights} disabled={loading} className="bg-violet-600 hover:bg-violet-700 text-snow">
             {loading ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Analysing…</> : 'Get My Insights'}
           </Button>
         </div>
@@ -998,7 +998,7 @@ export default function NutritionTracker() {
         {SUBTABS.map(t => (
           <button key={t.id} type="button" onClick={() => setSubTab(t.id)}
             className={cn('flex-1 rounded-md py-1.5 text-xs font-medium transition-all',
-              subTab === t.id ? 'bg-violet-600 text-white shadow' : 'text-slate-400 hover:text-white')}>
+              subTab === t.id ? 'bg-violet-600 text-snow shadow' : 'text-slate-400 hover:text-white')}>
             {t.label}
           </button>
         ))}
@@ -1021,7 +1021,7 @@ export default function NutritionTracker() {
               )}
             </div>
             <button onClick={() => setShowModal(true)}
-              className="flex items-center gap-1.5 rounded-lg bg-violet-600 hover:bg-violet-700 px-3 py-1.5 text-xs font-semibold text-white transition-colors">
+              className="flex items-center gap-1.5 rounded-lg bg-violet-600 hover:bg-violet-700 px-3 py-1.5 text-xs font-semibold text-snow transition-colors">
               <Plus className="h-3.5 w-3.5" /> Log Intake
             </button>
           </div>

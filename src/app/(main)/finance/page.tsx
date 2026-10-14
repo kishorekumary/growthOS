@@ -69,7 +69,7 @@ export default function FinancePage() {
             className={cn(
               'flex-1 whitespace-nowrap rounded-lg py-2 px-3 text-center text-sm font-medium transition-all',
               tab === t
-                ? 'bg-violet-600 text-white shadow-sm'
+                ? 'bg-violet-600 text-snow shadow-sm'
                 : 'text-slate-400 hover:text-white'
             )}
           >

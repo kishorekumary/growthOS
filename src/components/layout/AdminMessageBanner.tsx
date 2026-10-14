@@ -56,7 +56,7 @@ export default function AdminMessageBanner() {
       {shown.map(msg => (
         <div
           key={msg.id}
-          className="pointer-events-auto flex items-start gap-3 rounded-xl border border-violet-500/30 bg-[#0d0d1a]/95 backdrop-blur-sm shadow-2xl px-4 py-3"
+          className="pointer-events-auto flex items-start gap-3 rounded-xl border border-violet-500/30 bg-surface/95 backdrop-blur-sm shadow-2xl px-4 py-3"
         >
           <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-violet-500/20 shrink-0 mt-0.5">
             <Bell className="h-3.5 w-3.5 text-violet-400" />

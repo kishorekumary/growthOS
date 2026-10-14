@@ -62,7 +62,7 @@ export default function FocusDashboardWidget() {
           <p className="text-sm text-slate-400">No focus sessions today yet.</p>
           <Link
             href="/focus"
-            className="inline-flex items-center justify-center gap-2 rounded-xl bg-violet-600 hover:bg-violet-500 px-4 py-2.5 text-sm font-medium text-white transition-colors"
+            className="inline-flex items-center justify-center gap-2 rounded-xl bg-violet-600 hover:bg-violet-500 px-4 py-2.5 text-sm font-medium text-snow transition-colors"
           >
             <Zap className="h-4 w-4" />
             Start a Focus Session

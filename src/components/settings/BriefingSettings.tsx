@@ -28,7 +28,7 @@ function Toggle({ checked, onChange }: { checked: boolean; onChange: () => void 
         checked ? 'bg-violet-600' : 'bg-white/10'
       )}
     >
-      <span className={cn('inline-block h-4 w-4 rounded-full bg-white shadow transition-transform', checked ? 'translate-x-6' : 'translate-x-1')} />
+      <span className={cn('inline-block h-4 w-4 rounded-full bg-snow shadow transition-transform', checked ? 'translate-x-6' : 'translate-x-1')} />
     </button>
   )
 }
@@ -148,7 +148,7 @@ export default function BriefingSettings() {
       <Button
         onClick={saveSettings}
         disabled={saving}
-        className="w-full bg-violet-600 hover:bg-violet-700 text-white"
+        className="w-full bg-violet-600 hover:bg-violet-700 text-snow"
       >
         {saving
           ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Saving...</>

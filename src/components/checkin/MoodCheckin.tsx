@@ -204,7 +204,7 @@ export default function MoodCheckin() {
       <button
         onClick={submit}
         disabled={!mood || !energy || saving}
-        className="w-full rounded-xl bg-emerald-600 hover:bg-emerald-700 disabled:opacity-40 py-2.5 text-sm font-medium text-white transition-colors flex items-center justify-center gap-2"
+        className="w-full rounded-xl bg-emerald-600 hover:bg-emerald-700 disabled:opacity-40 py-2.5 text-sm font-medium text-snow transition-colors flex items-center justify-center gap-2"
       >
         {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : saved ? <CheckCircle className="h-4 w-4" /> : null}
         {saving ? 'Saving...' : saved ? 'Saved!' : 'Submit Check-in'}

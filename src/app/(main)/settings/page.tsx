@@ -3,9 +3,10 @@
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import dynamic from 'next/dynamic'
-import { Loader2, Bell, ShieldCheck, ChevronRight, Mail, Sun, PartyPopper } from 'lucide-react'
+import { Loader2, Bell, ShieldCheck, ChevronRight, Mail, Sun, PartyPopper, Palette } from 'lucide-react'
 import { createSupabaseBrowserClient } from '@/lib/supabase'
 import EffectsSettings from '@/components/settings/EffectsSettings'
+import AppearanceSettings from '@/components/settings/AppearanceSettings'
 
 const NotificationSettings = dynamic(
   () => import('@/components/settings/NotificationSettings'),
@@ -73,6 +74,14 @@ export default function SettingsPage() {
           <h2 className="text-base font-semibold text-white">Notifications</h2>
         </div>
         <NotificationSettings />
+      </div>
+
+      <div className="mb-6">
+        <div className="flex items-center gap-2 mb-4">
+          <Palette className="h-4 w-4 text-violet-400" />
+          <h2 className="text-base font-semibold text-white">Appearance</h2>
+        </div>
+        <AppearanceSettings />
       </div>
 
       <div className="mb-6">

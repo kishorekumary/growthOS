@@ -76,7 +76,7 @@ export default function HabitLeverageEditor({ habitId }: { habitId: string }) {
         type="button"
         onClick={save}
         disabled={!dirty || saving}
-        className="flex items-center gap-1.5 rounded-md bg-violet-600 hover:bg-violet-700 disabled:opacity-40 px-3 py-1.5 text-xs font-semibold text-white"
+        className="flex items-center gap-1.5 rounded-md bg-violet-600 hover:bg-violet-700 disabled:opacity-40 px-3 py-1.5 text-xs font-semibold text-snow"
       >
         {saving ? <Loader2 className="h-3 w-3 animate-spin" /> : saved ? <Check className="h-3 w-3" /> : null}
         {saved ? 'Saved' : 'Save'}

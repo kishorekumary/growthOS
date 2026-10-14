@@ -281,7 +281,7 @@ export default function MindshiftSurveyPage() {
               style={{ width: `${pct}%` }}
             />
             <div
-              className="absolute top-1/2 -translate-y-1/2 h-3.5 w-0.5 bg-white rounded-full"
+              className="absolute top-1/2 -translate-y-1/2 h-3.5 w-0.5 bg-snow rounded-full"
               style={{ left: `${pct}%` }}
             />
           </div>
@@ -325,7 +325,7 @@ export default function MindshiftSurveyPage() {
           </button>
           <button
             onClick={() => {}}
-            className="flex items-center gap-2 rounded-xl bg-violet-600 hover:bg-violet-700 px-5 py-2.5 text-sm text-white font-medium transition-colors"
+            className="flex items-center gap-2 rounded-xl bg-violet-600 hover:bg-violet-700 px-5 py-2.5 text-sm text-snow font-medium transition-colors"
           >
             <Zap className="h-4 w-4" />
             Get my action plan
@@ -417,7 +417,7 @@ export default function MindshiftSurveyPage() {
           <button
             type="button"
             onClick={handleNext}
-            className="rounded-xl bg-violet-600 hover:bg-violet-700 px-6 py-2.5 text-sm font-medium text-white transition-colors"
+            className="rounded-xl bg-violet-600 hover:bg-violet-700 px-6 py-2.5 text-sm font-medium text-snow transition-colors"
           >
             {sectionIdx === SECTIONS.length - 1 ? 'See my results' : 'Next'}
           </button>

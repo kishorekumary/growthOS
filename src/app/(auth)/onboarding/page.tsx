@@ -543,7 +543,7 @@ export default function OnboardingPage() {
           {step < TOTAL_STEPS ? (
             <Button
               type="button"
-              className="bg-purple-600 hover:bg-purple-700 text-white"
+              className="bg-purple-600 hover:bg-purple-700 text-snow"
               onClick={handleNext}
             >
               Next
@@ -551,7 +551,7 @@ export default function OnboardingPage() {
           ) : (
             <Button
               type="button"
-              className="bg-purple-600 hover:bg-purple-700 text-white min-w-[100px]"
+              className="bg-purple-600 hover:bg-purple-700 text-snow min-w-[100px]"
               onClick={handleFinish}
               disabled={isLoading}
             >

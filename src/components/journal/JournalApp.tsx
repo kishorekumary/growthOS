@@ -262,7 +262,7 @@ export default function JournalApp() {
         <button
           onClick={save}
           disabled={saving || !content.trim()}
-          className="flex items-center gap-2 rounded-xl bg-purple-600 hover:bg-purple-500 disabled:opacity-50 px-5 py-2.5 text-sm font-medium text-white transition-colors"
+          className="flex items-center gap-2 rounded-xl bg-purple-600 hover:bg-purple-500 disabled:opacity-50 px-5 py-2.5 text-sm font-medium text-snow transition-colors"
         >
           <Save className="h-4 w-4" />
           {saving ? 'Saving…' : editing ? 'Update entry' : 'Save entry'}
@@ -349,7 +349,7 @@ export default function JournalApp() {
               </button>
               <button
                 onClick={() => confirmDelete(deleteTarget)}
-                className="flex-1 rounded-xl bg-red-600 hover:bg-red-500 py-2 text-sm font-medium text-white transition-colors"
+                className="flex-1 rounded-xl bg-red-600 hover:bg-red-500 py-2 text-sm font-medium text-snow transition-colors"
               >
                 Delete
               </button>

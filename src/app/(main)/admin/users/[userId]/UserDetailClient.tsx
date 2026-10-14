@@ -237,7 +237,7 @@ export default function UserDetailClient({
             className={cn(
               'flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium border transition-colors',
               editMode
-                ? 'bg-indigo-600 border-indigo-500 text-white hover:bg-indigo-500'
+                ? 'bg-indigo-600 border-indigo-500 text-snow hover:bg-indigo-500'
                 : 'border-white/10 text-slate-400 hover:text-white hover:border-white/20',
             )}
           >
@@ -341,7 +341,7 @@ export default function UserDetailClient({
                 </select>
               </div>
               <div className="flex gap-2">
-                <button onClick={addHabit} disabled={busy === 'new-habit'} className="flex-1 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-xs text-white font-medium flex items-center justify-center gap-1">
+                <button onClick={addHabit} disabled={busy === 'new-habit'} className="flex-1 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-xs text-snow font-medium flex items-center justify-center gap-1">
                   {busy === 'new-habit' ? <Loader2 className="h-3 w-3 animate-spin" /> : <Check className="h-3 w-3" />} Save
                 </button>
                 <button onClick={() => setAddingHabit(false)} className="px-3 py-1.5 rounded-lg border border-white/10 text-xs text-slate-400 hover:text-white">Cancel</button>
@@ -420,7 +420,7 @@ export default function UserDetailClient({
                     className="flex-1 bg-slate-800/80 border border-white/10 rounded px-2 py-1.5 text-xs text-white focus:outline-none">
                     <option value="reading">Reading</option><option value="completed">Completed</option><option value="want-to-read">Want to Read</option>
                   </select>
-                  <button onClick={addBook} disabled={busy === 'new-book'} className="px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-xs text-white font-medium flex items-center gap-1">
+                  <button onClick={addBook} disabled={busy === 'new-book'} className="px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-xs text-snow font-medium flex items-center gap-1">
                     {busy === 'new-book' ? <Loader2 className="h-3 w-3 animate-spin" /> : <Check className="h-3 w-3" />} Add
                   </button>
                   <button onClick={() => setAddingBook(false)} className="px-3 py-1.5 rounded-lg border border-white/10 text-xs text-slate-400 hover:text-white">✕</button>
@@ -465,7 +465,7 @@ export default function UserDetailClient({
                 <input value={newGoal.title} onChange={e => setNewGoal({ title: e.target.value })}
                   onKeyDown={e => e.key === 'Enter' && addGoal()}
                   placeholder="Goal title" className="flex-1 bg-slate-800/80 border border-white/10 rounded px-2 py-1.5 text-sm text-white focus:outline-none" />
-                <button onClick={addGoal} disabled={busy === 'new-goal'} className="px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-xs text-white font-medium flex items-center gap-1">
+                <button onClick={addGoal} disabled={busy === 'new-goal'} className="px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-xs text-snow font-medium flex items-center gap-1">
                   {busy === 'new-goal' ? <Loader2 className="h-3 w-3 animate-spin" /> : <Check className="h-3 w-3" />}
                 </button>
                 <button onClick={() => setAddingGoal(false)} className="px-2 py-1.5 rounded-lg border border-white/10 text-xs text-slate-400 hover:text-white">✕</button>
@@ -514,7 +514,7 @@ export default function UserDetailClient({
                 <input value={newTodo.title} onChange={e => setNewTodo({ title: e.target.value })}
                   onKeyDown={e => e.key === 'Enter' && addTodo()}
                   placeholder="Task title" className="flex-1 bg-slate-800/80 border border-white/10 rounded px-2 py-1.5 text-sm text-white focus:outline-none" />
-                <button onClick={addTodo} disabled={busy === 'new-todo'} className="px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-xs text-white font-medium flex items-center gap-1">
+                <button onClick={addTodo} disabled={busy === 'new-todo'} className="px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-xs text-snow font-medium flex items-center gap-1">
                   {busy === 'new-todo' ? <Loader2 className="h-3 w-3 animate-spin" /> : <Check className="h-3 w-3" />}
                 </button>
                 <button onClick={() => setAddingTodo(false)} className="px-2 py-1.5 rounded-lg border border-white/10 text-xs text-slate-400 hover:text-white">✕</button>

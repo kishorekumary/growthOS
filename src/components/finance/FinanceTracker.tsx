@@ -141,7 +141,7 @@ function TxnModal({ initial, onSave, trigger }: {
               className="border-white/20 bg-white/5 text-white placeholder:text-slate-500 focus-visible:ring-violet-500"
             />
           </div>
-          <Button className="w-full bg-violet-600 hover:bg-violet-700 text-white" onClick={handleSave} disabled={saving || !amount}>
+          <Button className="w-full bg-violet-600 hover:bg-violet-700 text-snow" onClick={handleSave} disabled={saving || !amount}>
             {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
             {isEdit ? 'Save Changes' : 'Add Transaction'}
           </Button>
@@ -196,7 +196,7 @@ export default function FinanceTracker() {
           <p className="text-xs text-slate-500 mt-0.5">Last 30 entries</p>
         </div>
         <TxnModal onSave={fetchTxns} trigger={
-          <Button size="sm" className="bg-violet-600 hover:bg-violet-700 text-white gap-1.5">
+          <Button size="sm" className="bg-violet-600 hover:bg-violet-700 text-snow gap-1.5">
             <Plus className="h-4 w-4" /> Add
           </Button>
         } />

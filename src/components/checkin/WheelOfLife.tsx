@@ -67,10 +67,10 @@ export default function WheelOfLife({ scores }: Props) {
 
       <ResponsiveContainer width="100%" height={260}>
         <RadarChart data={data} margin={{ top: 10, right: 20, bottom: 10, left: 20 }}>
-          <PolarGrid stroke="rgba(255,255,255,0.08)" />
+          <PolarGrid stroke="rgb(var(--c-white) / 0.08)" />
           <PolarAngleAxis
             dataKey="domain"
-            tick={{ fill: '#94a3b8', fontSize: 10 }}
+            tick={{ fill: 'rgb(var(--c-slate-400))', fontSize: 10 }}
             tickLine={false}
           />
           <Radar
@@ -83,7 +83,7 @@ export default function WheelOfLife({ scores }: Props) {
             dot={{ fill: '#a78bfa', r: 3, strokeWidth: 0 }}
           />
           <Tooltip
-            contentStyle={{ background: '#1e293b', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 8, fontSize: 11 }}
+            contentStyle={{ background: 'rgb(var(--c-slate-800))', border: '1px solid rgb(var(--c-white) / 0.1)', borderRadius: 8, fontSize: 11 }}
             formatter={(v: number) => [v + '/10', 'Score']}
           />
         </RadarChart>

@@ -31,7 +31,7 @@ export default function RewardMilestoneModal() {
         </div>
         <button
           onClick={dismissCurrent}
-          className="w-full rounded-xl bg-amber-600 hover:bg-amber-700 px-4 py-3 text-sm font-semibold text-white transition-all"
+          className="w-full rounded-xl bg-amber-600 hover:bg-amber-700 px-4 py-3 text-sm font-semibold text-snow transition-all"
         >
           Nice!
         </button>

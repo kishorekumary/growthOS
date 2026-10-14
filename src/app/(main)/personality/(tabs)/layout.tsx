@@ -32,7 +32,7 @@ export default function PersonalityTabsLayout({ children }: { children: React.Re
               className={cn(
                 'flex-1 rounded-lg py-2 text-center text-sm font-medium transition-all',
                 active
-                  ? 'bg-violet-600 text-white shadow-sm'
+                  ? 'bg-violet-600 text-snow shadow-sm'
                   : 'text-slate-400 hover:text-white'
               )}
             >

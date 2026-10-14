@@ -175,7 +175,7 @@ export default function AssessmentPage() {
 
         <Button
           onClick={() => router.push('/personality')}
-          className="w-full bg-violet-600 hover:bg-violet-700 text-white"
+          className="w-full bg-violet-600 hover:bg-violet-700 text-snow"
         >
           Go to My Personality Hub
         </Button>
@@ -250,7 +250,7 @@ export default function AssessmentPage() {
 
         {current < QUIZ_QUESTIONS.length - 1 ? (
           <Button
-            className="bg-violet-600 hover:bg-violet-700 text-white"
+            className="bg-violet-600 hover:bg-violet-700 text-snow"
             onClick={goNext}
             disabled={!selected}
           >
@@ -258,7 +258,7 @@ export default function AssessmentPage() {
           </Button>
         ) : (
           <Button
-            className="bg-violet-600 hover:bg-violet-700 text-white min-w-[140px]"
+            className="bg-violet-600 hover:bg-violet-700 text-snow min-w-[140px]"
             onClick={handleFinish}
             disabled={!allAnswered}
           >

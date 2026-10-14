@@ -34,7 +34,7 @@ export default async function GalleryPage() {
   }))
 
   return (
-    <div className="min-h-screen bg-[#06060f]">
+    <div className="min-h-screen bg-surface-deep">
       <Gallery initialItems={items} userId={user.id} isAdmin={profile?.is_admin ?? false} />
     </div>
   )

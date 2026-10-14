@@ -158,7 +158,7 @@ export default function FinanceBudget() {
             'gap-1.5',
             budget
               ? 'border border-white/20 bg-white/5 text-white hover:bg-white/10'
-              : 'bg-violet-600 hover:bg-violet-700 text-white'
+              : 'bg-violet-600 hover:bg-violet-700 text-snow'
           )}
           variant={budget ? 'outline' : 'default'}
         >

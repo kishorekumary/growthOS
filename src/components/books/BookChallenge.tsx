@@ -117,7 +117,7 @@ export default function BookChallenge() {
           <Button
             onClick={startChallenge}
             disabled={starting}
-            className="w-full bg-amber-600 hover:bg-amber-700 text-white gap-2"
+            className="w-full bg-amber-600 hover:bg-amber-700 text-snow gap-2"
           >
             {starting
               ? <><Loader2 className="h-4 w-4 animate-spin" /> Picking your book...</>

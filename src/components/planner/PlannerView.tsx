@@ -157,7 +157,7 @@ export default function PlannerView() {
                   onClick={() => setTab(type)}
                   className={cn(
                     'flex-1 rounded-lg py-2 text-center text-sm font-semibold transition-all',
-                    tab === type ? 'bg-violet-600 text-white shadow-sm' : 'text-slate-400 hover:text-white',
+                    tab === type ? 'bg-violet-600 text-snow shadow-sm' : 'text-slate-400 hover:text-white',
                   )}
                 >
                   {TAB_LABEL[type]} <span className="text-xs font-normal opacity-80">{done}/{total}</span>

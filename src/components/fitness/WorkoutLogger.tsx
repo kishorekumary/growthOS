@@ -327,8 +327,8 @@ export default function WorkoutLogger() {
           className={cn(
             'w-full',
             saved
-              ? 'bg-emerald-600 hover:bg-emerald-600 text-white'
-              : 'bg-violet-600 hover:bg-violet-700 text-white'
+              ? 'bg-emerald-600 hover:bg-emerald-600 text-snow'
+              : 'bg-violet-600 hover:bg-violet-700 text-snow'
           )}
         >
           {saving
@@ -470,7 +470,7 @@ export default function WorkoutLogger() {
                         onClick={handleEditSave}
                         disabled={editSaving}
                         size="sm"
-                        className="bg-violet-600 hover:bg-violet-700 text-white h-8 px-4"
+                        className="bg-violet-600 hover:bg-violet-700 text-snow h-8 px-4"
                       >
                         {editSaving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : 'Save'}
                       </Button>

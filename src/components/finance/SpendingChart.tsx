@@ -57,10 +57,10 @@ const COLOR_PALETTE = [
 ]
 
 const TOOLTIP_STYLE = {
-  backgroundColor: '#0f172a',
-  border: '1px solid rgba(255,255,255,0.1)',
+  backgroundColor: 'rgb(var(--c-slate-900))',
+  border: '1px solid rgb(var(--c-white) / 0.1)',
   borderRadius: 8,
-  color: '#e2e8f0',
+  color: 'rgb(var(--c-slate-200))',
   fontSize: 12,
 }
 
@@ -131,7 +131,7 @@ function DonutChart({
                 key={i}
                 fill={colorFn(entry.name)}
                 opacity={activeIndex === null || activeIndex === i ? 1 : 0.5}
-                stroke={activeIndex === i ? 'rgba(255,255,255,0.4)' : 'transparent'}
+                stroke={activeIndex === i ? 'rgb(var(--c-white) / 0.4)' : 'transparent'}
                 strokeWidth={2}
               />
             ))}
@@ -357,7 +357,7 @@ function CategoryManager({
               className="flex-1 rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-white placeholder:text-slate-600 focus:outline-none focus:border-violet-500"
             />
             <button onClick={handleAdd} disabled={!newName.trim()}
-              className="flex items-center gap-1.5 rounded-lg bg-violet-600 hover:bg-violet-500 disabled:opacity-40 disabled:cursor-not-allowed px-3 py-2 text-xs font-semibold text-white transition-colors">
+              className="flex items-center gap-1.5 rounded-lg bg-violet-600 hover:bg-violet-500 disabled:opacity-40 disabled:cursor-not-allowed px-3 py-2 text-xs font-semibold text-snow transition-colors">
               <Plus className="h-3.5 w-3.5" /> Add
             </button>
           </div>

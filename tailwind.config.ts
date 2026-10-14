@@ -1,4 +1,60 @@
 import type { Config } from 'tailwindcss'
+import plugin from 'tailwindcss/plugin'
+import colors from 'tailwindcss/colors'
+
+// ── Light / dark theming ────────────────────────────────────────────
+// The app's classes were written for a dark background (text-white,
+// bg-white/5, text-slate-400, text-emerald-300 …). Rather than adding a
+// light variant to every class, white, the slate scale and the light
+// shades of each accent palette are CSS variables that the `.light` class
+// on <html> swaps: white turns to near-black ink, slate inverts, and pale
+// accent text gets darker shades so it stays readable on white. `snow` is
+// a white that never flips — for text on solid accent buttons.
+
+type Shade = '50' | '100' | '200' | '300' | '400' | '500' | '600' | '700' | '800' | '900' | '950'
+const SHADES: Shade[] = ['50', '100', '200', '300', '400', '500', '600', '700', '800', '900', '950']
+const ACCENTS = [
+  'red', 'orange', 'amber', 'yellow', 'lime', 'green', 'emerald', 'teal',
+  'cyan', 'sky', 'blue', 'indigo', 'violet', 'purple', 'fuchsia', 'pink', 'rose',
+] as const
+
+function rgb(hex: string): string {
+  const n = parseInt(hex.slice(1), 16)
+  return `${(n >> 16) & 255} ${(n >> 8) & 255} ${n & 255}`
+}
+
+// Which shade each shade becomes in light mode.
+const SLATE_LIGHT: Record<Shade, string> = {
+  '50': '#020617', '100': '#0f172a', '200': '#1e293b', '300': '#334155', '400': '#475569',
+  '500': '#64748b', '600': '#94a3b8', '700': '#cbd5e1', '800': '#e2e8f0', '900': '#ffffff', '950': '#f8fafc',
+}
+const ACCENT_LIGHT: Partial<Record<Shade, Shade>> = { '50': '900', '100': '800', '200': '800', '300': '700', '400': '600' }
+
+const themeVar = (name: string) => `rgb(var(--c-${name}) / <alpha-value>)`
+const palette = (name: string) => Object.fromEntries(SHADES.map(s => [s, themeVar(`${name}-${s}`)]))
+
+const themeColors = plugin(({ addBase, addVariant }) => {
+  // `light:` for the few spots the palette swap can't handle on its own.
+  // Note shades 50–400 of accents flip dark in light mode; for a pale tint
+  // use a 500+ shade with opacity (e.g. light:bg-violet-500/20).
+  addVariant('light', ':root.light &')
+  const dark: Record<string, string>  = {
+    '--c-white': '255 255 255', '--c-surface': '13 13 26', '--c-surface-deep': '6 6 15',
+  }
+  const light: Record<string, string> = {
+    '--c-white': '15 23 42', '--c-surface': '255 255 255', '--c-surface-deep': '250 250 253',
+  }
+  for (const s of SHADES) {
+    dark[`--c-slate-${s}`]  = rgb(colors.slate[s])
+    light[`--c-slate-${s}`] = rgb(SLATE_LIGHT[s])
+    for (const a of ACCENTS) {
+      dark[`--c-${a}-${s}`] = rgb(colors[a][s])
+      const swap = ACCENT_LIGHT[s]
+      if (swap) light[`--c-${a}-${s}`] = rgb(colors[a][swap])
+    }
+  }
+  addBase({ ':root': dark, ':root.light': light })
+})
 
 const config: Config = {
   darkMode: ['class'],
@@ -19,6 +75,11 @@ const config: Config = {
         sans: ['var(--font-sans)', 'system-ui', 'sans-serif'],
       },
       colors: {
+        white: themeVar('white'),
+        snow: '#ffffff',
+        surface: { DEFAULT: themeVar('surface'), deep: themeVar('surface-deep') },
+        slate: palette('slate'),
+        ...Object.fromEntries(ACCENTS.map(a => [a, palette(a)])),
         background: 'hsl(var(--background))',
         foreground: 'hsl(var(--foreground))',
         card: {
@@ -68,7 +129,7 @@ const config: Config = {
       },
     },
   },
-  plugins: [],
+  plugins: [themeColors],
 }
 
 export default config
