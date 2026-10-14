@@ -17,20 +17,30 @@ const items: ReminderItem[] = [
 
 describe('reminderTitles', () => {
   it('on a Tuesday mid-month mentions only day items', () => {
-    expect(reminderTitles(items, [], '2026-10-13')).toEqual(['today', 'overdue', 'daily-repeat'])
+    expect(reminderTitles(items, [], '2026-10-13').titles).toEqual(['today', 'overdue', 'daily-repeat'])
   })
   it('skips a repeating item already done for that day', () => {
-    expect(reminderTitles(items, [{ item_id: 'daily-repeat', period_start: '2026-10-13' }], '2026-10-13'))
+    expect(reminderTitles(items, [{ item_id: 'daily-repeat', period_start: '2026-10-13' }], '2026-10-13').titles)
       .toEqual(['today', 'overdue'])
   })
   it('adds week items on Wednesday and Sunday', () => {
-    expect(reminderTitles(items, [], '2026-10-14')).toContain('week')
-    expect(reminderTitles([r({ title: 'week', period_type: 'week', period_start: '2026-10-18' })], [], '2026-10-18')).toEqual(['week'])
+    expect(reminderTitles(items, [], '2026-10-14').titles).toContain('week')
+    expect(reminderTitles([r({ title: 'week', period_type: 'week', period_start: '2026-10-18' })], [], '2026-10-18').titles).toEqual(['week'])
   })
   it('adds month items only in the last 3 days of the month', () => {
     const feb = [r({ title: 'feb', period_type: 'month', period_start: '2026-02-01' })]
-    expect(reminderTitles(feb, [], '2026-02-25')).toEqual([])
-    expect(reminderTitles(feb, [], '2026-02-26')).toEqual(['feb'])
-    expect(reminderTitles(items, [], '2026-10-29')).toContain('month')
+    expect(reminderTitles(feb, [], '2026-02-25').titles).toEqual([])
+    expect(reminderTitles(feb, [], '2026-02-26').titles).toEqual(['feb'])
+    expect(reminderTitles(items, [], '2026-10-29').titles).toContain('month')
+  })
+  it('puts high-priority items first and lists them separately', () => {
+    const res = reminderTitles([
+      r({ title: 'plain' }),
+      r({ title: 'low', priority: 'low' }),
+      r({ title: 'urgent', priority: 'high' }),
+      r({ title: 'done-urgent', priority: 'high', is_completed: true }),
+    ], [], '2026-10-13')
+    expect(res.titles).toEqual(['urgent', 'low', 'plain'])
+    expect(res.highPriority).toEqual(['urgent'])
   })
 })

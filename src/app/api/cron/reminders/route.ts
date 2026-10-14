@@ -244,7 +244,7 @@ export async function GET(req: NextRequest) {
     const updatedSent = { ...sentToday }
 
     if (due.length) {
-      const todoTitles = await fetchReminderTitles(admin, s.user_id, day)
+      const { titles: todoTitles, highPriority } = await fetchReminderTitles(admin, s.user_id, day)
 
       const isEvening = now.minutes >= 12 * 60
       // Several due at once (e.g. after a scheduler outage) collapse into one message.
@@ -252,6 +252,7 @@ export async function GET(req: NextRequest) {
         pending:       state.pending,
         doneCount:     state.doneCount,
         todoTitles,
+        priorityTitles: highPriority,
         isEvening,
         perfectStreak: state.perfectStreak,
         powerPending:  !state.powerDone.has(isEvening ? POWER_TAG.evening : POWER_TAG.morning),

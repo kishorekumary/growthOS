@@ -60,7 +60,7 @@ export function usePlanner(from: string) {
       id: tempId, user_id: userId, title: fields.title.trim(), notes: fields.notes ?? null,
       period_type: fields.period_type, period_start: periodStart(fields.period_type, fields.period_start),
       repeats: fields.repeats ?? false, is_completed: false, completed_at: null, points_awarded: 0,
-      carry_count: 0, ended_at: null, sort_order: 0, created_at: new Date().toISOString(),
+      carry_count: 0, ended_at: null, sort_order: 0, priority: fields.priority ?? null, created_at: new Date().toISOString(),
     }
     setItems(prev => [...prev, temp])
     try {

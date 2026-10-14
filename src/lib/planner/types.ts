@@ -1,6 +1,8 @@
 export type PeriodType = 'day' | 'week' | 'month'
 export const PERIOD_TYPES: PeriodType[] = ['day', 'week', 'month']
 
+export type Priority = 'high' | 'medium' | 'low'
+
 export interface PlannerItem {
   id:             string
   user_id:        string
@@ -19,6 +21,8 @@ export interface PlannerItem {
   carry_count:    number
   ended_at:       string | null
   sort_order:     number
+  // Optional; null means no priority.
+  priority:       Priority | null
   created_at:     string
 }
 

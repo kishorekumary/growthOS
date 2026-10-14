@@ -1,14 +1,14 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { currentPeriods, periodStart, windowStart } from './periods'
 import { pointsFor } from './points'
-import { reminderTitles, type ReminderItem } from './reminders'
-import type { PeriodType, PlannerCompletion, PlannerItem } from './types'
+import { reminderTitles, type ReminderItem, type ReminderTitles } from './reminders'
+import type { PeriodType, PlannerCompletion, PlannerItem, Priority } from './types'
 
 // Works with the browser, server and admin Supabase clients alike.
 export type Db = SupabaseClient
 
 export const ITEM_COLUMNS =
-  'id, user_id, title, notes, period_type, period_start, repeats, is_completed, completed_at, points_awarded, carry_count, ended_at, sort_order, created_at'
+  'id, user_id, title, notes, period_type, period_start, repeats, is_completed, completed_at, points_awarded, carry_count, ended_at, sort_order, priority, created_at'
 export const COMPLETION_COLUMNS = 'id, item_id, period_start, completed_at, points_awarded'
 
 // Everything a planner screen anchored at `from` needs: items placed from
@@ -43,6 +43,7 @@ export interface NewItem {
   period_type:  PeriodType
   period_start: string   // any date inside the target period; aligned here
   repeats?:     boolean
+  priority?:    Priority | null
 }
 
 export async function insertItem(db: Db, userId: string, fields: NewItem): Promise<PlannerItem> {
@@ -54,6 +55,7 @@ export async function insertItem(db: Db, userId: string, fields: NewItem): Promi
       period_type:  fields.period_type,
       period_start: periodStart(fields.period_type, fields.period_start),
       repeats:      fields.repeats ?? false,
+      priority:     fields.priority ?? null,
     })
     .select(ITEM_COLUMNS)
     .single()
@@ -62,7 +64,7 @@ export async function insertItem(db: Db, userId: string, fields: NewItem): Promi
 }
 
 export type ItemPatch = Partial<Pick<PlannerItem,
-  'title' | 'notes' | 'period_type' | 'period_start' | 'repeats' | 'carry_count' | 'ended_at' | 'sort_order'>>
+  'title' | 'notes' | 'period_type' | 'period_start' | 'repeats' | 'carry_count' | 'ended_at' | 'sort_order' | 'priority'>>
 
 export async function patchItem(db: Db, id: string, patch: ItemPatch): Promise<void> {
   const { error } = await db.from('planner_items')
@@ -177,10 +179,10 @@ export function openNowQuery(db: Db, userId: string, today: string) {
     .returns<PlannerItem[]>()
 }
 
-export async function fetchReminderTitles(db: Db, userId: string, day: string): Promise<string[]> {
+export async function fetchReminderTitles(db: Db, userId: string, day: string): Promise<ReminderTitles> {
   const [items, done] = await Promise.all([
     db.from('planner_items')
-      .select('id, title, period_type, period_start, repeats, is_completed, ended_at')
+      .select('id, title, period_type, period_start, repeats, is_completed, ended_at, priority')
       .eq('user_id', userId)
       .is('ended_at', null)
       .or('repeats.eq.true,is_completed.eq.false')
@@ -193,7 +195,8 @@ export async function fetchReminderTitles(db: Db, userId: string, day: string): 
   // Called per user by the cron, so a failed query degrades to "no reminders" instead of throwing.
   if (items.error || done.error) {
     console.error('Failed to load planner reminders:', items.error ?? done.error)
-    return []
+    return { titles: [], highPriority: [] }
   }
-  return reminderTitles((items.data ?? []) as ReminderItem[], done.data ?? [], day).slice(0, 10)
+  const res = reminderTitles((items.data ?? []) as ReminderItem[], done.data ?? [], day)
+  return { titles: res.titles.slice(0, 10), highPriority: res.highPriority.slice(0, 10) }
 }

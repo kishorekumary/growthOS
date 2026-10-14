@@ -2,12 +2,14 @@
 
 import { useEffect, useRef, useState } from 'react'
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu'
-import { ArrowRight, MoreHorizontal, Pencil, Repeat, Trash2 } from 'lucide-react'
+import { ArrowRight, Check, Flag, MoreHorizontal, Pencil, Repeat, Trash2 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { moveTargets } from '@/lib/planner/periods'
+import { PRIORITIES, PRIORITY_LABEL } from '@/lib/planner/priority'
 import type { ItemPatch } from '@/lib/planner/actions'
 import type { PeriodType, PlannerItem } from '@/lib/planner/types'
 import CheckCircle from './CheckCircle'
+import PriorityFlag, { PRIORITY_COLOR } from './PriorityFlag'
 
 const REPEAT_LABEL: Record<PeriodType, string> = { day: 'daily', week: 'weekly', month: 'monthly' }
 const MENU_ITEM = 'flex cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 text-sm text-slate-200 outline-none data-[highlighted]:bg-white/10'
@@ -110,6 +112,7 @@ export default function PlannerItemRow({
         >
           {item.title}
         </button>
+        {!done && <PriorityFlag priority={item.priority} />}
         {item.carry_count > 0 && (
           <span className="shrink-0 rounded-full bg-amber-500/15 px-2 py-0.5 text-[11px] font-semibold text-amber-300" title="Times carried over">
             ↪ {item.carry_count}×
@@ -147,6 +150,27 @@ export default function PlannerItemRow({
                         {t.label}
                       </DropdownMenu.Item>
                     ))}
+                  </DropdownMenu.SubContent>
+                </DropdownMenu.Portal>
+              </DropdownMenu.Sub>
+              <DropdownMenu.Sub>
+                <DropdownMenu.SubTrigger className={MENU_ITEM}>
+                  <Flag className="h-3.5 w-3.5" /> Priority
+                </DropdownMenu.SubTrigger>
+                <DropdownMenu.Portal>
+                  <DropdownMenu.SubContent sideOffset={4} className="z-50 min-w-[140px] rounded-lg border border-white/10 bg-slate-900 p-1 shadow-xl">
+                    {PRIORITIES.map(p => (
+                      <DropdownMenu.Item key={p} className={MENU_ITEM} onSelect={() => onUpdate({ priority: p })}>
+                        <Flag className={cn('h-3.5 w-3.5', PRIORITY_COLOR[p])} fill="currentColor" />
+                        {PRIORITY_LABEL[p]}
+                        {item.priority === p && <Check className="ml-auto h-3.5 w-3.5 text-slate-400" />}
+                      </DropdownMenu.Item>
+                    ))}
+                    <DropdownMenu.Item className={MENU_ITEM} onSelect={() => onUpdate({ priority: null })}>
+                      <Flag className="h-3.5 w-3.5 text-slate-600" />
+                      None
+                      {!item.priority && <Check className="ml-auto h-3.5 w-3.5 text-slate-400" />}
+                    </DropdownMenu.Item>
                   </DropdownMenu.SubContent>
                 </DropdownMenu.Portal>
               </DropdownMenu.Sub>

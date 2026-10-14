@@ -6,6 +6,8 @@ import { X, Target, CheckSquare, Circle, Loader2 } from 'lucide-react'
 import { differenceInDays, parseISO } from 'date-fns'
 import { completeItem, openNowQuery } from '@/lib/planner/actions'
 import { periodStart } from '@/lib/planner/periods'
+import { byPriority } from '@/lib/planner/priority'
+import PriorityFlag from '@/components/planner/PriorityFlag'
 import type { PeriodType, PlannerItem } from '@/lib/planner/types'
 import { todayStr } from '@/lib/habitStreak'
 import { createSupabaseBrowserClient } from '@/lib/supabase'
@@ -157,7 +159,7 @@ function TodosSection({ onNavigate }: { onNavigate: () => void }) {
           {PERIOD_GROUPS.map(({ type, label }) => {
             // Each period gets its own limit so a busy day can't push the
             // week's and month's tasks out of view.
-            const all   = todos.filter(t => t.period_type === type)
+            const all   = byPriority(todos.filter(t => t.period_type === type))
             const group = all.slice(0, MAX_PER_PERIOD)
             if (group.length === 0) return null
             return (
@@ -175,6 +177,7 @@ function TodosSection({ onNavigate }: { onNavigate: () => void }) {
                       <span className="flex-1 min-w-0 text-sm text-slate-200 group-hover:text-white transition-colors truncate">
                         {todo.title}
                       </span>
+                      <PriorityFlag priority={todo.priority} compact />
                       {overdue && <span className="text-xs shrink-0 font-medium text-red-400">Overdue</span>}
                     </button>
                   )

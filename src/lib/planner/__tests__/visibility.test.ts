@@ -6,7 +6,7 @@ function item(over: Partial<PlannerItem>): PlannerItem {
   return {
     id: 'i1', user_id: 'u1', title: 'x', notes: null, period_type: 'week', period_start: '2026-10-11',
     repeats: false, is_completed: false, completed_at: null, points_awarded: 0, carry_count: 0,
-    ended_at: null, sort_order: 0, created_at: '2026-10-11T00:00:00Z', ...over,
+    ended_at: null, sort_order: 0, priority: null, created_at: '2026-10-11T00:00:00Z', ...over,
   }
 }
 

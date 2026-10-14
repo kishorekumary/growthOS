@@ -9,6 +9,7 @@ import { useHabitCelebration } from '@/hooks/useHabitCelebration'
 import ListClearedBurst from '@/components/shared/ListClearedBurst'
 import { periodLabel, periodStart } from '@/lib/planner/periods'
 import { isDoneIn } from '@/lib/planner/visibility'
+import { byPriority } from '@/lib/planner/priority'
 import type { ItemPatch } from '@/lib/planner/actions'
 import type { PeriodType, PlannerCompletion, PlannerItem } from '@/lib/planner/types'
 import type { PlannerHabit } from '@/hooks/usePlannerHabits'
@@ -121,7 +122,8 @@ export default function PeriodList(props: PeriodListProps) {
   const { done, total } = countDone(props)
   const pct = total ? Math.round((done / total) * 100) : 0
   const isDone     = (i: PlannerItem) => isDoneIn(i, start, completions)
-  const openItems  = items.filter(i => !isDone(i) || recentlyDone.has(i.id))
+  // Open items: high priority first, keeping the existing order within a level.
+  const openItems  = byPriority(items.filter(i => !isDone(i) || recentlyDone.has(i.id)))
   const doneItems  = items.filter(i => isDone(i) && !recentlyDone.has(i.id))
   const openHabits = habits.filter(h => !h.done)
   const doneHabits = habits.filter(h => h.done)

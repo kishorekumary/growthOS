@@ -27,7 +27,8 @@ export async function POST() {
   }
 
   const today = new Date().toISOString().slice(0, 10)
-  const todoTitles = await fetchReminderTitles(supabase, user.id, today)
+  // Already ordered high priority first, so the spoken list leads with them.
+  const { titles: todoTitles } = await fetchReminderTitles(supabase, user.id, today)
 
   const todoCount = todoTitles.length
   let taskMsg: string

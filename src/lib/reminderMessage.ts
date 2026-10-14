@@ -18,6 +18,7 @@ export interface ReminderInput {
   pending:       ReminderHabit[]   // today's daily habits not yet logged
   doneCount:     number
   todoTitles:    string[]          // open planner items worth nudging about today
+  priorityTitles?: string[]        // the high-priority subset of todoTitles
   isEvening:     boolean
   perfectStreak: number            // live perfect-day streak (0 if broken)
   powerPending?: boolean           // this half of the day's power questions not done yet
@@ -55,10 +56,14 @@ function plural(n: number, word: string): string {
   return `${n} ${word}${n === 1 ? '' : 's'}`
 }
 
-function taskLine(todoTitles: string[]): string {
+function taskLine(todoTitles: string[], priorityTitles: string[] = []): string {
   if (!todoTitles.length) return ''
   if (todoTitles.length === 1) return `On your plan: ${todoTitles[0]}.`
-  return `${plural(todoTitles.length, 'planner item')} still open.`
+  const open = `${plural(todoTitles.length, 'planner item')} still open`
+  if (!priorityTitles.length) return `${open}.`
+  const names = priorityTitles.slice(0, 2).join(', ')
+  const extra = priorityTitles.length - 2
+  return `High priority: ${names}${extra > 0 ? ` +${extra} more` : ''}. ${open}.`
 }
 
 function topAtRisk(pending: ReminderHabit[]): ReminderHabit | undefined {
@@ -80,7 +85,7 @@ export function buildReminder(input: ReminderInput): ReminderMessage {
 function buildHabitReminder(input: ReminderInput): ReminderMessage {
   const pending = prioritize(input.pending)
   const first   = pending[0]
-  const tasks   = taskLine(input.todoTitles)
+  const tasks   = taskLine(input.todoTitles, input.priorityTitles)
   const tag     = 'zenith-reminder'
 
   if (!pending.length) {
