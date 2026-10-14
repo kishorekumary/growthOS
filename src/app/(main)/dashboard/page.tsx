@@ -12,6 +12,15 @@ import PowerQuestions from '@/components/dashboard/PowerQuestions'
 import DecisionsDue from '@/components/dashboard/DecisionsDue'
 import WorkbookDue from '@/components/dashboard/WorkbookDue'
 
+// YYYY-MM-DD for `date` in an IANA timezone ('en-CA' formats as ISO).
+function dateIn(timezone: string, date: Date): string {
+  try {
+    return new Intl.DateTimeFormat('en-CA', { timeZone: timezone, year: 'numeric', month: '2-digit', day: '2-digit' }).format(date)
+  } catch {
+    return date.toISOString().slice(0, 10)
+  }
+}
+
 export default async function DashboardPage() {
   const supabase = createSupabaseServerClient()
   const { data: { user } } = await supabase.auth.getUser()
@@ -22,6 +31,8 @@ export default async function DashboardPage() {
   const [
     { data: profile },
     { data: habits },
+    { data: hiddenMarks },
+    { data: notificationSettings },
     { data: workouts },
     { data: financeProfile },
     { data: completedBooks },
@@ -29,7 +40,12 @@ export default async function DashboardPage() {
     { data: activeGoals },
   ] = await Promise.all([
     supabase.from('user_profiles').select('full_name').eq('id', user.id).single(),
-    supabase.from('personality_habits').select('streak_count').eq('user_id', user.id),
+    // Same set the habit tracker shows: own habits plus global ones, minus
+    // any global habit this user has hidden.
+    supabase.from('personality_habits').select('id, streak_count, last_done_at, is_global')
+      .or(`user_id.eq.${user.id},is_global.eq.true`),
+    supabase.from('user_hidden_habits').select('habit_id').eq('user_id', user.id),
+    supabase.from('notification_settings').select('timezone').eq('user_id', user.id).maybeSingle(),
     supabase.from('workout_logs').select('id').eq('user_id', user.id).gte('log_date', weekStart),
     supabase.from('financial_profile').select('financial_score').eq('user_id', user.id).single(),
     supabase.from('reading_log').select('id').eq('user_id', user.id).eq('status', 'completed'),
@@ -48,8 +64,23 @@ export default async function DashboardPage() {
       .order('target_date', { ascending: true, nullsFirst: false }),
   ])
 
-  const activeHabits = habits?.filter((h) => h.streak_count > 0).length ?? 0
-  const maxStreak = habits?.reduce((max, h) => Math.max(max, h.streak_count), 0) ?? 0
+  const hiddenIds = new Set((hiddenMarks ?? []).map(h => h.habit_id))
+  const visibleHabits = (habits ?? []).filter(h => !h.is_global || !hiddenIds.has(h.id))
+  const activeHabits = visibleHabits.length
+
+  // streak_count isn't reset when a day is missed, so only count streaks
+  // still alive (done today or yesterday in the user's timezone) — same rule
+  // as TodayHabits. Global habits share one streak column across users, so
+  // they're left out.
+  const tz = notificationSettings?.timezone ?? 'UTC'
+  const now = new Date()
+  const localToday = dateIn(tz, now)
+  const localYesterday = dateIn(tz, new Date(now.getTime() - 24 * 60 * 60 * 1000))
+  const maxStreak = visibleHabits.reduce((max, h) => {
+    if (h.is_global || !h.last_done_at || h.streak_count <= 0) return max
+    const last = dateIn(tz, new Date(h.last_done_at))
+    return last === localToday || last === localYesterday ? Math.max(max, h.streak_count) : max
+  }, 0)
   const workoutsThisWeek = workouts?.length ?? 0
   const financialScore = financeProfile?.financial_score ?? null
   const booksCompleted = completedBooks?.length ?? 0
@@ -67,7 +98,7 @@ export default async function DashboardPage() {
       iconBg: 'bg-violet-500/20',
       iconColor: 'text-violet-400',
       stat: activeHabits > 0 ? `${activeHabits} active habit${activeHabits !== 1 ? 's' : ''}` : 'No habits yet',
-      subStat: maxStreak > 0 ? `${maxStreak} day streak` : 'Start your first habit',
+      subStat: maxStreak > 0 ? `${maxStreak} day streak` : activeHabits > 0 ? 'Start a streak today' : 'Start your first habit',
       subIcon: maxStreak > 0 ? Flame : null,
     },
     {
