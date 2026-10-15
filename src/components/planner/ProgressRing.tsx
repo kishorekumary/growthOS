@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import CountUp from '@/components/ui/count-up'
 
 export default function ProgressRing({ done, total }: { done: number; total: number }) {
   const pct = total ? Math.round((done / total) * 100) : 0
@@ -19,7 +20,7 @@ export default function ProgressRing({ done, total }: { done: number; total: num
       aria-label={`${done} of ${total} done`}
     >
       <span className="flex h-11 w-11 items-center justify-center rounded-full bg-slate-950 text-xs font-bold text-white">
-        {pct}%
+        <CountUp value={pct} />%
       </span>
     </div>
   )

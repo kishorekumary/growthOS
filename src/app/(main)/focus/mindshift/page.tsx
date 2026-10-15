@@ -4,6 +4,7 @@ import { useState } from 'react'
 import Link from 'next/link'
 import { ArrowLeft, RefreshCw, Zap } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import CountUp from '@/components/ui/count-up'
 
 // ─── Survey data ────────────────────────────────────────────────────────────
 
@@ -268,7 +269,7 @@ export default function MindshiftSurveyPage() {
 
         {/* Total score */}
         <div className="mb-2 flex items-baseline gap-3">
-          <span className="text-5xl font-bold text-white">{total}</span>
+          <span className="text-5xl font-bold text-white"><CountUp value={total} /></span>
           <span className="text-slate-400 text-sm">out of 60</span>
         </div>
         <p className="text-slate-400 text-sm mb-4">{pct}% leakage score</p>

@@ -7,6 +7,7 @@ import {
 } from 'date-fns'
 import { Leaf, Zap, Flame, Star, Crown, Sparkles, ChevronDown, ChevronUp } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import CountUp from '@/components/ui/count-up'
 
 export interface DoneEntry {
   completed_at: string
@@ -173,7 +174,7 @@ export default function PlannerRewards({ done: entries }: { done: DoneEntry[] })
         </div>
         <div className="flex items-center gap-3">
           <span className="text-xs text-slate-500">
-            {todayPts} pts today
+            <CountUp value={todayPts} /> pts today
           </span>
           {collapsed
             ? <ChevronDown className="h-3.5 w-3.5 text-slate-500" />

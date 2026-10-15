@@ -22,7 +22,7 @@ export function setEffectsMode(mode: EffectsMode) {
   window.dispatchEvent(new Event(EFFECTS_CHANGE_EVENT))
 }
 
-function osReducedMotion(): boolean {
+export function osReducedMotion(): boolean {
   try {
     return window.matchMedia('(prefers-reduced-motion: reduce)').matches
   } catch {
