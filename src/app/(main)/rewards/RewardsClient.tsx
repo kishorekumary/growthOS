@@ -5,6 +5,7 @@ import { Coins, Flame, Plus, Trash2, Pencil, Gift, Loader2, AlertCircle, Sparkle
 import { cn } from '@/lib/utils'
 import { FREEZE_COST, FREEZE_MAX } from '@/lib/dailyChest'
 import CountUp from '@/components/ui/count-up'
+import EmptyState from '@/components/ui/empty-state'
 
 interface CatalogItem { id: string; title: string; point_cost: number; created_at: string }
 interface Redemption  { id: string; title: string; point_cost: number; redeemed_at: string }
@@ -239,7 +240,13 @@ export default function RewardsClient({
         </div>
 
         {catalog.length === 0 && seeded && (
-          <p className="text-sm text-slate-500 text-center py-4">No rewards yet — add your first one below.</p>
+          <EmptyState
+            icon={Gift}
+            tone="amber"
+            title="No rewards yet"
+            hint="Add something worth working for below, and spend your points on it."
+            className="py-8"
+          />
         )}
 
         <div className="space-y-2">

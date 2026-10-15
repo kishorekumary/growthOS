@@ -12,6 +12,7 @@ import {
 } from '@/components/ui/dialog'
 import { cn } from '@/lib/utils'
 import { format } from 'date-fns'
+import EmptyState from '@/components/ui/empty-state'
 
 interface Goal {
   id: string
@@ -255,11 +256,12 @@ export default function FinanceGoals() {
       )}
 
       {goals.length === 0 && !isOffline && (
-        <div className="rounded-xl border border-dashed border-white/10 p-10 text-center">
-          <Target className="h-10 w-10 text-violet-400/30 mx-auto mb-3" />
-          <p className="text-slate-400 text-sm">No goals yet.</p>
-          <p className="text-slate-600 text-xs mt-1">Add a goal to start tracking your progress.</p>
-        </div>
+        <EmptyState
+          icon={Target}
+          tone="emerald"
+          title="Set your first money goal"
+          hint="Add a goal and watch the progress add up."
+        />
       )}
 
       <div className="space-y-3">

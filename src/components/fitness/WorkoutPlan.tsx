@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import { format } from 'date-fns'
 import { useCachedQuery } from '@/hooks/useCachedQuery'
+import EmptyState from '@/components/ui/empty-state'
 
 type WorkoutType = 'strength' | 'cardio' | 'yoga' | 'sports' | 'rest'
 
@@ -173,13 +174,12 @@ export default function WorkoutPlan() {
           <p className="text-slate-400 text-sm">Can&apos;t load — you&apos;re offline.</p>
         </div>
       ) : !plan ? (
-        <div className="rounded-xl border border-dashed border-white/10 p-12 text-center">
-          <Dumbbell className="h-10 w-10 text-violet-400/30 mx-auto mb-3" />
-          <p className="text-slate-400 text-sm">No plan yet.</p>
-          <p className="text-slate-600 text-xs mt-1">
-            Generate a personalised plan based on your fitness profile.
-          </p>
-        </div>
+        <EmptyState
+          icon={Dumbbell}
+          tone="sky"
+          title="No workout plan yet"
+          hint="Generate a personalised plan based on your fitness profile."
+        />
       ) : (
         <div className="space-y-2">
           {DAYS.map((day) => (

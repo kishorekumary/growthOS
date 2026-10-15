@@ -12,6 +12,7 @@ import {
 } from '@/components/ui/dialog'
 import { cn } from '@/lib/utils'
 import { format } from 'date-fns'
+import EmptyState from '@/components/ui/empty-state'
 
 type TxnType = 'expense' | 'income' | 'savings'
 
@@ -210,11 +211,12 @@ export default function FinanceTracker() {
       )}
 
       {txns.length === 0 && !isOffline && (
-        <div className="rounded-xl border border-dashed border-white/10 p-10 text-center">
-          <PiggyBank className="h-10 w-10 text-violet-400/30 mx-auto mb-3" />
-          <p className="text-slate-400 text-sm">No transactions yet.</p>
-          <p className="text-slate-600 text-xs mt-1">Add your income, expenses, and savings.</p>
-        </div>
+        <EmptyState
+          icon={PiggyBank}
+          tone="emerald"
+          title="No transactions yet"
+          hint="Log income, expenses and savings to see where your money goes."
+        />
       )}
 
       <div className="space-y-4">

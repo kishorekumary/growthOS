@@ -24,6 +24,7 @@ import { completeHabit } from '@/lib/completeHabit'
 import { useReward } from '@/contexts/RewardContext'
 import { DAILY_POINTS, DAILY_POINTS_KEYSTONE } from '@/lib/rewardMilestones'
 import CountUp from '@/components/ui/count-up'
+import EmptyState from '@/components/ui/empty-state'
 
 type Category  = HabitCategory
 type Frequency = 'daily' | 'weekly'
@@ -1276,11 +1277,12 @@ export default function HabitTracker() {
       )}
 
       {visibleHabits.length === 0 && !isOffline && (
-        <div className="rounded-xl border border-dashed border-white/10 p-10 text-center">
-          <Flame className="h-10 w-10 text-orange-400/40 mx-auto mb-3" />
-          <p className="text-slate-400 text-sm">No habits yet.</p>
-          <p className="text-slate-600 text-xs mt-1">Add one above to start building streaks.</p>
-        </div>
+        <EmptyState
+          icon={Flame}
+          tone="orange"
+          title="Your first streak starts here"
+          hint="Add a habit above. Small and daily beats big and rare."
+        />
       )}
 
       {/* Keystone hint */}

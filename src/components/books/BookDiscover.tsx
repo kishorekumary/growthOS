@@ -5,6 +5,7 @@ import { Loader2, Sparkles, BookOpen, Check } from 'lucide-react'
 import { createSupabaseBrowserClient } from '@/lib/supabase'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
+import EmptyState from '@/components/ui/empty-state'
 
 interface RecommendedBook {
   title: string
@@ -120,13 +121,11 @@ export default function BookDiscover() {
       </div>
 
       {books.length === 0 && !loading && (
-        <div className="rounded-xl border border-dashed border-white/10 p-12 text-center">
-          <BookOpen className="h-10 w-10 text-violet-400/30 mx-auto mb-3" />
-          <p className="text-slate-400 text-sm">No recommendations yet.</p>
-          <p className="text-slate-600 text-xs mt-1">
-            Click "Get Recommendations" for books matched to your goals.
-          </p>
-        </div>
+        <EmptyState
+          icon={BookOpen}
+          title="Your next great read is waiting"
+          hint={'Tap "Get Recommendations" for books matched to your goals.'}
+        />
       )}
 
       {books.length > 0 && (

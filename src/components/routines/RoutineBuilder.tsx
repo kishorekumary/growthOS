@@ -3,12 +3,13 @@
 import { useState, useEffect, useMemo } from 'react'
 import {
   Plus, Trash2, Loader2, CheckCircle, GripVertical, ChevronUp, ChevronDown,
-  Edit2, Check, X, Clock, Flame,
+  Edit2, Check, X, Clock, Flame, Sunrise,
 } from 'lucide-react'
 import { createSupabaseBrowserClient } from '@/lib/supabase'
 import { useCachedQuery } from '@/hooks/useCachedQuery'
 import { cn } from '@/lib/utils'
 import { format } from 'date-fns'
+import EmptyState from '@/components/ui/empty-state'
 
 interface Step {
   id: string
@@ -245,7 +246,12 @@ export default function RoutineBuilder() {
       {routines.length === 0 && isOffline ? (
         <p className="text-sm text-slate-500 text-center py-6">Can&apos;t load routines — you&apos;re offline.</p>
       ) : routines.length === 0 ? (
-        <p className="text-sm text-slate-500 text-center py-6">No routines yet.</p>
+        <EmptyState
+          icon={Sunrise}
+          tone="amber"
+          title="No routines yet"
+          hint="Build a morning or evening routine and run through it each day."
+        />
       ) : (
         routines.map(routine => {
         const cfg = TYPE_CONFIG[routine.type]
