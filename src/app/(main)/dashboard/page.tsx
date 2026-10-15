@@ -188,12 +188,16 @@ export default async function DashboardPage() {
       {/* Section cards — 2×2 grid */}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         {sections.map(({ title, href, icon: Icon, gradient, border, iconBg, iconColor, stat, subStat, subIcon: SubIcon }) => (
-          <div
+          <Link
             key={title}
-            className={`rounded-xl border ${border} bg-gradient-to-br ${gradient} p-5 flex flex-col gap-4`}
+            href={href}
+            className={`card-sheen group relative overflow-hidden rounded-xl border ${border} bg-gradient-to-br ${gradient} p-5 flex flex-col gap-4 transition-[transform,box-shadow] duration-200 hover:-translate-y-0.5 active:scale-[0.98] motion-reduce:transform-none`}
           >
+            {/* Soft glow in the corner, in the section's colour */}
+            <div aria-hidden className={`pointer-events-none absolute -right-8 -top-8 h-24 w-24 rounded-full blur-2xl opacity-60 ${iconBg}`} />
+
             {/* Icon + title */}
-            <div className="flex items-center gap-3">
+            <div className="relative flex items-center gap-3">
               <div className={`flex h-9 w-9 items-center justify-center rounded-lg ${iconBg}`}>
                 <Icon className={`h-4 w-4 ${iconColor}`} />
               </div>
@@ -201,7 +205,7 @@ export default async function DashboardPage() {
             </div>
 
             {/* Stats */}
-            <div className="flex-1">
+            <div className="relative flex-1">
               <p className="text-base font-semibold text-white">{stat}</p>
               <p className="text-xs text-slate-400 mt-0.5 flex items-center gap-1">
                 {SubIcon && <SubIcon className="h-3 w-3" />}
@@ -209,15 +213,12 @@ export default async function DashboardPage() {
               </p>
             </div>
 
-            {/* Open button */}
-            <Link
-              href={href}
-              className={`inline-flex items-center gap-1.5 text-xs font-medium ${iconColor} hover:opacity-80 transition-opacity`}
-            >
+            {/* The whole card is the link; this is its affordance */}
+            <span className={`relative inline-flex items-center gap-1.5 text-xs font-medium ${iconColor}`}>
               Open
-              <ArrowRight className="h-3.5 w-3.5" />
-            </Link>
-          </div>
+              <ArrowRight className="h-3.5 w-3.5 transition-transform duration-200 group-hover:translate-x-0.5" />
+            </span>
+          </Link>
         ))}
       </div>
 
