@@ -2,24 +2,20 @@
 
 import { useState, useEffect } from 'react'
 import dynamic from 'next/dynamic'
-import { Loader2 } from 'lucide-react'
+import { SkeletonCards } from '@/components/ui/skeleton'
 import { cn } from '@/lib/utils'
 import { format, subMonths, startOfMonth, endOfMonth } from 'date-fns'
 import GoalsWidget from '@/components/goals/GoalsWidget'
 
-const FinanceOverview  = dynamic(() => import('@/components/finance/FinanceOverview'),  { loading: () => <Spinner /> })
-const FinanceBudget    = dynamic(() => import('@/components/finance/FinanceBudget'),    { loading: () => <Spinner /> })
-const FinanceGoals     = dynamic(() => import('@/components/finance/FinanceGoals'),     { loading: () => <Spinner /> })
-const SpendingChart    = dynamic(() => import('@/components/finance/SpendingChart'),    { loading: () => <Spinner /> })
-const ExpenseTracker   = dynamic(() => import('@/components/finance/ExpenseTracker'),   { loading: () => <Spinner /> })
-const AIChat           = dynamic(() => import('@/components/shared/AIChat'),            { loading: () => <Spinner /> })
+const FinanceOverview  = dynamic(() => import('@/components/finance/FinanceOverview'),  { loading: () => <SectionSkeleton /> })
+const FinanceBudget    = dynamic(() => import('@/components/finance/FinanceBudget'),    { loading: () => <SectionSkeleton /> })
+const FinanceGoals     = dynamic(() => import('@/components/finance/FinanceGoals'),     { loading: () => <SectionSkeleton /> })
+const SpendingChart    = dynamic(() => import('@/components/finance/SpendingChart'),    { loading: () => <SectionSkeleton /> })
+const ExpenseTracker   = dynamic(() => import('@/components/finance/ExpenseTracker'),   { loading: () => <SectionSkeleton /> })
+const AIChat           = dynamic(() => import('@/components/shared/AIChat'),            { loading: () => <SectionSkeleton /> })
 
-function Spinner() {
-  return (
-    <div className="flex items-center justify-center py-12">
-      <Loader2 className="h-5 w-5 animate-spin text-slate-500" />
-    </div>
-  )
+function SectionSkeleton() {
+  return <SkeletonCards />
 }
 
 function buildMonths() {

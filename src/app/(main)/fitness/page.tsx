@@ -2,22 +2,18 @@
 
 import { useState, useEffect } from 'react'
 import dynamic from 'next/dynamic'
-import { Loader2 } from 'lucide-react'
+import { SkeletonCards } from '@/components/ui/skeleton'
 import { cn } from '@/lib/utils'
 import GoalsWidget from '@/components/goals/GoalsWidget'
 
-const WorkoutPlan     = dynamic(() => import('@/components/fitness/WorkoutPlan'),       { loading: () => <Spinner /> })
-const WorkoutLogger   = dynamic(() => import('@/components/fitness/WorkoutLogger'),     { loading: () => <Spinner /> })
-const FitnessProgress = dynamic(() => import('@/components/fitness/FitnessProgress'),   { loading: () => <Spinner /> })
-const NutritionTracker = dynamic(() => import('@/components/fitness/NutritionTracker'), { loading: () => <Spinner /> })
-const AIChat          = dynamic(() => import('@/components/shared/AIChat'),              { loading: () => <Spinner /> })
+const WorkoutPlan     = dynamic(() => import('@/components/fitness/WorkoutPlan'),       { loading: () => <SectionSkeleton /> })
+const WorkoutLogger   = dynamic(() => import('@/components/fitness/WorkoutLogger'),     { loading: () => <SectionSkeleton /> })
+const FitnessProgress = dynamic(() => import('@/components/fitness/FitnessProgress'),   { loading: () => <SectionSkeleton /> })
+const NutritionTracker = dynamic(() => import('@/components/fitness/NutritionTracker'), { loading: () => <SectionSkeleton /> })
+const AIChat          = dynamic(() => import('@/components/shared/AIChat'),              { loading: () => <SectionSkeleton /> })
 
-function Spinner() {
-  return (
-    <div className="flex items-center justify-center py-12">
-      <Loader2 className="h-5 w-5 animate-spin text-slate-500" />
-    </div>
-  )
+function SectionSkeleton() {
+  return <SkeletonCards />
 }
 
 const TABS = ['Log Workout', 'Nutrition', 'Plan', 'Progress', 'Coach'] as const
