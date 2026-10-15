@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import { format } from 'date-fns'
 import { useCachedQuery } from '@/hooks/useCachedQuery'
+import EmptyState from '@/components/ui/empty-state'
 
 interface BudgetItem {
   name: string
@@ -176,13 +177,12 @@ export default function FinanceBudget() {
           <p className="text-slate-400 text-sm">Can&apos;t load — you&apos;re offline.</p>
         </div>
       ) : !budget ? (
-        <div className="rounded-xl border border-dashed border-white/10 p-12 text-center">
-          <Sparkles className="h-10 w-10 text-violet-400/30 mx-auto mb-3" />
-          <p className="text-slate-400 text-sm">No budget yet.</p>
-          <p className="text-slate-600 text-xs mt-1">
-            Generate a personalised 50/30/20 plan based on your income.
-          </p>
-        </div>
+        <EmptyState
+          icon={Sparkles}
+          tone="emerald"
+          title="No budget yet"
+          hint="Generate a personalised 50/30/20 plan from your income."
+        />
       ) : (
         <div className="space-y-4">
           {(['needs', 'wants', 'savings'] as CategoryKey[]).map((key) => {

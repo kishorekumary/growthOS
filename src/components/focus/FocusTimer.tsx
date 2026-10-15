@@ -12,6 +12,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { cn } from '@/lib/utils'
 import { useTimer, playAlarm, showNotification, type Sequence } from '@/contexts/TimerContext'
+import EmptyState from '@/components/ui/empty-state'
 
 // ─── Types ────────────────────────────────────────────────────
 
@@ -713,11 +714,11 @@ export default function FocusTimer() {
           <p className="text-slate-400 text-sm">Can&apos;t load — you&apos;re offline.</p>
         </div>
       ) : sequences.length === 0 ? (
-        <div className="rounded-xl border border-dashed border-white/10 p-12 text-center">
-          <Timer className="h-10 w-10 text-violet-400/30 mx-auto mb-3" />
-          <p className="text-slate-400 text-sm">No sequences yet.</p>
-          <p className="text-slate-600 text-xs mt-1">Create a sequence of timed intervals to focus deeply.</p>
-        </div>
+        <EmptyState
+          icon={Timer}
+          title="No focus sequences yet"
+          hint="Build a sequence of timed intervals and go deep."
+        />
       ) : (
         <div className="space-y-3">
           {sequences.map((seq, idx) => {
