@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import { Check, Crown, Flame, Loader2, ArrowRight, Trophy, Sparkles, Gift, Lock, Snowflake } from 'lucide-react'
 import { useCachedQuery } from '@/hooks/useCachedQuery'
@@ -15,6 +15,7 @@ import { HABIT_CATEGORY_META, type HabitCategory } from '@/lib/habitCategories'
 import { prevDate } from '@/lib/dailyChest'
 import { cn } from '@/lib/utils'
 import Collapse from '@/components/ui/collapse'
+import StreakFlame from '@/components/ui/streak-flame'
 
 interface Habit {
   id:             string
@@ -107,6 +108,15 @@ export default function TodayHabits() {
   const { inFlight, begin, end } = useInFlightIds()
   // A tapped habit shows its check for a moment, then collapses out of the list.
   const settle = useSettle()
+  // From 6pm, a pending habit with a live streak says it's at risk. Read after
+  // mount (and each minute) so server and client render the same markup.
+  const [evening, setEvening] = useState(false)
+  useEffect(() => {
+    const check = () => setEvening(new Date().getHours() >= 18)
+    check()
+    const id = setInterval(check, 60_000)
+    return () => clearInterval(id)
+  }, [])
   const { celebrate, celebrationNode } = useHabitCelebration()
   const { celebrateMilestones } = useReward()
 
@@ -296,9 +306,13 @@ export default function TodayHabits() {
                       <span className={cn('text-[10px] px-1.5 py-0.5 rounded-full', HABIT_CATEGORY_META[habit.category]?.badge ?? 'bg-white/10 text-slate-400')}>
                         {HABIT_CATEGORY_META[habit.category]?.label ?? habit.category}
                       </span>
-                      {streak > 0 && (
-                        <span className="text-[11px] text-orange-400">🔥 {streak} — keep it alive</span>
-                      )}
+                      {streak > 0 && (evening && !checked ? (
+                        <span className="text-[11px] font-medium text-orange-300 animate-pulse motion-reduce:animate-none">
+                          <StreakFlame seed={streak} /> {streak} at risk — do it tonight
+                        </span>
+                      ) : (
+                        <span className="text-[11px] text-orange-400"><StreakFlame seed={streak} /> {streak} — keep it alive</span>
+                      ))}
                       {frozen > 0 && (
                         <span className="text-[11px] text-sky-300">🧊 {frozen} — a freeze will save it today</span>
                       )}

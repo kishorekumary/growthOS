@@ -8,6 +8,7 @@ import {
 import { Leaf, Zap, Flame, Star, Crown, Sparkles, ChevronDown, ChevronUp } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import CountUp from '@/components/ui/count-up'
+import StreakFlame from '@/components/ui/streak-flame'
 
 export interface DoneEntry {
   completed_at: string
@@ -168,7 +169,7 @@ export default function PlannerRewards({ done: entries }: { done: DoneEntry[] })
           <span className="text-sm font-semibold text-white">Rewards</span>
           {streak > 1 && (
             <span className="flex items-center gap-0.5 text-xs font-bold text-orange-400">
-              🔥 {streak}d streak
+              <StreakFlame seed={streak} /> {streak}d streak
             </span>
           )}
         </div>

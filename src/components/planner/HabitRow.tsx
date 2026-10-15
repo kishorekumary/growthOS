@@ -3,6 +3,7 @@
 import { cn } from '@/lib/utils'
 import type { PlannerHabit } from '@/hooks/usePlannerHabits'
 import CheckCircle from './CheckCircle'
+import StreakFlame from '@/components/ui/streak-flame'
 
 export default function HabitRow({ habit, busy, onDone }: {
   habit:  PlannerHabit
@@ -23,7 +24,7 @@ export default function HabitRow({ habit, busy, onDone }: {
       </span>
       {habit.streak_count > 0 && (
         <span className="shrink-0 rounded-full bg-orange-500/15 px-2 py-0.5 text-[11px] font-semibold text-orange-300">
-          🔥 {habit.streak_count}
+          <StreakFlame seed={habit.streak_count} /> {habit.streak_count}
         </span>
       )}
     </div>
