@@ -5,6 +5,8 @@ import { createPortal } from 'react-dom'
 import { ChevronDown, ChevronLeft, ChevronRight, ChevronUp } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { haptic } from '@/lib/effects'
+import { useSettle } from '@/hooks/useSettle'
+import Collapse from '@/components/ui/collapse'
 import { useHabitCelebration } from '@/hooks/useHabitCelebration'
 import ListClearedBurst from '@/components/shared/ListClearedBurst'
 import { periodLabel, periodStart } from '@/lib/planner/periods'
@@ -55,19 +57,11 @@ export default function PeriodList(props: PeriodListProps) {
   } = props
   const [showDone, setShowDone] = useState(false)
   const [dragOver, setDragOver] = useState(false)
-  // Items just checked off stay in the open list for 700ms so the pop,
-  // strike-through and "+N" flash are visible before they move to Done.
-  const [recentlyDone, setRecentlyDone] = useState<Set<string>>(new Set())
-  const timers = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map())
-  useEffect(() => {
-    const t = timers.current
-    return () => { t.forEach(clearTimeout); t.clear() }
-  }, [])
-
-  const unmark = (id: string) => setRecentlyDone(prev => {
-    if (!prev.has(id)) return prev
-    const n = new Set(prev); n.delete(id); return n
-  })
+  // Rows just checked off stay in the open list for 700ms so the pop,
+  // strike-through and "+N" flash are visible, then collapse out and move to
+  // Done. Habit ids are prefixed so they can't clash with item ids.
+  const settle = useSettle()
+  const habitKey = (h: PlannerHabit) => `h:${h.id}`
 
   // Celebrations: coin burst + light haptic per check-off; confetti + success
   // haptic when that check-off empties the list.
@@ -90,7 +84,9 @@ export default function PeriodList(props: PeriodListProps) {
   function habitDone(habit: PlannerHabit) {
     if (habit.done) return
     const emptiesList = openCount() === 1
+    settle.hold(habitKey(habit))
     onHabitDone(habit)
+    settle.release(habitKey(habit))
     celebrateCheck(emptiesList)
   }
 
@@ -99,22 +95,20 @@ export default function PeriodList(props: PeriodListProps) {
     // row synchronously (before onToggle) to keep it mounted from the tap.
     const wasOpen = !isDoneIn(item, start, completions)
     const emptiesList = wasOpen && openCount() === 1
-    const prior = timers.current.get(item.id)
-    if (prior) { clearTimeout(prior); timers.current.delete(item.id) }
-    if (wasOpen) setRecentlyDone(prev => new Set(prev).add(item.id))
+    if (wasOpen) settle.hold(item.id)
+    else settle.cancel(item.id)
     let delta = 0
     try {
       delta = await onToggle(item)
     } catch (err) {
-      unmark(item.id)
+      settle.cancel(item.id)
       throw err
     }
     if (wasOpen && delta > 0) {
-      const timer = setTimeout(() => { timers.current.delete(item.id); unmark(item.id) }, 700)
-      timers.current.set(item.id, timer)
+      settle.release(item.id)
       celebrateCheck(emptiesList)
     } else {
-      unmark(item.id)
+      settle.cancel(item.id)
     }
     return delta
   }
@@ -123,16 +117,16 @@ export default function PeriodList(props: PeriodListProps) {
   const pct = total ? Math.round((done / total) * 100) : 0
   const isDone     = (i: PlannerItem) => isDoneIn(i, start, completions)
   // Open items: high priority first, keeping the existing order within a level.
-  const openItems  = byPriority(items.filter(i => !isDone(i) || recentlyDone.has(i.id)))
-  const doneItems  = items.filter(i => isDone(i) && !recentlyDone.has(i.id))
-  const openHabits = habits.filter(h => !h.done)
-  const doneHabits = habits.filter(h => h.done)
+  const openItems  = byPriority(items.filter(i => !isDone(i) || settle.held.has(i.id)))
+  const doneItems  = items.filter(i => isDone(i) && !settle.held.has(i.id))
+  const openHabits = habits.filter(h => !h.done || settle.held.has(habitKey(h)))
+  const doneHabits = habits.filter(h => h.done && !settle.held.has(habitKey(h)))
   const doneCount  = doneItems.length + doneHabits.length
   const futureStart = start > periodStart(type, today)
 
   const renderItem = (item: PlannerItem) => (
+    <Collapse key={item.id} open={!settle.leaving.has(item.id)}>
     <PlannerItemRow
-      key={item.id}
       item={item}
       done={isDoneIn(item, start, completions)}
       busy={itemBusy.has(`${item.id}:${start}`)}
@@ -145,6 +139,7 @@ export default function PeriodList(props: PeriodListProps) {
       onMove={(t, s) => onMove(item, t, s)}
       onDelete={() => onDelete(item)}
     />
+    </Collapse>
   )
 
   return (
@@ -198,7 +193,9 @@ export default function PeriodList(props: PeriodListProps) {
       {/* Open */}
       <div className="space-y-2">
         {openHabits.map(h => (
-          <HabitRow key={h.id} habit={h} busy={habitBusy.has(h.id)} onDone={() => habitDone(h)} />
+          <Collapse key={h.id} open={!settle.leaving.has(habitKey(h))}>
+            <HabitRow habit={h} busy={habitBusy.has(h.id)} onDone={() => habitDone(h)} />
+          </Collapse>
         ))}
         {openItems.map(renderItem)}
         {openHabits.length + openItems.length === 0 && (
@@ -222,7 +219,9 @@ export default function PeriodList(props: PeriodListProps) {
           {showDone && (
             <>
               {doneHabits.map(h => (
-                <HabitRow key={h.id} habit={h} busy={habitBusy.has(h.id)} onDone={() => habitDone(h)} />
+                <Collapse key={h.id}>
+                  <HabitRow habit={h} busy={habitBusy.has(h.id)} onDone={() => habitDone(h)} />
+                </Collapse>
               ))}
               {doneItems.map(renderItem)}
             </>

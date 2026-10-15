@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { Check, Crown, Flame, Loader2, ArrowRight, Trophy, Sparkles, Gift, Lock, Snowflake } from 'lucide-react'
 import { useCachedQuery } from '@/hooks/useCachedQuery'
 import { useInFlightIds } from '@/hooks/useInFlightIds'
+import { useSettle } from '@/hooks/useSettle'
 import { useHabitLeverage, leverageLine } from '@/hooks/useHabitLeverage'
 import { useHabitCelebration } from '@/hooks/useHabitCelebration'
 import { useReward } from '@/contexts/RewardContext'
@@ -13,6 +14,7 @@ import { localDateStr, todayStr, yesterdayStr } from '@/lib/habitStreak'
 import { HABIT_CATEGORY_META, type HabitCategory } from '@/lib/habitCategories'
 import { prevDate } from '@/lib/dailyChest'
 import { cn } from '@/lib/utils'
+import Collapse from '@/components/ui/collapse'
 
 interface Habit {
   id:             string
@@ -103,6 +105,8 @@ export default function TodayHabits() {
 
   const { byHabit: leverage } = useHabitLeverage()
   const { inFlight, begin, end } = useInFlightIds()
+  // A tapped habit shows its check for a moment, then collapses out of the list.
+  const settle = useSettle()
   const { celebrate, celebrationNode } = useHabitCelebration()
   const { celebrateMilestones } = useReward()
 
@@ -132,9 +136,11 @@ export default function TodayHabits() {
 
   const visible = habits.filter(h => !h.is_global || !hiddenIds.has(h.id))
   const pending = visible
-    .filter(h => statusOf(h) === 'pending')
+    .filter(h => statusOf(h) === 'pending' || settle.held.has(h.id))
     .sort((a, b) => Number(isKeystone(b)) - Number(isKeystone(a)) || liveStreak(b) - liveStreak(a))
   const done    = visible.filter(h => statusOf(h) === 'done')
+  // Done habits still showing their check in the list aren't repeated as pills.
+  const doneSettled = done.filter(h => !settle.held.has(h.id))
   const actionable = visible.length - visible.filter(h => statusOf(h) === 'skipped').length
   const pct     = actionable ? Math.round((done.length / actionable) * 100) : 0
 
@@ -145,6 +151,7 @@ export default function TodayHabits() {
 
   async function markDone(habit: Habit) {
     if (statusOf(habit) !== 'pending' || !begin(habit.id)) return
+    settle.hold(habit.id)
     // Optimistic write through the cached logs — useCachedQuery discards any
     // in-flight fetch that started before it, so it can't be reverted.
     setLogs(prev => [...prev.filter(l => l.habit_id !== habit.id), { habit_id: habit.id, status: 'done' }])
@@ -153,11 +160,13 @@ export default function TodayHabits() {
       setHabits(prev => prev.map(h => h.id === habit.id
         ? { ...h, streak_count, longest_streak: Math.max(streak_count, h.longest_streak), last_done_at: new Date().toISOString() }
         : h))
+      settle.release(habit.id)
       celebrate()
       celebrateMilestones(milestones)
       refetchRewards()  // may have just completed a perfect day
       if (milestones.some(m => m.kind === 'freeze')) refetchFreezes()
     } catch {
+      settle.cancel(habit.id)
       setLogs(prev => prev.filter(l => !(l.habit_id === habit.id && l.status === 'done')))
     }
     end(habit.id)
@@ -256,12 +265,13 @@ export default function TodayHabits() {
             const frozen  = frozenStreak(habit)
             const why     = leverageLine(leverage.get(habit.id), today)
             const marking = inFlight.has(habit.id)
+            const checked = statusOf(habit) === 'done'
             return (
-              <li key={habit.id}>
+              <Collapse as="li" key={habit.id} open={!settle.leaving.has(habit.id)}>
                 <button
                   type="button"
                   onClick={() => markDone(habit)}
-                  disabled={marking}
+                  disabled={marking || checked}
                   className={cn(
                     'w-full flex items-center gap-3 rounded-xl border px-4 py-3 text-left transition-all active:scale-[0.98]',
                     isKeystone(habit)
@@ -269,13 +279,18 @@ export default function TodayHabits() {
                       : 'border-white/10 bg-white/5 hover:border-emerald-500/30',
                   )}
                 >
-                  <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full border-2 border-slate-600">
-                    {marking && <Loader2 className="h-3 w-3 animate-spin text-slate-400" />}
+                  <span className={cn(
+                    'flex h-6 w-6 shrink-0 items-center justify-center rounded-full border-2 transition-colors duration-200',
+                    checked ? 'animate-pop border-emerald-500 bg-emerald-500 motion-reduce:animate-none' : 'border-slate-600',
+                  )}>
+                    {checked
+                      ? <Check className="h-3.5 w-3.5 text-emerald-950" strokeWidth={3} />
+                      : marking && <Loader2 className="h-3 w-3 animate-spin text-slate-400" />}
                   </span>
                   <span className="flex-1 min-w-0">
                     <span className="flex items-start gap-1.5">
                       {isKeystone(habit) && <Crown className="mt-0.5 h-3.5 w-3.5 shrink-0 text-amber-400" />}
-                      <span className="min-w-0 break-words text-sm font-medium text-white">{habit.habit_name}</span>
+                      <span className={cn('min-w-0 break-words text-sm font-medium', checked ? 'text-slate-400 line-through' : 'text-white')}>{habit.habit_name}</span>
                     </span>
                     <span className="mt-0.5 flex items-center gap-1.5">
                       <span className={cn('text-[10px] px-1.5 py-0.5 rounded-full', HABIT_CATEGORY_META[habit.category]?.badge ?? 'bg-white/10 text-slate-400')}>
@@ -291,15 +306,15 @@ export default function TodayHabits() {
                     {why && <span className="mt-0.5 block text-[11px] italic text-slate-400 line-clamp-1">{why}</span>}
                   </span>
                 </button>
-              </li>
+              </Collapse>
             )
           })}
         </ul>
       )}
 
-      {done.length > 0 && pending.length > 0 && (
+      {doneSettled.length > 0 && pending.length > 0 && (
         <div className="flex flex-wrap gap-1.5">
-          {done.map(h => (
+          {doneSettled.map(h => (
             <span key={h.id} className="flex items-center gap-1 rounded-full bg-emerald-500/10 px-2 py-0.5 text-[11px] text-emerald-300/80">
               <Check className="h-3 w-3" />
               <span className="line-through decoration-emerald-500/40">{h.habit_name}</span>
