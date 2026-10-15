@@ -737,7 +737,7 @@ function HabitPanel() {
           </div>
           {catchableHabits.map(habit => (
             <div key={habit.id} className="flex items-center justify-between gap-2">
-              <span className="text-xs text-slate-300 truncate">{habit.habit_name}</span>
+              <span className="min-w-0 break-words text-xs text-slate-300">{habit.habit_name}</span>
               <button
                 onClick={() => markDoneForYesterday(habit)}
                 disabled={catchUpId === habit.id}
@@ -780,7 +780,7 @@ function HabitPanel() {
                     : null}
               </div>
               <div className="flex-1 min-w-0">
-                <p className={cn('text-sm font-medium line-clamp-2', isDone ? 'text-slate-500 line-through' : 'text-white')}>
+                <p className={cn('break-words text-sm font-medium', isDone ? 'text-slate-500 line-through' : 'text-white')}>
                   {habit.habit_name}
                 </p>
                 <div className="flex items-center gap-1.5 mt-0.5">

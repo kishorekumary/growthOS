@@ -560,7 +560,7 @@ function ManageGlobalHabitsModal({
             const hidden = hiddenIds.has(habit.id)
             return (
               <div key={habit.id} className="flex items-center justify-between gap-3 rounded-lg border border-white/10 bg-white/5 px-3 py-2.5">
-                <span className={cn('text-sm truncate', hidden ? 'text-slate-500' : 'text-white')}>
+                <span className={cn('min-w-0 break-words text-sm', hidden ? 'text-slate-500' : 'text-white')}>
                   {habit.habit_name}
                 </span>
                 <button
@@ -1180,7 +1180,7 @@ export default function HabitTracker() {
             <div className="border-t border-amber-500/20 px-4 py-3 space-y-2">
               {catchableHabits.map(habit => (
                 <div key={habit.id} className="flex items-center justify-between gap-3">
-                  <span className="text-sm text-slate-300 truncate">{habit.habit_name}</span>
+                  <span className="min-w-0 break-words text-sm text-slate-300">{habit.habit_name}</span>
                   <button
                     onClick={() => markDoneForYesterday(habit)}
                     disabled={catchUpId === habit.id}
@@ -1379,13 +1379,13 @@ export default function HabitTracker() {
 
               {/* Info */}
               <div className="flex-1 min-w-0 space-y-0.5">
-                <div className="flex items-center gap-1.5">
-                  {habit.is_global && <Globe className="h-3 w-3 shrink-0 text-emerald-400" />}
+                <div className="flex items-start gap-1.5">
+                  {habit.is_global && <Globe className="mt-1 h-3 w-3 shrink-0 text-emerald-400" />}
                   {keystone && (
-                    <Crown className="h-3.5 w-3.5 shrink-0 text-amber-400" />
+                    <Crown className="mt-0.5 h-3.5 w-3.5 shrink-0 text-amber-400" />
                   )}
                   <p className={cn(
-                    'text-sm font-medium line-clamp-2',
+                    'min-w-0 break-words text-sm font-medium',
                     keystone && status === 'pending' && 'text-amber-100',
                     !keystone && status === 'pending' && 'text-white',
                     status === 'done' && 'text-slate-500 line-through',
@@ -1504,7 +1504,7 @@ export default function HabitTracker() {
                       </>}
                 </button>
                 <div className="flex-1 min-w-0 space-y-0.5">
-                  <p className="text-sm text-slate-500 line-through line-clamp-2">{habit.habit_name}</p>
+                  <p className="min-w-0 break-words text-sm text-slate-500 line-through">{habit.habit_name}</p>
                   <span className={cn('text-xs px-1.5 py-0.5 rounded-full', cat.badge)}>
                     {cat.label}
                   </span>

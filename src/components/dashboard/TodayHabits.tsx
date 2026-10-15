@@ -273,9 +273,9 @@ export default function TodayHabits() {
                     {marking && <Loader2 className="h-3 w-3 animate-spin text-slate-400" />}
                   </span>
                   <span className="flex-1 min-w-0">
-                    <span className="flex items-center gap-1.5">
-                      {isKeystone(habit) && <Crown className="h-3.5 w-3.5 shrink-0 text-amber-400" />}
-                      <span className="text-sm font-medium text-white line-clamp-1">{habit.habit_name}</span>
+                    <span className="flex items-start gap-1.5">
+                      {isKeystone(habit) && <Crown className="mt-0.5 h-3.5 w-3.5 shrink-0 text-amber-400" />}
+                      <span className="min-w-0 break-words text-sm font-medium text-white">{habit.habit_name}</span>
                     </span>
                     <span className="mt-0.5 flex items-center gap-1.5">
                       <span className={cn('text-[10px] px-1.5 py-0.5 rounded-full', HABIT_CATEGORY_META[habit.category]?.badge ?? 'bg-white/10 text-slate-400')}>

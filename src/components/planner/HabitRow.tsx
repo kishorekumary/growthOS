@@ -18,7 +18,7 @@ export default function HabitRow({ habit, busy, onDone }: {
       title={habit.done ? 'Undo from the Habits page' : undefined}
     >
       <CheckCircle checked={habit.done} disabled={habit.done || busy} label={`Mark ${habit.habit_name} done`} onClick={onDone} />
-      <span className={cn('min-w-0 flex-1 truncate text-sm', habit.done ? 'text-slate-500 line-through' : 'text-white')}>
+      <span className={cn('min-w-0 flex-1 break-words text-sm', habit.done ? 'text-slate-500 line-through' : 'text-white')}>
         {habit.habit_name}
       </span>
       {habit.streak_count > 0 && (
