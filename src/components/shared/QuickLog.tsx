@@ -21,6 +21,7 @@ import { useReward } from '@/contexts/RewardContext'
 import RichTextEditor from './RichTextEditor'
 import OpenPlanList from '@/components/planner/OpenPlanList'
 import { mergeFinalTranscripts } from '@/lib/speechTranscript'
+import { matchHabit } from '@/lib/habitMatch'
 
 type Panel = 'plans' | 'voice' | 'meal' | 'workout' | 'finance' | 'journal' | 'task' | 'sleep'
 type MealType    = 'breakfast' | 'lunch' | 'dinner' | 'snack' | 'drink'
@@ -1038,6 +1039,8 @@ function VoicePanel({ onDone }: { onDone: () => void }) {
   const [result, setResult]       = useState<VoiceResult | null>(null)
   const [errorMsg, setErrorMsg]   = useState('')
   const [matchedHabit, setMatchedHabit]   = useState<Habit | null>(null)
+  // Closest habits when the voice match isn't certain — shown as a picker.
+  const [habitOptions, setHabitOptions]   = useState<Habit[]>([])
   const [nutritionData, setNutritionData] = useState<NutritionEstimate | null>(null)
   const [parsingMsg, setParsingMsg]       = useState('Understanding your command…')
   const { celebrate, celebrationNode } = useHabitCelebration()
@@ -1156,21 +1159,30 @@ function VoicePanel({ onDone }: { onDone: () => void }) {
         } catch { /* non-fatal — proceed without macros */ }
       }
 
-      // For habit intents, try to match to a real habit
-      if (data.type === 'habit') {
+      // For habit intents, try to match to a real habit. Also when the AI
+      // couldn't classify the command — it may still be a habit's name.
+      setMatchedHabit(null); setHabitOptions([])
+      if (data.type === 'habit' || data.type === 'unknown') {
         const supabase = createSupabaseBrowserClient()
         const { data: { session } } = await supabase.auth.getSession()
         if (session?.user) {
-          const { data: habits } = await supabase
-            .from('personality_habits')
-            .select('id, habit_name, category, streak_count, longest_streak, last_done_at, frequency, is_keystone')
-            .eq('user_id', session.user.id)
-          const needle = data.habit_name.toLowerCase()
-          const match = (habits as Habit[] ?? []).find(h =>
-            h.habit_name.toLowerCase().includes(needle) ||
-            needle.includes(h.habit_name.toLowerCase())
-          )
-          setMatchedHabit(match ?? null)
+          // Same set the Habit Tracker shows: own + global, minus hidden.
+          const [{ data: habits }, { data: hidden }] = await Promise.all([
+            supabase
+              .from('personality_habits')
+              .select('id, habit_name, category, streak_count, longest_streak, last_done_at, frequency, is_keystone, is_global')
+              .or(`user_id.eq.${session.user.id},is_global.eq.true`),
+            supabase.from('user_hidden_habits').select('habit_id').eq('user_id', session.user.id),
+          ])
+          const hiddenIds = new Set((hidden ?? []).map(h => h.habit_id as string))
+          const visible = ((habits ?? []) as Habit[]).filter(h => !h.is_global || !hiddenIds.has(h.id))
+          // Approximate match on both the AI's extracted name and the raw words.
+          const { match, candidates } = matchHabit(data.type === 'habit' ? [data.habit_name, text] : [text], visible)
+          if (data.type === 'unknown' && candidates.length) {
+            data = { type: 'habit', habit_name: text, summary: 'Mark a habit as done' }
+          }
+          setMatchedHabit(match)
+          setHabitOptions(candidates.map(c => c.habit))
         }
       }
 
@@ -1245,7 +1257,7 @@ function VoicePanel({ onDone }: { onDone: () => void }) {
 
   function retry() {
     setTranscript(''); setResult(null); setErrorMsg('')
-    setMatchedHabit(null); setNutritionData(null)
+    setMatchedHabit(null); setHabitOptions([]); setNutritionData(null)
     setState('idle')
   }
 
@@ -1383,9 +1395,35 @@ function VoicePanel({ onDone }: { onDone: () => void }) {
             </div>
           )}
           {result.type === 'habit' && (
-            <p className="text-xs text-slate-400">
-              {matchedHabit ? `Matched: "${matchedHabit.habit_name}"` : `No habit matching "${result.habit_name}" found`}
-            </p>
+            <div className="space-y-2">
+              <p className="text-xs text-slate-400">
+                {matchedHabit
+                  ? `Matched: "${matchedHabit.habit_name}"`
+                  : habitOptions.length
+                    ? 'Which habit did you mean?'
+                    : `No habit matching "${result.habit_name}" found`}
+              </p>
+              {/* Close matches to tap — to pick one, or to correct the auto-match. */}
+              {habitOptions.length > (matchedHabit ? 1 : 0) && (
+                <div className="flex flex-wrap gap-1.5">
+                  {habitOptions.map(h => (
+                    <button
+                      key={h.id}
+                      type="button"
+                      onClick={() => setMatchedHabit(h)}
+                      className={cn(
+                        'rounded-full border px-2.5 py-1 text-xs transition-colors',
+                        matchedHabit?.id === h.id
+                          ? 'border-emerald-500/60 bg-emerald-500/15 text-emerald-200'
+                          : 'border-white/10 bg-white/5 text-slate-300 hover:border-emerald-500/40',
+                      )}
+                    >
+                      {h.habit_name}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
           )}
           {result.type === 'journal' && (
             <p className="text-xs text-slate-400 line-clamp-2">
