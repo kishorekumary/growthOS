@@ -8,6 +8,7 @@ import QuickReset from '@/components/shared/QuickReset'
 import PlannerWidget from '@/components/planner/PlannerWidget'
 import DashboardGoalsCard from '@/components/goals/DashboardGoalsCard'
 import TodayHabits from '@/components/dashboard/TodayHabits'
+import ThemeToggle from '@/components/layout/ThemeToggle'
 import PowerQuestions from '@/components/dashboard/PowerQuestions'
 import DecisionsDue from '@/components/dashboard/DecisionsDue'
 import WorkbookDue from '@/components/dashboard/WorkbookDue'
@@ -144,11 +145,15 @@ export default async function DashboardPage() {
   return (
     <div className="mx-auto max-w-2xl px-4 py-8 md:px-8">
       {/* Header */}
-      <div className="mb-6">
-        <p className="text-sm text-slate-500 mb-1">{today}</p>
-        <h1 className="text-2xl font-bold text-white">
-          Today
-        </h1>
+      <div className="mb-6 flex items-start justify-between gap-3">
+        <div>
+          <p className="text-sm text-slate-500 mb-1">{today}</p>
+          <h1 className="text-2xl font-bold text-white">
+            Today
+          </h1>
+        </div>
+        {/* Phones have it in the top bar (src/app/(main)/layout.tsx). */}
+        <ThemeToggle className="hidden md:flex" />
       </div>
 
       {/* Today's habits first — opening the app should be enough to act */}

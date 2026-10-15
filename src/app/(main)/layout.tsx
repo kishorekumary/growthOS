@@ -8,6 +8,7 @@ import ServiceWorkerRegister from '@/components/layout/ServiceWorkerRegister'
 import MobileMenuButton from '@/components/layout/MobileMenuButton'
 import MobileDrawer from '@/components/layout/MobileDrawer'
 import MobileSearchButton from '@/components/layout/MobileSearchButton'
+import ThemeToggle from '@/components/layout/ThemeToggle'
 import { TimerProvider } from '@/contexts/TimerContext'
 import FloatingTimer from '@/components/focus/FloatingTimer'
 import QuickLog from '@/components/shared/QuickLog'
@@ -48,6 +49,7 @@ export default async function MainLayout({ children }: { children: React.ReactNo
         <MobileMenuButton />
         <div className="flex items-center gap-1">
           <MobileSearchButton />
+          <ThemeToggle />
           <Link href="/settings" className="flex h-8 w-8 items-center justify-center rounded-lg text-slate-500 hover:text-white hover:bg-white/[0.06] transition-colors">
             <Settings className="h-4 w-4" />
           </Link>

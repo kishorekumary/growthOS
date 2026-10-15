@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect, useRef } from 'react'
+import { mergeFinalTranscripts, newSpeechText } from '@/lib/speechTranscript'
 import { format } from 'date-fns'
 import { Sparkles, Loader2, Save, Pencil, ChevronDown, ChevronUp, AlertCircle, BookOpen, Mic, Square } from 'lucide-react'
 import { createSupabaseBrowserClient } from '@/lib/supabase'
@@ -128,17 +129,23 @@ function EntryEditor({
     stoppedByUser.current = false
 
     function spawn() {
+      let said = ''  // what this recognition session has already added
       const rec = new SR()
       rec.continuous = true
       rec.interimResults = true
       rec.lang = 'en-US'
 
       rec.onresult = (e: any) => {
-        let final = '', inter = ''
-        for (let i = e.resultIndex; i < e.results.length; i++) {
-          if (e.results[i].isFinal) final += e.results[i][0].transcript
-          else inter += e.results[i][0].transcript
+        // Android re-sends and accumulates finals, so merge the session's
+        // whole result list and append only what's new (src/lib/speechTranscript.ts).
+        const finals: string[] = []; let inter = ''
+        for (let i = 0; i < e.results.length; i++) {
+          if (e.results[i].isFinal) finals.push(e.results[i][0].transcript)
+          else if (i >= e.resultIndex) inter += e.results[i][0].transcript
         }
+        const merged = mergeFinalTranscripts(finals)
+        const final  = newSpeechText(said, merged)
+        if (merged) said = merged
         if (final) {
           setContent(prev => {
             const sep = prev && !prev.endsWith(' ') && !prev.endsWith('\n') ? ' ' : ''

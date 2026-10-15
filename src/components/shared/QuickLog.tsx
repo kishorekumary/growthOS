@@ -3,9 +3,9 @@
 import { useState, useEffect, useMemo, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import {
-  Plus, X, Utensils, Dumbbell, CheckSquare, CreditCard, BookOpen,
+  Plus, X, Utensils, Dumbbell, CreditCard, BookOpen,
   Loader2, Check, Camera, Image as ImageIcon, Zap, Sparkles, AlertCircle, CheckCircle2,
-  Mic, MicOff, RefreshCw, ClipboardList, Moon,
+  Mic, MicOff, RefreshCw, ClipboardList, Moon, Flame, ListChecks,
 } from 'lucide-react'
 import { createSupabaseBrowserClient } from '@/lib/supabase'
 import { useCachedQuery } from '@/hooks/useCachedQuery'
@@ -19,8 +19,10 @@ import { completeHabit } from '@/lib/completeHabit'
 import { insertItem } from '@/lib/planner/actions'
 import { useReward } from '@/contexts/RewardContext'
 import RichTextEditor from './RichTextEditor'
+import OpenPlanList from '@/components/planner/OpenPlanList'
+import { mergeFinalTranscripts } from '@/lib/speechTranscript'
 
-type Panel = 'voice' | 'meal' | 'workout' | 'habit' | 'finance' | 'journal' | 'task' | 'sleep'
+type Panel = 'plans' | 'voice' | 'meal' | 'workout' | 'finance' | 'journal' | 'task' | 'sleep'
 type MealType    = 'breakfast' | 'lunch' | 'dinner' | 'snack' | 'drink'
 type WorkoutType = 'cardio' | 'strength' | 'yoga' | 'sports' | 'rest'
 type TxnType     = 'expense' | 'income' | 'savings'
@@ -751,7 +753,7 @@ function HabitPanel() {
         {doneList.length}/{visible} done today
         {allDone && ' 🎉'}
       </p>
-      <div className="space-y-2 max-h-[50vh] overflow-y-auto pr-1">
+      <div className="space-y-2">
         {[...pending, ...doneList].map(habit => {
           const isDone = doneIds.has(habit.id)
           return (
@@ -794,6 +796,25 @@ function HabitPanel() {
         })}
       </div>
       <p className="text-[10px] text-slate-600 text-center">Tap a habit to mark it done</p>
+    </div>
+  )
+}
+
+// ─── Plans Panel ──────────────────────────────────────────────────
+
+// Everything to check off today in one place: open planner tasks
+// (today / this week / this month) and today's habits.
+function PlansPanel({ onDone }: { onDone: () => void }) {
+  return (
+    <div className="space-y-5">
+      <OpenPlanList onNavigate={onDone} />
+      <div className="space-y-2">
+        <div className="flex items-center gap-2">
+          <Flame className="h-4 w-4 text-orange-400" />
+          <p className="text-sm font-semibold text-white">Habits</p>
+        </div>
+        <HabitPanel />
+      </div>
     </div>
   )
 }
@@ -1027,7 +1048,6 @@ function VoicePanel({ onDone }: { onDone: () => void }) {
   const silenceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   // Tracks the next expected final-result index to prevent mobile Chrome from
   // re-appending already-committed finals when e.resultIndex is unreliable.
-  const nextFinalIdx    = useRef(0)
 
   function getSR() {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -1062,22 +1082,18 @@ function VoicePanel({ onDone }: { onDone: () => void }) {
       // Any speech activity resets the 3-second silence countdown
       if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current)
 
-      let final = ''; let inter = ''
+      // Rebuild from the whole result list each time rather than appending —
+      // Android re-sends and accumulates finals (see mergeFinalTranscripts).
+      const finals: string[] = []; let inter = ''
       for (let i = 0; i < e.results.length; i++) {
         const t = e.results[i][0].transcript
-        if (e.results[i].isFinal) {
-          // Only append finals we haven't committed yet — guards against
-          // mobile Chrome re-sending already-finalized results.
-          if (i >= nextFinalIdx.current) {
-            final += t
-            nextFinalIdx.current = i + 1
-          }
-        } else {
-          inter += t
-        }
+        if (e.results[i].isFinal) finals.push(t)
+        else inter += t
       }
-      if (final) setTranscript(p => (p + ' ' + final).trim())
-      setInterim(inter)
+      const final = mergeFinalTranscripts(finals)
+      setTranscript(final)
+      // Android also echoes the finished text as interim; don't show it twice.
+      setInterim(final && final.toLowerCase().includes(inter.trim().toLowerCase()) ? '' : inter)
 
       // Auto-stop 3 seconds after the last detected word
       silenceTimerRef.current = setTimeout(() => {
@@ -1095,7 +1111,6 @@ function VoicePanel({ onDone }: { onDone: () => void }) {
     setInterim('')
     setResult(null)
     setNutritionData(null)
-    nextFinalIdx.current = 0
     r.start()
   }
 
@@ -1503,16 +1518,16 @@ const TABS: {
   activeClass: string; inactiveClass: string; route: string
 }[] = [
   {
+    id: 'plans', label: 'Plans', Icon: ListChecks,
+    activeClass:   'border-emerald-500 bg-emerald-500/20 text-white',
+    inactiveClass: 'border-emerald-500/20 bg-emerald-500/8 text-emerald-400/80 hover:opacity-100',
+    route: '/planner',
+  },
+  {
     id: 'voice', label: 'Voice', Icon: Mic,
     activeClass:   'border-emerald-500 bg-emerald-500/20 text-white',
     inactiveClass: 'border-emerald-500/20 bg-emerald-500/8 text-emerald-400/80 hover:opacity-100',
     route: '/',
-  },
-  {
-    id: 'habit', label: 'Habits', Icon: CheckSquare,
-    activeClass:   'border-emerald-500 bg-emerald-500/20 text-white',
-    inactiveClass: 'border-emerald-500/20 bg-emerald-500/8 text-emerald-400/80 hover:opacity-100',
-    route: '/personality/habits',
   },
   {
     id: 'meal', label: 'Meal', Icon: Utensils,
@@ -1557,7 +1572,7 @@ const TABS: {
 export default function QuickLog() {
   const router = useRouter()
   const [open, setOpen]       = useState(false)
-  const [panel, setPanel]     = useState<Panel>('voice')
+  const [panel, setPanel]     = useState<Panel>('plans')
   const [pinging, setPinging] = useState(true)
   const fab = useDraggableFab('quicklog_fab_pos')
 
@@ -1626,11 +1641,11 @@ export default function QuickLog() {
 
             {/* Panel content */}
             <div className="flex-1 overflow-y-auto px-5 pb-5 min-h-0">
+              {panel === 'plans'   && <PlansPanel   onDone={handleDone} />}
               {panel === 'voice'   && <VoicePanel   onDone={handleDone} />}
               {panel === 'meal'    && <MealPanel    onDone={handleDone} />}
               {panel === 'workout' && <WorkoutPanel onDone={handleDone} />}
               {panel === 'sleep'   && <SleepPanel   onDone={handleDone} />}
-              {panel === 'habit'   && <HabitPanel />}
               {panel === 'finance' && <FinancePanel onDone={handleDone} />}
               {panel === 'journal' && <JournalPanel onDone={handleDone} />}
               {panel === 'task'    && <TaskPanel    onDone={handleDone} />}
