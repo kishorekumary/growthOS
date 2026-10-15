@@ -122,10 +122,12 @@ const config: Config = {
       keyframes: {
         pop:        { '0%': { transform: 'scale(0.8)' }, '60%': { transform: 'scale(1.15)' }, '100%': { transform: 'scale(1)' } },
         'float-up': { '0%': { opacity: '0', transform: 'translateY(4px)' }, '20%': { opacity: '1' }, '100%': { opacity: '0', transform: 'translateY(-14px)' } },
+        'page-in':  { '0%': { opacity: '0', transform: 'translateY(6px)' }, '100%': { opacity: '1', transform: 'translateY(0)' } },
       },
       animation: {
         pop:        'pop 250ms ease-out',
         'float-up': 'float-up 900ms ease-out forwards',
+        'page-in':  'page-in 220ms cubic-bezier(0.22, 1, 0.36, 1)',
       },
     },
   },
