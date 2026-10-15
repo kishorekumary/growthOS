@@ -1,6 +1,7 @@
 import type { Config } from 'tailwindcss'
 import plugin from 'tailwindcss/plugin'
 import colors from 'tailwindcss/colors'
+import animate from 'tailwindcss-animate'
 
 // ── Light / dark theming ────────────────────────────────────────────
 // The app's classes were written for a dark background (text-white,
@@ -131,7 +132,7 @@ const config: Config = {
       },
     },
   },
-  plugins: [themeColors],
+  plugins: [themeColors, animate],
 }
 
 export default config

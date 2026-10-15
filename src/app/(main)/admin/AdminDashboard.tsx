@@ -679,7 +679,7 @@ export default function AdminDashboard({
 
       {/* Message compose modal */}
       {msgTarget && (
-        <div className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+        <div className="sheet-in fixed inset-0 z-[100] flex items-end sm:items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
           <div className="w-full max-w-md rounded-2xl border border-white/10 bg-surface shadow-2xl p-5 space-y-4">
             <div className="flex items-center justify-between">
               <div>
@@ -739,7 +739,7 @@ export default function AdminDashboard({
 
       {/* Edit global habit modal */}
       {editingHabit && (
-        <div className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+        <div className="sheet-in fixed inset-0 z-[100] flex items-end sm:items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
           <div className="w-full max-w-md rounded-2xl border border-white/10 bg-surface shadow-2xl p-5 space-y-4">
             <div className="flex items-center justify-between">
               <h3 className="text-base font-semibold text-white">Edit Global Habit</h3>

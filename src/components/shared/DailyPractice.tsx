@@ -353,7 +353,7 @@ export default function DailyPractice() {
   if (fullscreen) {
     return (
       <div
-        className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4 bg-black/70 backdrop-blur-sm"
+        className="sheet-in fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4 bg-black/70 backdrop-blur-sm"
         onClick={e => { if (e.target === e.currentTarget) setFullscreen(false) }}
       >
         <div className="w-full max-w-md rounded-2xl border border-white/10 bg-slate-900 shadow-2xl overflow-hidden">

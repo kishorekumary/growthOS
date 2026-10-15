@@ -1938,7 +1938,7 @@ export default function BookMindMap({ bookId, bookTitle, initialJson, onClose, r
 
       {/* Unsaved changes confirm dialog */}
       {showCloseConfirm && (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+        <div className="sheet-in fixed inset-0 z-[60] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
           <div className="w-full max-w-sm rounded-2xl border border-white/10 bg-slate-900 p-6 space-y-4">
             <p className="text-base font-semibold text-white">Unsaved changes</p>
             <p className="text-sm text-slate-400">You have unsaved changes to this mind map. Save before closing?</p>
