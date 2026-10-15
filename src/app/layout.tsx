@@ -1,8 +1,10 @@
 import type { Metadata, Viewport } from 'next'
 import { Plus_Jakarta_Sans } from 'next/font/google'
 import './globals.css'
+import DaypartWatcher from '@/components/layout/DaypartWatcher'
 import ThemeWatcher from '@/components/layout/ThemeWatcher'
 import { THEME_COLOR, THEME_INIT_SCRIPT } from '@/lib/theme'
+import { DAYPART_INIT_SCRIPT } from '@/lib/daypart'
 
 const jakarta = Plus_Jakarta_Sans({
   subsets: ['latin'],
@@ -43,14 +45,15 @@ export const viewport: Viewport = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    // suppressHydrationWarning: THEME_INIT_SCRIPT adds the theme class
-    // before React hydrates.
+    // suppressHydrationWarning: THEME_INIT_SCRIPT and DAYPART_INIT_SCRIPT
+    // set the theme class and data-daypart before React hydrates.
     <html lang="en" className={jakarta.variable} suppressHydrationWarning>
       <head>
-        <script dangerouslySetInnerHTML={{ __html: THEME_INIT_SCRIPT }} />
+        <script dangerouslySetInnerHTML={{ __html: THEME_INIT_SCRIPT + DAYPART_INIT_SCRIPT }} />
       </head>
       <body className="font-sans" suppressHydrationWarning>
         <ThemeWatcher />
+        <DaypartWatcher />
         {children}
       </body>
     </html>

@@ -329,3 +329,15 @@
     0 1px 2px rgb(15 23 42 / 0.06),
     0 8px 24px -12px rgb(15 23 42 / 0.15);
 }
+
+/* ── Time-of-day tint ────────────────────────────────────────────── */
+/* data-daypart is set on <html> by src/lib/daypart.ts. Night keeps the
+   default indigo glow. Light-mode rules carry .light for the extra
+   specificity, so they win regardless of order. */
+:root[data-daypart='morning']   { --app-glow-1: rgba(251, 191, 36, 0.10); --app-glow-2: rgba(244, 114, 182, 0.04); }
+:root[data-daypart='afternoon'] { --app-glow-1: rgba(56, 189, 248, 0.09); --app-glow-2: rgba(99, 102, 241, 0.04); }
+:root[data-daypart='evening']   { --app-glow-1: rgba(244, 114, 182, 0.09); --app-glow-2: rgba(139, 92, 246, 0.05); }
+
+:root.light[data-daypart='morning']   { --app-glow-1: rgba(251, 191, 36, 0.14); --app-glow-2: rgba(244, 114, 182, 0.05); }
+:root.light[data-daypart='afternoon'] { --app-glow-1: rgba(56, 189, 248, 0.10); --app-glow-2: rgba(99, 102, 241, 0.05); }
+:root.light[data-daypart='evening']   { --app-glow-1: rgba(244, 114, 182, 0.09); --app-glow-2: rgba(139, 92, 246, 0.05); }
