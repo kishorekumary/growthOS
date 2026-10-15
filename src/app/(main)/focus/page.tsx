@@ -2,14 +2,11 @@
 
 import dynamic from 'next/dynamic'
 import Link from 'next/link'
-import { Timer, Loader2, Brain, SearchCheck } from 'lucide-react'
+import { Timer, Brain, SearchCheck } from 'lucide-react'
+import { SkeletonCards } from '@/components/ui/skeleton'
 
 const FocusTimer = dynamic(() => import('@/components/focus/FocusTimer'), {
-  loading: () => (
-    <div className="flex items-center justify-center py-16">
-      <Loader2 className="h-5 w-5 animate-spin text-slate-500" />
-    </div>
-  ),
+  loading: () => <SkeletonCards />,
 })
 
 export default function FocusPage() {

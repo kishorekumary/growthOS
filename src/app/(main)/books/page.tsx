@@ -2,21 +2,17 @@
 
 import { useState, useEffect } from 'react'
 import dynamic from 'next/dynamic'
-import { Loader2 } from 'lucide-react'
+import { SkeletonCards } from '@/components/ui/skeleton'
 import { cn } from '@/lib/utils'
 import GoalsWidget from '@/components/goals/GoalsWidget'
 
-const BookDiscover  = dynamic(() => import('@/components/books/BookDiscover'),  { loading: () => <Spinner /> })
-const ReadingList   = dynamic(() => import('@/components/books/ReadingList'),   { loading: () => <Spinner /> })
-const BookChallenge = dynamic(() => import('@/components/books/BookChallenge'), { loading: () => <Spinner /> })
-const AIChat        = dynamic(() => import('@/components/shared/AIChat'),        { loading: () => <Spinner /> })
+const BookDiscover  = dynamic(() => import('@/components/books/BookDiscover'),  { loading: () => <SectionSkeleton /> })
+const ReadingList   = dynamic(() => import('@/components/books/ReadingList'),   { loading: () => <SectionSkeleton /> })
+const BookChallenge = dynamic(() => import('@/components/books/BookChallenge'), { loading: () => <SectionSkeleton /> })
+const AIChat        = dynamic(() => import('@/components/shared/AIChat'),        { loading: () => <SectionSkeleton /> })
 
-function Spinner() {
-  return (
-    <div className="flex items-center justify-center py-12">
-      <Loader2 className="h-5 w-5 animate-spin text-slate-500" />
-    </div>
-  )
+function SectionSkeleton() {
+  return <SkeletonCards />
 }
 
 const TABS = ['My List', 'Challenge', 'Coach', 'Discover'] as const

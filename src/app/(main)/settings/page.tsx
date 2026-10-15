@@ -3,24 +3,25 @@
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import dynamic from 'next/dynamic'
-import { Loader2, Bell, ShieldCheck, ChevronRight, Mail, Sun, PartyPopper, Palette } from 'lucide-react'
+import { Bell, ShieldCheck, ChevronRight, Mail, Sun, PartyPopper, Palette } from 'lucide-react'
+import { SkeletonCards } from '@/components/ui/skeleton'
 import { createSupabaseBrowserClient } from '@/lib/supabase'
 import EffectsSettings from '@/components/settings/EffectsSettings'
 import AppearanceSettings from '@/components/settings/AppearanceSettings'
 
 const NotificationSettings = dynamic(
   () => import('@/components/settings/NotificationSettings'),
-  { loading: () => <div className="flex justify-center py-16"><Loader2 className="h-5 w-5 animate-spin text-slate-500" /></div> }
+  { loading: () => <SkeletonCards /> }
 )
 
 const BankEmailSync = dynamic(
   () => import('@/components/settings/BankEmailSync'),
-  { loading: () => <div className="flex justify-center py-16"><Loader2 className="h-5 w-5 animate-spin text-slate-500" /></div> }
+  { loading: () => <SkeletonCards /> }
 )
 
 const BriefingSettings = dynamic(
   () => import('@/components/settings/BriefingSettings'),
-  { loading: () => <div className="flex justify-center py-16"><Loader2 className="h-5 w-5 animate-spin text-slate-500" /></div> }
+  { loading: () => <SkeletonCards /> }
 )
 
 export default function SettingsPage() {

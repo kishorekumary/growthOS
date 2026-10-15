@@ -1,14 +1,11 @@
 'use client'
 
 import dynamic from 'next/dynamic'
-import { Zap, Loader2 } from 'lucide-react'
+import { Zap } from 'lucide-react'
+import { SkeletonCards } from '@/components/ui/skeleton'
 
 const DecisionLog = dynamic(() => import('@/components/decisions/DecisionLog'), {
-  loading: () => (
-    <div className="flex items-center justify-center py-16">
-      <Loader2 className="h-5 w-5 animate-spin text-slate-500" />
-    </div>
-  ),
+  loading: () => <SkeletonCards />,
 })
 
 export default function DecisionsPage() {
