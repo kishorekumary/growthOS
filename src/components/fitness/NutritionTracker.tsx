@@ -513,7 +513,7 @@ function AddMealModal({ onSave, onClose }: {
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/70 backdrop-blur-sm px-4 pt-4">
+    <div className="sheet-in fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/70 backdrop-blur-sm px-4 pt-4">
       <div className="w-full max-w-md rounded-2xl border border-white/10 bg-slate-900 flex flex-col max-h-[92vh]">
 
         {/* ── Scrollable form content ── */}

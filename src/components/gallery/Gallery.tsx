@@ -450,7 +450,7 @@ export default function Gallery({ initialItems, userId, isAdmin = false }: { ini
       {/* ── Lightbox ── */}
       {lightboxItem && (
         <div
-          className="fixed inset-0 z-[70] flex items-center justify-center bg-black/92 backdrop-blur-sm"
+          className="sheet-in fixed inset-0 z-[70] flex items-center justify-center bg-black/92 backdrop-blur-sm"
           onClick={e => { if (e.target === e.currentTarget) setLightbox(null) }}
         >
           {/* Prev */}

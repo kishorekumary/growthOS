@@ -9,7 +9,7 @@ export default function RewardMilestoneModal() {
   if (!current) return null
 
   return (
-    <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm">
+    <div className="sheet-in fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm">
       <div className="relative w-full max-w-sm rounded-2xl border border-amber-500/30 bg-gradient-to-br from-slate-900 to-slate-800 p-6 text-center space-y-4 shadow-2xl">
         <button onClick={dismissCurrent} className="absolute top-3 right-3 text-slate-500 hover:text-white transition-colors">
           <X className="h-4 w-4" />
