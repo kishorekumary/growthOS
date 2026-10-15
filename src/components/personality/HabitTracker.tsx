@@ -24,6 +24,7 @@ import { completeHabit } from '@/lib/completeHabit'
 import { useReward } from '@/contexts/RewardContext'
 import { DAILY_POINTS, DAILY_POINTS_KEYSTONE } from '@/lib/rewardMilestones'
 import CountUp from '@/components/ui/count-up'
+import StreakFlame from '@/components/ui/streak-flame'
 import EmptyState from '@/components/ui/empty-state'
 
 type Category  = HabitCategory
@@ -1417,7 +1418,7 @@ export default function HabitTracker() {
               {/* Streak — not shown for global (no per-user streak tracked on habit row) */}
               {habit.streak_count > 0 && !habit.is_global && (
                 <div className="flex items-center gap-1 shrink-0">
-                  <span className="text-orange-400">🔥</span>
+                  <StreakFlame seed={habit.streak_count} className="text-orange-400" />
                   <span className="text-sm font-semibold text-orange-300">
                     {habit.streak_count}
                     <span className="text-xs font-normal text-slate-500 ml-0.5">days</span>

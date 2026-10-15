@@ -14,6 +14,7 @@ import { useDraggableFab } from '@/hooks/useDraggableFab'
 import { useHabitCelebration } from '@/hooks/useHabitCelebration'
 import { HabitCategory, HABIT_CATEGORY_META } from '@/lib/habitCategories'
 import { cn } from '@/lib/utils'
+import StreakFlame from '@/components/ui/streak-flame'
 import { computeStreak, todayStr, yesterdayStr, isGraceActive } from '@/lib/habitStreak'
 import { completeHabit } from '@/lib/completeHabit'
 import { insertItem } from '@/lib/planner/actions'
@@ -788,7 +789,7 @@ function HabitPanel() {
                     {habit.category}
                   </span>
                   {habit.streak_count > 0 && !isDone && (
-                    <span className="text-xs text-orange-400">🔥 {habit.streak_count}</span>
+                    <span className="text-xs text-orange-400"><StreakFlame seed={habit.streak_count} /> {habit.streak_count}</span>
                   )}
                 </div>
               </div>
