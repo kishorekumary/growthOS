@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { Coins, Flame, Plus, Trash2, Pencil, Gift, Loader2, AlertCircle, Sparkles, Snowflake } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { FREEZE_COST, FREEZE_MAX } from '@/lib/dailyChest'
+import CountUp from '@/components/ui/count-up'
 
 interface CatalogItem { id: string; title: string; point_cost: number; created_at: string }
 interface Redemption  { id: string; title: string; point_cost: number; redeemed_at: string }
@@ -168,14 +169,14 @@ export default function RewardsClient({
             <Coins className="h-4 w-4" />
             <p className="text-xs font-medium">Points Balance</p>
           </div>
-          <p className="text-3xl font-bold text-white mt-1">{balance}</p>
+          <p className="text-3xl font-bold text-white mt-1"><CountUp value={balance} /></p>
         </div>
         <div className="rounded-xl border border-orange-500/20 bg-orange-500/5 p-4">
           <div className="flex items-center gap-2 text-orange-400">
             <Flame className="h-4 w-4" />
             <p className="text-xs font-medium">Perfect Day Streak</p>
           </div>
-          <p className="text-3xl font-bold text-white mt-1">{currentPerfectStreak}</p>
+          <p className="text-3xl font-bold text-white mt-1"><CountUp value={currentPerfectStreak} /></p>
           <p className="text-[11px] text-slate-500 mt-0.5">Best: {longestPerfectStreak}</p>
         </div>
       </div>

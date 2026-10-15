@@ -4,6 +4,7 @@ import { useState } from 'react'
 import Link from 'next/link'
 import { ArrowLeft, RefreshCw } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import CountUp from '@/components/ui/count-up'
 
 // ─── Survey data ─────────────────────────────────────────────────────────────
 
@@ -152,7 +153,7 @@ export default function OverthinkingAuditPage() {
 
         {/* Score */}
         <div className="text-center mb-8">
-          <p className="text-8xl font-bold text-white tracking-tight">{total}</p>
+          <p className="text-8xl font-bold text-white tracking-tight"><CountUp value={total} /></p>
           <p className="text-slate-400 text-sm mt-1">out of 40 points</p>
         </div>
 

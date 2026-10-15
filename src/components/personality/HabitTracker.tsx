@@ -23,6 +23,7 @@ import { useHabitCelebration } from '@/hooks/useHabitCelebration'
 import { completeHabit } from '@/lib/completeHabit'
 import { useReward } from '@/contexts/RewardContext'
 import { DAILY_POINTS, DAILY_POINTS_KEYSTONE } from '@/lib/rewardMilestones'
+import CountUp from '@/components/ui/count-up'
 
 type Category  = HabitCategory
 type Frequency = 'daily' | 'weekly'
@@ -648,7 +649,7 @@ function WeeklyScoreCard({
             <Trophy className="h-4 w-4 text-amber-400" />
             <p className="text-xs font-medium text-slate-400">Weekly Score</p>
           </div>
-          <p className={cn('text-3xl font-bold mt-0.5', color)}>{score}%</p>
+          <p className={cn('text-3xl font-bold mt-0.5', color)}><CountUp value={score} />%</p>
           <p className="text-xs text-slate-500 mt-0.5">{label}</p>
           {streakBonus > 0 && (
             <p className="text-xs text-amber-400/70 mt-0.5">+{streakBonus} streak bonus</p>
