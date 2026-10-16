@@ -2,9 +2,11 @@
 
 import { useState, useRef, useEffect, useCallback, useMemo } from 'react'
 import { flushSync } from 'react-dom'
-import { X, Trash2, GitBranch, Loader2, Check, Pencil, Upload, Plus, Undo2, Link2, Eye, EyeOff, Search, ChevronLeft, ChevronRight, ChevronDown, Download, MoreHorizontal, Save, Navigation, ChevronsDown, Sparkles } from 'lucide-react'
+import { X, Trash2, GitBranch, Loader2, Check, Pencil, Upload, Plus, Undo2, Link2, Eye, EyeOff, Search, ChevronLeft, ChevronRight, ChevronDown, Download, MoreHorizontal, Save, Navigation, ChevronsDown, Sparkles, Network, Move } from 'lucide-react'
 import { createSupabaseBrowserClient } from '@/lib/supabase'
 import { cn } from '@/lib/utils'
+import { autoLayout, focusScroll } from '@/lib/mindmapLayout'
+import { useTweenedPositions } from '@/hooks/useTweenedPositions'
 
 const NODE_H = 58
 const MIN_W  = 200
@@ -16,6 +18,8 @@ const DEPTH_COLORS = ['#7c3aed', '#06b6d4', '#10b981', '#f59e0b', '#ef4444', '#3
 // child node's fade-in is offset by this much so the reveal reads as
 // parent → arrow (draws) → child (appears), not both at once.
 const EDGE_DRAW_MS = 700
+// Per-device choice between the compact auto layout and stored positions.
+const LAYOUT_KEY = 'growthos:mindmap-layout'
 
 function nodeWidth(label: string): number {
   return Math.max(MIN_W, Math.min(MAX_W, label.length * 9.5 + 110))
@@ -365,6 +369,7 @@ export default function BookMindMap({ bookId, bookTitle, initialJson, onClose, r
   }
 
   function toggleCollapse(nodeId: string) {
+    pendingFocus.current = nodeId
     setCollapsedNodes(prev => {
       const next = new Set(prev)
       if (next.has(nodeId)) next.delete(nodeId)
@@ -418,6 +423,95 @@ export default function BookMindMap({ bookId, bookTitle, initialJson, onClose, r
     }
     return nodes.filter(n => isVisible(n.id))
   }, [nodes, collapsedNodes])
+  const visibleNodesRef = useRef(visibleNodes)
+  visibleNodesRef.current = visibleNodes
+
+  // ── Layout mode ───────────────────────────────────────────
+  // 'auto' lays out only what is expanded (src/lib/mindmapLayout.ts), so a
+  // node's children always sit together beside it. 'free' shows the stored
+  // positions and allows dragging. Auto never writes positions back.
+  const [layoutMode, setLayoutMode] = useState<'auto' | 'free'>('auto')
+  useEffect(() => {
+    try { if (localStorage.getItem(LAYOUT_KEY) === 'free') setLayoutMode('free') } catch {}
+  }, [])
+  function toggleLayout() {
+    const next = layoutMode === 'auto' ? 'free' : 'auto'
+    setLayoutMode(next)
+    try { localStorage.setItem(LAYOUT_KEY, next) } catch {}
+  }
+  const isAuto = layoutMode === 'auto'
+  const layoutModeRef = useRef(layoutMode)
+  layoutModeRef.current = layoutMode
+
+  // On phones, auto layout narrows wide nodes to fit the screen and lets the
+  // label wrap, so a column of children reads without side-scrolling.
+  const [viewW, setViewW] = useState(1024)
+  const maxNodeW = isAuto && viewW < 640 ? Math.max(MIN_W, viewW - 96) : Infinity
+  const fit = useCallback((n: MindNode): MindNode => {
+    const w = getNodeW(n)
+    if (w <= maxNodeW) return n
+    return { ...n, w: maxNodeW, h: Math.max(n.h ?? 0, nodeHeight(n.label, maxNodeW)) }
+  }, [maxNodeW])
+
+  const autoTarget = useMemo(() => isAuto
+    ? autoLayout(visibleNodes.map(fit).map(n => ({ id: n.id, parentId: n.parentId, y: n.y, w: getNodeW(n), h: getNodeH(n) })), collapsedNodes)
+    : null,
+  [isAuto, visibleNodes, collapsedNodes, fit])
+
+  // Nodes and edges glide to their new spots when the layout changes.
+  // Switching from free starts the glide from the stored positions.
+  const tweened = useTweenedPositions(autoTarget, () => new Map(visibleNodes.map(n => [n.id, { x: n.x, y: n.y }])))
+
+  // What is on screen right now (mid-glide in auto, stored in free).
+  const shownNodes = useMemo(() => {
+    if (!autoTarget || !tweened) return visibleNodes
+    return visibleNodes.map(n => {
+      const p = tweened.get(n.id) ?? autoTarget.get(n.id)
+      return p ? { ...fit(n), x: p.x, y: p.y } : n
+    })
+  }, [visibleNodes, autoTarget, tweened, fit])
+  const shownById = useMemo(() => new Map(shownNodes.map(n => [n.id, n])), [shownNodes])
+  const shownByIdRef = useRef(shownById)
+  shownByIdRef.current = shownById
+
+  // Where a node ends up once any glide finishes — scrolling aims here.
+  const finalPos = (n: MindNode): MindNode => {
+    const p = autoTarget?.get(n.id)
+    return p ? { ...fit(n), x: p.x, y: p.y } : n
+  }
+  const finalPosRef = useRef(finalPos)
+  finalPosRef.current = finalPos
+
+  // Scroll so `id` and its visible children are in view — only if they
+  // aren't already, so expanding something on screen doesn't jolt the view.
+  function focusOn(id: string) {
+    const c = scrollContainerRef.current
+    const all = visibleNodesRef.current
+    const node = all.find(n => n.id === id)
+    if (!c || !node) return
+    const box = (n: MindNode) => { const p = finalPosRef.current(n); return { x: p.x, y: p.y, w: getNodeW(p), h: getNodeH(p) } }
+    const focus = box(node)
+    const kids = all.filter(n => n.parentId === id).map(box)
+    const boxes = [focus, ...kids]
+    const inView =
+      Math.min(...boxes.map(b => b.x)) >= c.scrollLeft &&
+      Math.max(...boxes.map(b => b.x + b.w)) <= c.scrollLeft + c.clientWidth &&
+      Math.min(...boxes.map(b => b.y)) >= c.scrollTop &&
+      Math.max(...boxes.map(b => b.y + b.h)) <= c.scrollTop + c.clientHeight
+    if (inView) return
+    const { left, top } = focusScroll(focus, kids, { w: c.clientWidth, h: c.clientHeight })
+    c.scrollTo({ left, top, behavior: 'smooth' })
+  }
+
+  // Set by toggleCollapse; acted on once the new layout has rendered.
+  const pendingFocus = useRef<string | null>(null)
+  useEffect(() => {
+    if (!pendingFocus.current) return
+    const id = pendingFocus.current
+    pendingFocus.current = null
+    focusOn(id)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [visibleNodes, autoTarget])
 
   // ── Stagger entrance animation ────────────────────────────
   // staggerMap holds each edge's draw-start delay; nodeDelayMap holds each
@@ -426,8 +520,6 @@ export default function BookMindMap({ bookId, bookTitle, initialJson, onClose, r
   const [staggerMap, setStaggerMap] = useState<Map<string, number>>(new Map())
   const [nodeDelayMap, setNodeDelayMap] = useState<Map<string, number>>(new Map())
   const prevVisibleIds  = useRef<Set<string>>(new Set())
-  // First load uses a quick cascade; user-triggered expands use 800ms per child.
-  const isFirstLoad     = useRef(true)
   // Set by expandAll() to bypass the stagger entirely for that one batch.
   const skipStagger     = useRef(false)
 
@@ -459,9 +551,9 @@ export default function BookMindMap({ bookId, bookTitle, initialJson, onClose, r
       return
     }
 
-    // 120 ms between nodes on first open; 800 ms on each subsequent expand click
-    const stepMs = isFirstLoad.current ? 120 : 800
-    isFirstLoad.current = false
+    // 120 ms between nodes, so all of a node's children are in view within
+    // about a second of expanding it.
+    const stepMs = 120
 
     // Depth-first, then top-to-bottom: a batch can span multiple tree levels
     // at once (e.g. re-expanding an ancestor whose child branch was already
@@ -530,8 +622,9 @@ export default function BookMindMap({ bookId, bookTitle, initialJson, onClose, r
 
   // Scroll canvas to keep the focused match visible
   useEffect(() => {
-    const node = searchMatches[searchMatchIdx]
-    if (!node || !scrollContainerRef.current) return
+    const match = searchMatches[searchMatchIdx]
+    if (!match || !scrollContainerRef.current) return
+    const node = finalPosRef.current(match)
     const c  = scrollContainerRef.current
     c.scrollTo({
       left: Math.max(0, node.x + getNodeW(node) / 2 - c.clientWidth / 2),
@@ -726,24 +819,16 @@ export default function BookMindMap({ bookId, bookTitle, initialJson, onClose, r
 
   // Mobile breakpoint detection
   useEffect(() => {
-    const check = () => setIsMobile(window.innerWidth < 640)
+    const check = () => { setIsMobile(window.innerWidth < 640); setViewW(window.innerWidth) }
     check()
     window.addEventListener('resize', check)
     return () => window.removeEventListener('resize', check)
   }, [])
 
-  // Auto-scroll to root node on first render
+  // On open, bring the root and its children into view
   useEffect(() => {
-    const root = nodes.find(n => n.id === 'root')
-    if (!root || !scrollContainerRef.current) return
-    const c = scrollContainerRef.current
-    setTimeout(() => {
-      c.scrollTo({
-        left: Math.max(0, root.x - 40),
-        top:  Math.max(0, root.y + getNodeH(root) / 2 - c.clientHeight / 2),
-        behavior: 'smooth',
-      })
-    }, 150)
+    const t = setTimeout(() => focusOn('root'), 150)
+    return () => clearTimeout(t)
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
@@ -754,8 +839,9 @@ export default function BookMindMap({ bookId, bookTitle, initialJson, onClose, r
       setTraversalIdx(Math.max(0, dfsOrder.length - 1))
       return
     }
-    const node = dfsOrder[traversalIdx]
-    if (!node || !scrollContainerRef.current) return
+    const focused = dfsOrder[traversalIdx]
+    if (!focused || !scrollContainerRef.current) return
+    const node = finalPosRef.current(focused)
     const c  = scrollContainerRef.current
     c.scrollTo({
       left: Math.max(0, node.x + getNodeW(node) / 2 - c.clientWidth / 2),
@@ -887,17 +973,32 @@ export default function BookMindMap({ bookId, bookTitle, initialJson, onClose, r
       if (connRef.current) {
         const { fromId } = connRef.current
         const { x, y } = canvasXY(e.clientX, e.clientY)
-        const from = nodesRef.current.find(n => n.id === fromId)
-        if (from) {
+        const from = shownByIdRef.current.get(fromId)
+        const stored = nodesRef.current.find(n => n.id === fromId)
+        if (from && stored) {
           const dist = Math.hypot(x - (from.x + getNodeW(from)), y - (from.y + getNodeH(from) / 2))
           if (dist > 24) {
             pushHistory()
             const newId = uid()
-            const newNode: MindNode = {
-              id: newId, label: 'New point', parentId: fromId,
-              x: Math.max(8, x - MIN_W / 2), y: Math.max(8, y - NODE_H / 2),
-            }
+            // Auto layout decides where it goes; store it after its siblings
+            // so it lands last among them. Free layout keeps the drop point.
+            const siblings = nodesRef.current.filter(n => n.parentId === fromId)
+            const newNode: MindNode = layoutModeRef.current === 'auto'
+              ? {
+                  id: newId, label: 'New point', parentId: fromId,
+                  x: stored.x + H_GAP,
+                  y: siblings.length ? Math.max(...siblings.map(n => n.y)) + V_GAP : stored.y,
+                }
+              : {
+                  id: newId, label: 'New point', parentId: fromId,
+                  x: Math.max(8, x - MIN_W / 2), y: Math.max(8, y - NODE_H / 2),
+                }
             setNodes(prev => [...prev, newNode])
+            // A new child of a collapsed node would otherwise be hidden.
+            setCollapsedNodes(prev => {
+              if (!prev.has(fromId)) return prev
+              const next = new Set(prev); next.delete(fromId); return next
+            })
             setTimeout(() => { setEditingId(newId); setEditLabel('New point') }, 20)
           }
         }
@@ -949,7 +1050,7 @@ export default function BookMindMap({ bookId, bookTitle, initialJson, onClose, r
   }
 
   function startMove(e: React.MouseEvent, node: MindNode) {
-    if (node.id === 'root' || isReadOnly || reparentId) return
+    if (node.id === 'root' || isReadOnly || reparentId || isAuto) return
     if (Date.now() - lastTouchRef.current < 500) return // skip synthesized mouse events after touch
     pushHistory()
     moveRef.current = { id: node.id, ox: node.x, oy: node.y, mx: e.clientX, my: e.clientY, childOffsets: captureChildOffsets(node.id) }
@@ -958,7 +1059,7 @@ export default function BookMindMap({ bookId, bookTitle, initialJson, onClose, r
   }
 
   function startTouchMove(e: React.TouchEvent, node: MindNode) {
-    if (node.id === 'root' || isReadOnly || reparentId) return
+    if (node.id === 'root' || isReadOnly || reparentId || isAuto) return
     const touch = e.touches[0]
     lastTouchRef.current = Date.now()
     pushHistory()
@@ -1044,10 +1145,14 @@ export default function BookMindMap({ bookId, bookTitle, initialJson, onClose, r
     setTimeout(() => setSavedFlash(false), 2000)
   }
 
-  const canvasW = Math.max(2400, Math.max(...nodes.map(n => n.x + getNodeW(n))) + 400)
-  const canvasH = Math.max(1600, Math.max(...nodes.map(n => n.y + getNodeH(n))) + 400)
+  // Auto: size to the laid-out (visible) tree. Free: to every stored node.
+  const extentNodes = autoTarget ? visibleNodes.map(finalPos) : nodes
+  const canvasW = Math.max(2400, Math.max(...extentNodes.map(n => n.x + getNodeW(n))) + 400)
+  const canvasH = Math.max(1600, Math.max(...extentNodes.map(n => n.y + getNodeH(n))) + 400)
 
-  const nodesWithChildren = new Set(nodes.filter(n => n.parentId).map(n => n.parentId!))
+  const childCounts = new Map<string, number>()
+  for (const n of nodes) if (n.parentId) childCounts.set(n.parentId, (childCounts.get(n.parentId) ?? 0) + 1)
+  const nodesWithChildren = new Set(childCounts.keys())
 
   // Sorted node list for the import target selector (root first, then alphabetical)
   const sortedNodesForSelect = [
@@ -1139,6 +1244,22 @@ export default function BookMindMap({ bookId, bookTitle, initialJson, onClose, r
           >
             <ChevronsDown className="h-3 w-3" />
             Expand All
+          </button>
+
+          <button
+            onClick={toggleLayout}
+            title={isAuto
+              ? 'Auto layout: tidies itself as you expand. Switch to Free to drag nodes.'
+              : 'Free layout: your own positions. Switch to Auto to tidy.'}
+            className={cn(
+              'flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium border transition-all',
+              isAuto
+                ? 'bg-violet-500/15 border-violet-500/40 text-violet-300 hover:bg-violet-500/25'
+                : 'bg-white/5 border-white/10 text-slate-300 hover:bg-white/10'
+            )}
+          >
+            {isAuto ? <Network className="h-3 w-3" /> : <Move className="h-3 w-3" />}
+            {isAuto ? 'Auto layout' : 'Free layout'}
           </button>
 
           <button
@@ -1243,6 +1364,13 @@ export default function BookMindMap({ bookId, bookTitle, initialJson, onClose, r
                   className="flex w-full items-center gap-2.5 px-3.5 py-2.5 text-sm text-slate-300 hover:bg-white/5 transition-colors"
                 >
                   <ChevronsDown className="h-3.5 w-3.5" /> Expand All
+                </button>
+                <button
+                  onClick={() => { toggleLayout(); setShowMobileMenu(false) }}
+                  className="flex w-full items-center gap-2.5 px-3.5 py-2.5 text-sm text-slate-300 hover:bg-white/5 transition-colors"
+                >
+                  {isAuto ? <Move className="h-3.5 w-3.5" /> : <Network className="h-3.5 w-3.5" />}
+                  {isAuto ? 'Free layout (drag nodes)' : 'Auto layout'}
                 </button>
                 <button
                   onClick={() => { exportMarkdown(); setShowMobileMenu(false) }}
@@ -1366,10 +1494,13 @@ export default function BookMindMap({ bookId, bookTitle, initialJson, onClose, r
                 <span className="text-violet-400">◉</span> collapse/expand &nbsp;·&nbsp;
                 <span className="text-slate-400">double-click canvas</span> for free node &nbsp;·&nbsp;
                 ⌘Z undo
+                {isAuto && <> &nbsp;·&nbsp; <span className="text-violet-400">Free layout</span> to drag nodes</>}
               </p>
               <p className="sm:hidden text-[11px] text-slate-600">
                 <span className="text-violet-500">Tap</span> node to edit &nbsp;·&nbsp;
-                <span className="text-violet-500">Hold &amp; drag</span> to move &nbsp;·&nbsp;
+                {isAuto
+                  ? <><span className="text-violet-500">Free layout</span> (⋯ menu) to move nodes &nbsp;·&nbsp;</>
+                  : <><span className="text-violet-500">Hold &amp; drag</span> to move &nbsp;·&nbsp;</>}
                 Drag <span className="text-violet-500">●</span> right edge to branch &nbsp;·&nbsp;
                 double-tap canvas for free node
               </p>
@@ -1490,8 +1621,8 @@ export default function BookMindMap({ bookId, bookTitle, initialJson, onClose, r
             width={canvasW} height={canvasH}
             style={{ overflow: 'visible' }}
           >
-            {visibleNodes.filter(n => n.parentId).map(child => {
-              const parent = nodesRef.current.find(p => p.id === child.parentId)
+            {shownNodes.filter(n => n.parentId).map(child => {
+              const parent = shownById.get(child.parentId!)
               if (!parent) return null
               const d = getDepth(child.id, nodesRef.current)
               const color = DEPTH_COLORS[d % DEPTH_COLORS.length]
@@ -1524,7 +1655,7 @@ export default function BookMindMap({ bookId, bookTitle, initialJson, onClose, r
             })}
 
             {connRef.current && connPos && (() => {
-              const from = nodesRef.current.find(n => n.id === connRef.current!.fromId)
+              const from = shownById.get(connRef.current!.fromId)
               if (!from) return null
               const fakeChild: MindNode = {
                 id: '__tmp__', label: '', parentId: null,
@@ -1538,7 +1669,7 @@ export default function BookMindMap({ bookId, bookTitle, initialJson, onClose, r
           </svg>
 
           {/* ── Nodes ── */}
-          {visibleNodes.map(node => {
+          {shownNodes.map(node => {
             const isRoot        = node.id === 'root'
             const isEditing     = editingId === node.id
             const d             = getDepth(node.id, nodes)
@@ -1572,7 +1703,7 @@ export default function BookMindMap({ bookId, bookTitle, initialJson, onClose, r
                           : isValidTarget
                             ? 'cursor-pointer hover:shadow-[0_0_18px_rgba(6,182,212,0.45)] hover:z-30'
                             : 'hover:shadow-[0_0_16px_rgba(124,58,237,0.35)] hover:z-30',
-                  !isReadOnly && !reparentId && !isRoot ? 'cursor-move' : '',
+                  !isReadOnly && !reparentId && !isRoot && !isAuto ? 'cursor-move' : '',
                   isReadOnly ? 'cursor-default' : '',
                 )}
                 style={{
@@ -1612,8 +1743,8 @@ export default function BookMindMap({ bookId, bookTitle, initialJson, onClose, r
                           : 'rgba(12,12,26,0.88)',
                   backdropFilter: 'blur(10px)',
                 }}
-                onMouseDown={isReadOnly || reparentId || isRoot ? undefined : e => startMove(e, node)}
-                onTouchStart={isReadOnly || reparentId || isRoot ? undefined : e => startTouchMove(e, node)}
+                onMouseDown={isReadOnly || reparentId || isRoot || isAuto ? undefined : e => startMove(e, node)}
+                onTouchStart={isReadOnly || reparentId || isRoot || isAuto ? undefined : e => startTouchMove(e, node)}
                 onDoubleClick={e => e.stopPropagation()}
                 onClick={
                   reparentId && !isBeingMoved
@@ -1667,7 +1798,7 @@ export default function BookMindMap({ bookId, bookTitle, initialJson, onClose, r
                     type="button"
                     onMouseDown={e => e.stopPropagation()}
                     onClick={e => { e.stopPropagation(); toggleCollapse(node.id) }}
-                    title={collapsedNodes.has(node.id) ? 'Expand children' : 'Collapse children'}
+                    title={collapsedNodes.has(node.id) ? `Show ${childCounts.get(node.id)} children` : 'Collapse children'}
                     className={cn(
                       'absolute -right-4 top-1/2 -translate-y-1/2 z-10',
                       'flex items-center justify-center w-8 h-8 rounded-full border transition-all',
@@ -1679,6 +1810,11 @@ export default function BookMindMap({ bookId, bookTitle, initialJson, onClose, r
                     {collapsedNodes.has(node.id)
                       ? <ChevronRight className="h-4 w-4" />
                       : <ChevronDown className="h-4 w-4" />}
+                    {collapsedNodes.has(node.id) && (
+                      <span className="absolute -top-2 -right-2 flex h-4 min-w-4 items-center justify-center rounded-full bg-violet-500 px-1 text-[9px] font-bold leading-none text-snow">
+                        {childCounts.get(node.id)}
+                      </span>
+                    )}
                   </button>
                 )}
 
@@ -1783,21 +1919,25 @@ export default function BookMindMap({ bookId, bookTitle, initialJson, onClose, r
                       style={{ background: 'linear-gradient(to right, transparent, rgba(124,58,237,0.35))' }}
                       onMouseDown={e => startResize(e, node, 'right')}
                     />
-                    <div
-                      className="absolute top-1 bottom-1 -left-1 w-2 cursor-ew-resize opacity-0 group-hover:opacity-100 transition-opacity z-10 rounded-l"
-                      style={{ background: 'linear-gradient(to left, transparent, rgba(124,58,237,0.35))' }}
-                      onMouseDown={e => startResize(e, node, 'left')}
-                    />
+                    {!isAuto && (
+                      <div
+                        className="absolute top-1 bottom-1 -left-1 w-2 cursor-ew-resize opacity-0 group-hover:opacity-100 transition-opacity z-10 rounded-l"
+                        style={{ background: 'linear-gradient(to left, transparent, rgba(124,58,237,0.35))' }}
+                        onMouseDown={e => startResize(e, node, 'left')}
+                      />
+                    )}
                     <div
                       className="absolute left-1 right-1 -bottom-1 h-2 cursor-ns-resize opacity-0 group-hover:opacity-100 transition-opacity z-10 rounded-b"
                       style={{ background: 'linear-gradient(to bottom, transparent, rgba(124,58,237,0.35))' }}
                       onMouseDown={e => startResize(e, node, 'bottom')}
                     />
-                    <div
-                      className="absolute left-1 right-1 -top-1 h-2 cursor-ns-resize opacity-0 group-hover:opacity-100 transition-opacity z-10 rounded-t"
-                      style={{ background: 'linear-gradient(to top, transparent, rgba(124,58,237,0.35))' }}
-                      onMouseDown={e => startResize(e, node, 'top')}
-                    />
+                    {!isAuto && (
+                      <div
+                        className="absolute left-1 right-1 -top-1 h-2 cursor-ns-resize opacity-0 group-hover:opacity-100 transition-opacity z-10 rounded-t"
+                        style={{ background: 'linear-gradient(to top, transparent, rgba(124,58,237,0.35))' }}
+                        onMouseDown={e => startResize(e, node, 'top')}
+                      />
+                    )}
                   </>
                 )}
               </div>
