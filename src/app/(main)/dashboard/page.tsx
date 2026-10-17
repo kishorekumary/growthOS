@@ -8,6 +8,7 @@ import QuickReset from '@/components/shared/QuickReset'
 import PlannerWidget from '@/components/planner/PlannerWidget'
 import DashboardGoalsCard from '@/components/goals/DashboardGoalsCard'
 import TodayHabits from '@/components/dashboard/TodayHabits'
+import RewardsProgressCard from '@/components/dashboard/RewardsProgressCard'
 import ThemeToggle from '@/components/layout/ThemeToggle'
 import PowerQuestions from '@/components/dashboard/PowerQuestions'
 import DecisionsDue from '@/components/dashboard/DecisionsDue'
@@ -159,6 +160,11 @@ export default async function DashboardPage() {
       {/* Today's habits first — opening the app should be enough to act */}
       <div className="mb-6">
         <TodayHabits />
+      </div>
+
+      {/* What the points are worth — moves as habits are checked off */}
+      <div className="mb-6 empty:hidden">
+        <RewardsProgressCard />
       </div>
 
       <div className="mb-6">
