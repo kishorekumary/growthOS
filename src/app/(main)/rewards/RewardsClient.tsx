@@ -10,6 +10,7 @@ import EmptyState from '@/components/ui/empty-state'
 import PointsOverview from '@/components/rewards/PointsOverview'
 import ListClearedBurst from '@/components/shared/ListClearedBurst'
 import { daysToAfford } from '@/lib/pointsSummary'
+import { formatSpend, parseSpend } from '@/lib/rewardSpend'
 import { haptic } from '@/lib/effects'
 import { notifyPointsChanged } from '@/lib/pointsEvents'
 
@@ -32,6 +33,7 @@ const STARTER_CATALOG = [
 export default function RewardsClient({
   pointsBalance, currentPerfectStreak, longestPerfectStreak,
   catalog: initialCatalog, redemptions: initialRedemptions, streaks, streakFreezes,
+  spendAmounts, redemptionSpend,
 }: {
   pointsBalance: number
   currentPerfectStreak: number
@@ -40,7 +42,14 @@ export default function RewardsClient({
   redemptions: Redemption[]
   streaks: HabitStreak[]
   streakFreezes: number | null   // null: freezes not available (migration 049 not applied)
+  spendAmounts: Record<string, number | null> | null  // null: money amounts unavailable (migration 054 not applied)
+  redemptionSpend: Record<string, number | null>
 }) {
+  const spendEnabled = spendAmounts !== null
+  const [spendById, setSpendById] = useState<Record<string, number | null>>({ ...spendAmounts, ...redemptionSpend })
+  const rememberSpend = (row: { id: string; spend_amount?: number | string | null }) => {
+    if (row.spend_amount !== undefined) setSpendById(prev => ({ ...prev, [row.id]: row.spend_amount === null ? null : Number(row.spend_amount) }))
+  }
   const [freezes, setFreezes]         = useState(streakFreezes ?? 0)
   const [buyingFreeze, setBuyingFreeze] = useState(false)
   const [balance, setBalance]         = useState(pointsBalance)
@@ -51,11 +60,13 @@ export default function RewardsClient({
 
   const [newTitle, setNewTitle] = useState('')
   const [newCost, setNewCost]   = useState('')
+  const [newSpend, setNewSpend] = useState('')
   const [adding, setAdding]     = useState(false)
 
   const [editingId, setEditingId] = useState<string | null>(null)
   const [editTitle, setEditTitle] = useState('')
   const [editCost, setEditCost]   = useState('')
+  const [editSpend, setEditSpend] = useState('')
 
   const [redeemingId, setRedeemingId] = useState<string | null>(null)
   const [deletingId, setDeletingId]   = useState<string | null>(null)
@@ -92,17 +103,20 @@ export default function RewardsClient({
   async function addReward() {
     const cost = Number(newCost)
     if (!newTitle.trim() || !cost || cost <= 0) return
+    const spend = spendEnabled ? parseSpend(newSpend) : null
+    if (spend === undefined) { setError('Enter the amount as a positive number, or leave it empty'); return }
     setAdding(true)
     setError(null)
     const res  = await fetch('/api/rewards/catalog', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ title: newTitle.trim(), point_cost: cost }),
+      body: JSON.stringify({ title: newTitle.trim(), point_cost: cost, ...(spendEnabled && { spend_amount: spend }) }),
     })
     const data = await res.json()
     if (data.reward) {
       setCatalog(prev => [...prev, data.reward].sort((a, b) => a.point_cost - b.point_cost))
-      setNewTitle(''); setNewCost('')
+      rememberSpend(data.reward)
+      setNewTitle(''); setNewCost(''); setNewSpend('')
     } else {
       setError(data.error ?? 'Failed to add reward')
     }
@@ -125,18 +139,22 @@ export default function RewardsClient({
 
   function startEdit(item: CatalogItem) {
     setEditingId(item.id); setEditTitle(item.title); setEditCost(String(item.point_cost))
+    setEditSpend(spendById[item.id] != null ? String(spendById[item.id]) : '')
   }
 
   async function saveEdit(id: string) {
     const cost = Number(editCost)
     if (!editTitle.trim() || !cost || cost <= 0) return
+    const spend = spendEnabled ? parseSpend(editSpend) : null
+    if (spend === undefined) { setError('Enter the amount as a positive number, or leave it empty'); return }
     const res  = await fetch(`/api/rewards/catalog?id=${id}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ title: editTitle.trim(), point_cost: cost }),
+      body: JSON.stringify({ title: editTitle.trim(), point_cost: cost, ...(spendEnabled && { spend_amount: spend }) }),
     })
     const data = await res.json()
     if (data.reward) {
+      rememberSpend(data.reward)
       setCatalog(prev => prev.map(c => c.id === id ? data.reward : c).sort((a, b) => a.point_cost - b.point_cost))
       setEditingId(null)
     } else {
@@ -164,8 +182,9 @@ export default function RewardsClient({
     if (data.redemption) {
       setBalance(prev => prev - item.point_cost)
       setRedemptions(prev => [data.redemption, ...prev])
+      rememberSpend(data.redemption)
       setLedgerKey(k => k + 1)
-      setCelebrating(item.title)
+      setCelebrating(item.id)
       haptic('success')
       notifyPointsChanged()
     } else {
@@ -201,8 +220,12 @@ export default function RewardsClient({
         <div key={item.id} className="flex items-center gap-2 rounded-lg border border-white/10 bg-white/5 px-3 py-2.5">
           <input value={editTitle} onChange={e => setEditTitle(e.target.value)}
             className="flex-1 rounded-lg border border-white/20 bg-white/5 px-2 py-1 text-sm text-white" />
-          <input type="number" value={editCost} onChange={e => setEditCost(e.target.value)}
+          <input type="number" value={editCost} onChange={e => setEditCost(e.target.value)} aria-label="Points"
             className="w-20 rounded-lg border border-white/20 bg-white/5 px-2 py-1 text-sm text-white" />
+          {spendEnabled && (
+            <input inputMode="decimal" value={editSpend} onChange={e => setEditSpend(e.target.value)} placeholder="₹" aria-label="Amount to spend (optional)"
+              className="w-20 rounded-lg border border-white/20 bg-white/5 px-2 py-1 text-sm text-white placeholder-slate-600" />
+          )}
           <button onClick={() => saveEdit(item.id)} className="text-xs text-emerald-400">Save</button>
         </div>
       )
@@ -223,6 +246,14 @@ export default function RewardsClient({
           <div className="min-w-0 flex-1">
             <p className="text-sm font-medium text-white">{item.title}</p>
             <p className="text-[11px] text-slate-500">{item.point_cost.toLocaleString()} pts</p>
+            {spendById[item.id] != null && (
+              <span className={cn(
+                'mt-1 inline-flex rounded-full px-2 py-0.5 text-[11px] font-semibold',
+                isReady ? 'bg-amber-500/20 text-amber-200' : 'bg-white/[0.06] text-slate-400',
+              )}>
+                {formatSpend(spendById[item.id]!)} to spend
+              </span>
+            )}
           </div>
           <div className="flex items-center gap-1.5 shrink-0">
             <button onClick={() => startEdit(item)} className="p-1.5 text-slate-500 hover:text-white transition-colors" aria-label="Edit">
@@ -279,7 +310,13 @@ export default function RewardsClient({
       <PointsOverview balance={balance} refreshKey={ledgerKey} onLedger={l => setPace(l.summary.dailyPace)} />
 
       {celebrating && typeof document !== 'undefined' && createPortal(
-        <ListClearedBurst title={`Enjoy: ${celebrating}`} subtitle="You earned this. Have a great time!" emoji="🎁" />,
+        <ListClearedBurst
+          title={`Enjoy: ${catalog.find(c => c.id === celebrating)?.title ?? 'your reward'}`}
+          subtitle={spendById[celebrating] != null
+            ? `You've earned ${formatSpend(spendById[celebrating]!)} to spend on it. Have a great time!`
+            : 'You earned this. Have a great time!'}
+          emoji="🎁"
+        />,
         document.body,
       )}
 
@@ -374,11 +411,16 @@ export default function RewardsClient({
           </div>
         )}
 
-        <div className="flex items-center gap-2 pt-1">
+        <div className="flex flex-wrap items-center gap-2 pt-1">
           <input placeholder="New reward…" value={newTitle} onChange={e => setNewTitle(e.target.value)}
-            className="flex-1 rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-white placeholder-slate-600" />
-          <input placeholder="Cost" type="number" value={newCost} onChange={e => setNewCost(e.target.value)}
-            className="w-20 rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-white placeholder-slate-600" />
+            className="min-w-0 flex-1 basis-full sm:basis-auto rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-white placeholder-slate-600" />
+          <input placeholder="Points" type="number" value={newCost} onChange={e => setNewCost(e.target.value)}
+            className="min-w-0 flex-1 sm:w-20 sm:flex-none rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-white placeholder-slate-600" />
+          {spendEnabled && (
+            <input placeholder="₹ (optional)" inputMode="decimal" value={newSpend} onChange={e => setNewSpend(e.target.value)}
+              title="Optional: how much money you'll let yourself spend on it"
+              className="min-w-0 flex-1 sm:w-36 sm:flex-none rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-white placeholder-slate-600" />
+          )}
           <button onClick={addReward} disabled={adding} className="p-2 rounded-lg bg-amber-600 hover:bg-amber-700 text-snow disabled:opacity-50">
             {adding ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
           </button>
@@ -412,7 +454,10 @@ export default function RewardsClient({
             {redemptions.map(r => (
               <div key={r.id} className="flex items-center justify-between text-sm">
                 <span className="text-slate-300">{r.title}</span>
-                <span className="text-slate-500">-{r.point_cost} pts</span>
+                <span className="text-slate-500">
+                  {spendById[r.id] != null && <span className="text-amber-300/80">{formatSpend(spendById[r.id]!)} · </span>}
+                  -{r.point_cost} pts
+                </span>
               </div>
             ))}
           </div>
