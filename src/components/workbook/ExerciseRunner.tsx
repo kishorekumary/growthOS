@@ -5,6 +5,7 @@ import { ChevronLeft, Loader2 } from 'lucide-react'
 import { useReward } from '@/contexts/RewardContext'
 import { WORKBOOK_POINTS, type Exercise } from '@/lib/workbook'
 import { cn } from '@/lib/utils'
+import { notifyPointsChanged } from '@/lib/pointsEvents'
 
 const draftKey = (slug: string) => `workbook-draft:${slug}`
 
@@ -53,6 +54,7 @@ export default function ExerciseRunner({ exercise, date, onClose, onSaved }: {
     })
     if (res.ok) {
       const { points } = await res.json() as { points: number }
+      if (points > 0) notifyPointsChanged()
       try { localStorage.removeItem(draftKey(exercise.slug)) } catch {}
       onSaved()
       if (points > 0) celebrateMilestones([{ label: `${exercise.title} done.`, points }])
