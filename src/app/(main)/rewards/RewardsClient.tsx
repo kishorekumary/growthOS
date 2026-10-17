@@ -1,11 +1,12 @@
 'use client'
 
 import { useState } from 'react'
-import { Coins, Flame, Plus, Trash2, Pencil, Gift, Loader2, AlertCircle, Sparkles, Snowflake } from 'lucide-react'
+import { Flame, Plus, Trash2, Pencil, Gift, Loader2, AlertCircle, Sparkles, Snowflake } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { FREEZE_COST, FREEZE_MAX } from '@/lib/dailyChest'
 import CountUp from '@/components/ui/count-up'
 import EmptyState from '@/components/ui/empty-state'
+import PointsOverview from '@/components/rewards/PointsOverview'
 
 interface CatalogItem { id: string; title: string; point_cost: number; created_at: string }
 interface Redemption  { id: string; title: string; point_cost: number; redeemed_at: string }
@@ -50,6 +51,8 @@ export default function RewardsClient({
   const [redeemingId, setRedeemingId] = useState<string | null>(null)
   const [deletingId, setDeletingId]   = useState<string | null>(null)
   const [error, setError]             = useState<string | null>(null)
+  // Bumped after spending so the points breakdown reloads.
+  const [ledgerKey, setLedgerKey]     = useState(0)
 
   async function seedStarters() {
     setSeeding(true)
@@ -129,6 +132,7 @@ export default function RewardsClient({
     if (data.redemption) {
       setBalance(prev => prev - item.point_cost)
       setRedemptions(prev => [data.redemption, ...prev])
+      setLedgerKey(k => k + 1)
     } else {
       setError(data.error ?? 'Failed to redeem')
     }
@@ -143,6 +147,7 @@ export default function RewardsClient({
     if (res.ok) {
       setBalance(prev => prev - FREEZE_COST)
       setFreezes(prev => prev + 1)
+      setLedgerKey(k => k + 1)
     } else {
       const d = await res.json().catch(() => ({}))
       setError(d.error ?? 'Could not buy a streak freeze')
@@ -164,22 +169,17 @@ export default function RewardsClient({
         </div>
       )}
 
-      <div className="grid grid-cols-2 gap-3">
-        <div className="rounded-xl border border-amber-500/20 bg-amber-500/5 p-4">
-          <div className="flex items-center gap-2 text-amber-400">
-            <Coins className="h-4 w-4" />
-            <p className="text-xs font-medium">Points Balance</p>
-          </div>
-          <p className="text-3xl font-bold text-white mt-1"><CountUp value={balance} /></p>
+      <PointsOverview balance={balance} refreshKey={ledgerKey} />
+
+      <div className="flex items-center gap-3 rounded-xl border border-orange-500/20 bg-orange-500/5 p-4">
+        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-orange-500/15">
+          <Flame className="h-5 w-5 text-orange-400" />
         </div>
-        <div className="rounded-xl border border-orange-500/20 bg-orange-500/5 p-4">
-          <div className="flex items-center gap-2 text-orange-400">
-            <Flame className="h-4 w-4" />
-            <p className="text-xs font-medium">Perfect Day Streak</p>
-          </div>
-          <p className="text-3xl font-bold text-white mt-1"><CountUp value={currentPerfectStreak} /></p>
-          <p className="text-[11px] text-slate-500 mt-0.5">Best: {longestPerfectStreak}</p>
+        <div className="flex-1">
+          <p className="text-xs font-medium text-orange-400">Perfect Day Streak</p>
+          <p className="text-[11px] text-slate-500">Best: {longestPerfectStreak}</p>
         </div>
+        <p className="text-3xl font-bold text-white"><CountUp value={currentPerfectStreak} /></p>
       </div>
 
       {streakFreezes !== null && (
