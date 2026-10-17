@@ -9,6 +9,7 @@ import MobileMenuButton from '@/components/layout/MobileMenuButton'
 import MobileDrawer from '@/components/layout/MobileDrawer'
 import MobileSearchButton from '@/components/layout/MobileSearchButton'
 import ThemeToggle from '@/components/layout/ThemeToggle'
+import PointsChip from '@/components/layout/PointsChip'
 import { TimerProvider } from '@/contexts/TimerContext'
 import FloatingTimer from '@/components/focus/FloatingTimer'
 import QuickLog from '@/components/shared/QuickLog'
@@ -48,6 +49,7 @@ export default async function MainLayout({ children }: { children: React.ReactNo
       <header className="fixed top-0 left-0 right-0 z-40 flex h-14 items-center justify-between border-b border-white/[0.06] bg-surface-deep/95 backdrop-blur-md px-4 md:hidden">
         <MobileMenuButton />
         <div className="flex items-center gap-1">
+          <PointsChip variant="bar" />
           <MobileSearchButton />
           <ThemeToggle />
           <Link href="/settings" className="flex h-8 w-8 items-center justify-center rounded-lg text-slate-500 hover:text-white hover:bg-white/[0.06] transition-colors">

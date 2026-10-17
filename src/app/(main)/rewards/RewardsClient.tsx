@@ -11,6 +11,7 @@ import PointsOverview from '@/components/rewards/PointsOverview'
 import ListClearedBurst from '@/components/shared/ListClearedBurst'
 import { daysToAfford } from '@/lib/pointsSummary'
 import { haptic } from '@/lib/effects'
+import { notifyPointsChanged } from '@/lib/pointsEvents'
 
 interface CatalogItem { id: string; title: string; point_cost: number; created_at: string }
 interface Redemption  { id: string; title: string; point_cost: number; redeemed_at: string }
@@ -166,6 +167,7 @@ export default function RewardsClient({
       setLedgerKey(k => k + 1)
       setCelebrating(item.title)
       haptic('success')
+      notifyPointsChanged()
     } else {
       setError(data.error ?? 'Failed to redeem')
     }
@@ -181,6 +183,7 @@ export default function RewardsClient({
       setBalance(prev => prev - FREEZE_COST)
       setFreezes(prev => prev + 1)
       setLedgerKey(k => k + 1)
+      notifyPointsChanged()
     } else {
       const d = await res.json().catch(() => ({}))
       setError(d.error ?? 'Could not buy a streak freeze')

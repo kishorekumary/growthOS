@@ -10,6 +10,7 @@ import {
 import { createSupabaseBrowserClient } from '@/lib/supabase'
 import { cn } from '@/lib/utils'
 import ZenithIcon from './ZenithIcon'
+import PointsChip from './PointsChip'
 
 const NAV_ITEMS = [
   { href: '/dashboard',           label: 'Dashboard',  icon: LayoutDashboard },
@@ -76,6 +77,8 @@ export default function Sidebar({ userName, userEmail, avatarUrl, isAdmin = fals
           </kbd>
         </button>
       </div>
+
+      <PointsChip variant="sidebar" />
 
       {/* Nav */}
       <nav className="flex-1 overflow-y-auto px-3 py-2 space-y-0.5">

@@ -1,4 +1,5 @@
 import { todayStr, yesterdayStr } from '@/lib/habitStreak'
+import { notifyPointsChanged } from '@/lib/pointsEvents'
 
 export interface RewardMilestone {
   label:  string
@@ -37,6 +38,7 @@ export async function completeHabit(
   })
   if (!res.ok) throw new Error('Failed to complete habit')
   const result = await res.json()
+  notifyPointsChanged()
   if (result.perfect_day) {
     window.dispatchEvent(new CustomEvent<PerfectDay>(PERFECT_DAY_EVENT, { detail: result.perfect_day }))
   }

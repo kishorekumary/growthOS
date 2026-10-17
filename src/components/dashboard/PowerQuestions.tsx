@@ -11,6 +11,7 @@ import {
   defaultKind, eveningHabitQuestion, powerStreak, type PowerKind,
 } from '@/lib/powerQuestions'
 import { cn } from '@/lib/utils'
+import { notifyPointsChanged } from '@/lib/pointsEvents'
 
 interface Session { entry_date: string; tags: string[] }
 interface Habit   { id: string; habit_name: string; frequency: string; is_global: boolean }
@@ -122,6 +123,7 @@ export default function PowerQuestions() {
     })
     if (res.ok) {
       const { points } = await res.json() as { points: number }
+      if (points > 0) notifyPointsChanged()
       try { localStorage.removeItem(draftKey(today, kind)) } catch {}
       setSessions(prev => [...prev, { entry_date: today, tags: [POWER_TAG[kind]] }])
       setActive(false)

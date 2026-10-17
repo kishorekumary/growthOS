@@ -1,4 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
+import { notifyPointsChanged } from '@/lib/pointsEvents'
 import { currentPeriods, periodStart, windowStart } from './periods'
 import { pointsFor } from './points'
 import { reminderTitles, type ReminderItem, type ReminderTitles } from './reminders'
@@ -89,6 +90,7 @@ export async function adjustPoints(db: Db, userId: string, delta: number, reason
   if (logErr) console.error('Failed to adjust planner points:', logErr)
   const { error: rpcErr } = await db.rpc('increment_points_balance', { p_user_id: userId, p_delta: delta })
   if (rpcErr) console.error('Failed to adjust planner points:', rpcErr)
+  notifyPointsChanged()
 }
 
 // Marks `item` done for period `start` and awards points. Both write paths

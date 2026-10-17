@@ -24,6 +24,7 @@ import { completeHabit } from '@/lib/completeHabit'
 import { useReward } from '@/contexts/RewardContext'
 import { DAILY_POINTS, DAILY_POINTS_KEYSTONE } from '@/lib/rewardMilestones'
 import CountUp from '@/components/ui/count-up'
+import { notifyPointsChanged } from '@/lib/pointsEvents'
 import StreakFlame from '@/components/ui/streak-flame'
 import EmptyState from '@/components/ui/empty-state'
 
@@ -1013,6 +1014,7 @@ export default function HabitTracker() {
         if (logErr) console.error('Failed to reverse habit undo points:', logErr)
         const { error: rpcErr } = await supabase.rpc('increment_points_balance', { p_user_id: userId, p_delta: delta })
         if (rpcErr) console.error('Failed to reverse habit undo points:', rpcErr)
+        notifyPointsChanged()
       }
     } else {
       writeTodayMissed(readTodayMissed().filter(id => id !== habit.id))

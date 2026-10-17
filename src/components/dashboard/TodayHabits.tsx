@@ -6,6 +6,7 @@ import { Check, Crown, Flame, Loader2, ArrowRight, Trophy, Sparkles, Gift, Lock,
 import { useCachedQuery } from '@/hooks/useCachedQuery'
 import { useInFlightIds } from '@/hooks/useInFlightIds'
 import { useSettle } from '@/hooks/useSettle'
+import { notifyPointsChanged } from '@/lib/pointsEvents'
 import { useHabitLeverage, leverageLine } from '@/hooks/useHabitLeverage'
 import { useHabitCelebration } from '@/hooks/useHabitCelebration'
 import { useReward } from '@/contexts/RewardContext'
@@ -195,6 +196,7 @@ export default function TodayHabits() {
         const { claim, alreadyClaimed } = await res.json() as { claim: ChestClaim; alreadyClaimed: boolean }
         setChest(claim)
         if (!alreadyClaimed) {
+          notifyPointsChanged()
           celebrateMilestones([{ label: `Day ${claim.chest_streak} chest: ${claim.label}`, points: claim.points, kind: 'chest' }])
           if (claim.freeze) refetchFreezes()
         }
