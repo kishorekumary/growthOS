@@ -7,6 +7,7 @@ import { createSupabaseBrowserClient } from '@/lib/supabase'
 import { POINTS_CHANGED_EVENT, notifyPointsChanged } from '@/lib/pointsEvents'
 import { findUnlocks, type UnlockCandidate } from '@/lib/rewardUnlocks'
 import { haptic } from '@/lib/effects'
+import { formatSpend } from '@/lib/rewardSpend'
 import ListClearedBurst from './ListClearedBurst'
 
 const SEEN_KEY = 'growthos:rewards-affordable'
@@ -27,22 +28,25 @@ function writeSeen(ids: string[]) {
 // cost, offer to redeem it right away. Mounted once in the main layout;
 // re-checks whenever points change (see pointsEvents).
 export default function RewardUnlockModal() {
-  const [unlocked, setUnlocked] = useState<UnlockCandidate[]>([])
+  const [unlocked, setUnlocked] = useState<(UnlockCandidate & { spend: number | null })[]>([])
   const [redeeming, setRedeeming] = useState(false)
   const [redeemed, setRedeemed] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
   const check = useCallback(async () => {
     const db = createSupabaseBrowserClient()
-    const [{ data: rewards }, { data: catalog }] = await Promise.all([
+    const [{ data: rewards }, { data: catalog }, spendRes] = await Promise.all([
       db.from('user_rewards').select('points_balance').maybeSingle(),
       db.from('reward_catalog').select('id, title, point_cost'),
+      // Fails harmlessly until migration 054 adds money amounts.
+      db.from('reward_catalog').select('id, spend_amount'),
     ])
     if (!catalog) return
+    const spend = new Map((spendRes.error ? [] : spendRes.data ?? []).map(r => [r.id, r.spend_amount == null ? null : Number(r.spend_amount)]))
     const { announce, nextSeen } = findUnlocks(catalog, rewards?.points_balance ?? 0, readSeen())
     writeSeen(nextSeen)
     if (announce.length) {
-      setUnlocked(announce)
+      setUnlocked(announce.map(c => ({ ...c, spend: spend.get(c.id) ?? null })))
       setRedeemed(false)
       setError(null)
       haptic('success')
@@ -100,8 +104,12 @@ export default function RewardUnlockModal() {
         <p className="relative mt-1 text-xl font-bold text-white">{reward.title}</p>
         <p className="relative mt-2 text-sm text-slate-400">
           {redeemed
-            ? 'Go treat yourself. You earned every point of it.'
-            : `Your habits earned you this. ${reward.point_cost.toLocaleString()} points, ready to spend.`}
+            ? reward.spend !== null
+              ? `Go spend that ${formatSpend(reward.spend)} and enjoy it. You earned every point.`
+              : 'Go treat yourself. You earned every point of it.'
+            : reward.spend !== null
+              ? `Your habits earned you this. You're now free to spend ${formatSpend(reward.spend)} on it.`
+              : `Your habits earned you this. ${reward.point_cost.toLocaleString()} points, ready to spend.`}
         </p>
         {error && <p className="relative mt-2 text-xs text-red-400">{error}</p>}
 

@@ -30,8 +30,14 @@ export async function POST(req: Request) {
   })
   if (logErr) return NextResponse.json({ error: logErr.message }, { status: 500 })
 
+  // Snapshot the money allowance too, when migration 054 is applied (the
+  // separate read fails harmlessly before then).
+  const { data: spendRow, error: spendErr } = await supabase
+    .from('reward_catalog').select('spend_amount').eq('id', item.id).maybeSingle()
+  const spend = !spendErr && spendRow?.spend_amount != null ? { spend_amount: Number(spendRow.spend_amount) } : {}
+
   const { data: redemption, error: redemptionErr } = await supabase.from('reward_redemptions').insert({
-    user_id: user.id, title: item.title, point_cost: item.point_cost,
+    user_id: user.id, title: item.title, point_cost: item.point_cost, ...spend,
   }).select().single()
   if (redemptionErr) return NextResponse.json({ error: redemptionErr.message }, { status: 500 })
 

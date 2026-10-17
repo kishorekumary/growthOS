@@ -7,7 +7,7 @@ export default async function RewardsPage() {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/login')
 
-  const [{ data: rewards }, { data: catalog }, { data: redemptions }, { data: habits }, freezeRes] = await Promise.all([
+  const [{ data: rewards }, { data: catalog }, { data: redemptions }, { data: habits }, freezeRes, spendRes, redeemedSpendRes] = await Promise.all([
     supabase.from('user_rewards')
       .select('points_balance, current_perfect_streak, longest_perfect_streak')
       .eq('user_id', user.id).maybeSingle(),
@@ -24,7 +24,13 @@ export default async function RewardsPage() {
       .order('streak_count', { ascending: false }),
     // Separate query: errors (hiding the freeze shop) until migration 049 is applied.
     supabase.from('user_rewards').select('streak_freezes').eq('user_id', user.id).maybeSingle(),
+    // Separate queries: error (hiding money amounts) until migration 054 is applied.
+    supabase.from('reward_catalog').select('id, spend_amount').eq('user_id', user.id),
+    supabase.from('reward_redemptions').select('id, spend_amount')
+      .eq('user_id', user.id).order('redeemed_at', { ascending: false }).limit(20),
   ])
+  const amounts = (rows: { id: string; spend_amount: number | string | null }[] | null) =>
+    Object.fromEntries((rows ?? []).map(r => [r.id, r.spend_amount === null ? null : Number(r.spend_amount)]))
 
   return (
     <RewardsClient
@@ -35,6 +41,8 @@ export default async function RewardsPage() {
       redemptions={redemptions ?? []}
       streaks={(habits ?? []).filter(h => !h.is_global)}
       streakFreezes={freezeRes.error ? null : freezeRes.data?.streak_freezes ?? 0}
+      spendAmounts={spendRes.error ? null : amounts(spendRes.data)}
+      redemptionSpend={redeemedSpendRes.error ? {} : amounts(redeemedSpendRes.data)}
     />
   )
 }
