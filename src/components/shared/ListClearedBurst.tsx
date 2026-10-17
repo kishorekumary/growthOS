@@ -31,11 +31,12 @@ function randomPieces(): Piece[] {
 
 interface PieceStyle extends CSSProperties { '--cx': string; '--cy': string; '--cr': string }
 
-export default function ListClearedBurst({ label, title, subtitle = 'Everything checked off', emoji = '🎉' }: {
+export default function ListClearedBurst({ label, title, subtitle = 'Everything checked off', emoji = '🎉', card = true }: {
   label?:    string
   title?:    string
   subtitle?: string
   emoji?:    string
+  card?:     boolean  // false: confetti only, behind something else's own UI
 }) {
   const [pieces] = useState<Piece[]>(randomPieces)
   const [motion, setMotion] = useState(true)
@@ -57,11 +58,11 @@ export default function ListClearedBurst({ label, title, subtitle = 'Everything 
           } as PieceStyle}
         />
       ))}
-      <div className="list-cleared-card rounded-2xl border border-emerald-400/30 bg-slate-900/90 px-6 py-4 text-center shadow-2xl backdrop-blur">
+      {card && <div className="list-cleared-card rounded-2xl border border-emerald-400/30 bg-slate-900/90 px-6 py-4 text-center shadow-2xl backdrop-blur">
         <div className="text-3xl">{emoji}</div>
         <p className="mt-1 text-lg font-bold text-white">{title ?? `${label} cleared!`}</p>
         <p className="text-xs text-emerald-300">{subtitle}</p>
-      </div>
+      </div>}
     </div>
   )
 }
