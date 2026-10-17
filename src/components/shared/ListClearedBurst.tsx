@@ -3,7 +3,8 @@
 import { useEffect, useState, type CSSProperties } from 'react'
 import { motionAllowed } from '@/lib/effects'
 
-// Confetti + a "cleared" card for finishing a whole list. Pieces only animate
+// Confetti + a "cleared" card for finishing a whole list (or, with a custom
+// title/subtitle, any other moment worth a burst — e.g. redeeming a reward). Pieces only animate
 // transform/opacity (GPU-composited), and the whole thing unmounts after
 // ~2s, so it costs nothing once it's gone. With motion off: just the card.
 
@@ -30,7 +31,12 @@ function randomPieces(): Piece[] {
 
 interface PieceStyle extends CSSProperties { '--cx': string; '--cy': string; '--cr': string }
 
-export default function ListClearedBurst({ label }: { label: string }) {
+export default function ListClearedBurst({ label, title, subtitle = 'Everything checked off', emoji = '🎉' }: {
+  label?:    string
+  title?:    string
+  subtitle?: string
+  emoji?:    string
+}) {
   const [pieces] = useState<Piece[]>(randomPieces)
   const [motion, setMotion] = useState(true)
 
@@ -52,9 +58,9 @@ export default function ListClearedBurst({ label }: { label: string }) {
         />
       ))}
       <div className="list-cleared-card rounded-2xl border border-emerald-400/30 bg-slate-900/90 px-6 py-4 text-center shadow-2xl backdrop-blur">
-        <div className="text-3xl">🎉</div>
-        <p className="mt-1 text-lg font-bold text-white">{label} cleared!</p>
-        <p className="text-xs text-emerald-300">Everything checked off</p>
+        <div className="text-3xl">{emoji}</div>
+        <p className="mt-1 text-lg font-bold text-white">{title ?? `${label} cleared!`}</p>
+        <p className="text-xs text-emerald-300">{subtitle}</p>
       </div>
     </div>
   )

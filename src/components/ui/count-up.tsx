@@ -32,5 +32,5 @@ export default function CountUp({ value, className }: { value: number; className
     return () => cancelAnimationFrame(frame)
   }, [value])
 
-  return <span className={className ?? 'tabular-nums'}>{shown}</span>
+  return <span className={className ?? 'tabular-nums'}>{shown.toLocaleString()}</span>
 }
