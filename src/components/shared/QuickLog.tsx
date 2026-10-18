@@ -2139,7 +2139,9 @@ export default function QuickLog() {
           className="sheet-in fixed inset-0 z-50 flex touch-none items-end sm:items-center justify-center p-4 bg-black/60 backdrop-blur-sm"
           onClick={e => { if (e.target === e.currentTarget) close() }}
         >
-          <div ref={sheetRef} className="w-full max-w-md overflow-hidden overscroll-contain rounded-2xl border border-white/10 bg-slate-900 shadow-2xl flex flex-col max-h-[88vh]">
+          {/* Fixed height, so paging between logs feels like flipping equal cards
+              instead of the sheet growing and shrinking with each form. */}
+          <div ref={sheetRef} className="w-full max-w-md overflow-hidden overscroll-contain rounded-2xl border border-white/10 bg-slate-900 shadow-2xl flex flex-col h-[min(88dvh,720px)]">
 
             {/* Header: Today, or a detail form with a way back */}
             <div className="flex items-center justify-between gap-2 px-5 pt-5 pb-3 shrink-0">
