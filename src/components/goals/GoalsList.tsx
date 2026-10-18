@@ -20,7 +20,8 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger,
 } from '@/components/ui/dialog'
 import { cn } from '@/lib/utils'
-import { format, differenceInDays, isPast, parseISO } from 'date-fns'
+import { format, parseISO } from 'date-fns'
+import { timeProgress, type Urgency } from '@/lib/goalProgress'
 
 type Category  = 'fitness' | 'finance' | 'books' | 'general' | 'career'
 type Timeframe = 'week' | 'month' | 'year' | 'custom'
@@ -38,13 +39,19 @@ interface Goal {
   vision_image_url: string | null
 }
 
-const CATEGORY_CONFIG: Record<Category, { label: string; icon: typeof Target; color: string; bg: string; border: string }> = {
-  fitness: { label: 'Fitness', icon: Dumbbell,  color: 'text-emerald-400', bg: 'bg-emerald-500/10', border: 'border-emerald-500/20' },
-  finance: { label: 'Finance', icon: Wallet,    color: 'text-sky-400',     bg: 'bg-sky-500/10',     border: 'border-sky-500/20'     },
-  books:   { label: 'Books',   icon: BookOpen,  color: 'text-amber-400',   bg: 'bg-amber-500/10',   border: 'border-amber-500/20'   },
-  general: { label: 'Personal', icon: Sparkles,   color: 'text-violet-400', bg: 'bg-violet-500/10', border: 'border-violet-500/20' },
-  career:  { label: 'Career',  icon: Briefcase,  color: 'text-rose-400',   bg: 'bg-rose-500/10',   border: 'border-rose-500/20'   },
+// `accent` is a gradient for the card stripe and the on-track time bar.
+const CATEGORY_CONFIG: Record<Category, { label: string; icon: typeof Target; color: string; bg: string; border: string; accent: string }> = {
+  fitness: { label: 'Fitness', icon: Dumbbell,  color: 'text-emerald-400', bg: 'bg-emerald-500/10', border: 'border-emerald-500/20', accent: 'from-emerald-400 to-teal-500'  },
+  finance: { label: 'Finance', icon: Wallet,    color: 'text-sky-400',     bg: 'bg-sky-500/10',     border: 'border-sky-500/20',     accent: 'from-sky-400 to-blue-500'      },
+  books:   { label: 'Books',   icon: BookOpen,  color: 'text-amber-400',   bg: 'bg-amber-500/10',   border: 'border-amber-500/20',   accent: 'from-amber-300 to-orange-500'  },
+  general: { label: 'Personal', icon: Sparkles,   color: 'text-violet-400', bg: 'bg-violet-500/10', border: 'border-violet-500/20', accent: 'from-violet-400 to-fuchsia-500' },
+  career:  { label: 'Career',  icon: Briefcase,  color: 'text-rose-400',   bg: 'bg-rose-500/10',   border: 'border-rose-500/20',   accent: 'from-rose-400 to-pink-500'     },
 }
+
+// Card actions: revealed on hover with a mouse, always visible on touch
+// screens (which have no hover to reveal them).
+const CARD_ACTION = 'flex h-7 w-7 items-center justify-center rounded-md text-slate-500 hover:bg-white/8 hover:text-white transition-all'
+const REVEAL = 'opacity-0 group-hover:opacity-100 focus-within:opacity-100 [@media(hover:none)]:opacity-100'
 
 const TIMEFRAME_CONFIG: Record<Timeframe, {
   label: string; icon: typeof Target
@@ -111,19 +118,38 @@ function effectiveTimeframe(goal: Goal): Timeframe {
   return goal.timeframe
 }
 
-function DateStatus({ targetDate }: { targetDate: string }) {
-  const date = parseISO(targetDate)
-  const days = differenceInDays(date, new Date())
-  const formatted = format(date, 'MMM d, yyyy')
-  if (isPast(date) && days < 0) {
-    const n = Math.abs(days)
-    const label = n === 1 ? 'Due yesterday' : `${n} days overdue`
-    return <span className="text-xs text-red-400">{formatted} · {label}</span>
-  }
-  if (days === 0) return <span className="text-xs text-amber-400">{formatted} · Due today</span>
-  if (days <= 7)  return <span className="text-xs text-amber-400">{formatted} · {days}d left</span>
-  if (days <= 30) return <span className="text-xs text-slate-400">{formatted} · {days}d left</span>
-  return <span className="text-xs text-slate-500">{formatted}</span>
+const URGENCY_TEXT: Record<Urgency, string> = {
+  overdue: 'text-red-400', today: 'text-amber-300', soon: 'text-amber-300', ok: 'text-slate-400', none: 'text-slate-500',
+}
+
+// Due date plus how much of the goal's time has gone by, coloured calm →
+// amber (a week or less) → red (overdue).
+function GoalTimeline({ goal, accent }: { goal: Goal; accent: string }) {
+  if (!goal.target_date) return null
+  const { elapsed, daysLeft, urgency } = timeProgress(goal.created_at, goal.target_date)
+  const date = format(parseISO(goal.target_date), 'MMM d, yyyy')
+  const n = Math.abs(daysLeft ?? 0)
+  const status =
+    urgency === 'overdue' ? `${n} day${n === 1 ? '' : 's'} overdue`
+    : urgency === 'today' ? 'Due today'
+    : `${n} day${n === 1 ? '' : 's'} left`
+  return (
+    <div className="pt-1">
+      <div className="h-1.5 overflow-hidden rounded-full bg-white/[0.07]">
+        <div
+          className={cn(
+            'h-full rounded-full bg-gradient-to-r transition-[width] duration-700',
+            urgency === 'overdue' ? 'from-red-500 to-rose-400' : urgency === 'ok' ? accent : 'from-amber-400 to-orange-400',
+          )}
+          style={{ width: `${Math.max(3, elapsed * 100)}%` }}
+        />
+      </div>
+      <p className={cn('mt-1.5 flex items-center justify-between gap-2 text-[11px]', URGENCY_TEXT[urgency])}>
+        <span>{date}</span>
+        <span className="font-medium">{status}</span>
+      </p>
+    </div>
+  )
 }
 
 // ─── Add Goal Modal ───────────────────────────────────────────
@@ -547,9 +573,10 @@ function GoalVisionModal({ goal, onImageSaved }: { goal: Goal; onImageSaved: (ur
         <button
           type="button"
           title="Visualize goal"
-          className="opacity-0 group-hover:opacity-100 text-slate-600 hover:text-violet-400 transition-all shrink-0"
+          aria-label="Visualize goal"
+          className={cn(CARD_ACTION, 'hover:text-violet-300')}
         >
-          <ImageIcon className="h-3 w-3" />
+          <ImageIcon className="h-3.5 w-3.5" />
         </button>
       </DialogTrigger>
       <DialogContent className="max-w-md">
@@ -661,75 +688,66 @@ function GoalCard({
   const CatIcon = cat.icon
 
   return (
-    <div className={cn(
-      'group flex flex-col rounded-xl border transition-all overflow-hidden',
-      'border-white/10 bg-white/3 hover:border-white/20',
-    )}>
+    <div className="card-sheen group relative flex flex-col overflow-hidden rounded-xl border border-white/10 bg-gradient-to-br from-white/[0.05] to-white/[0.015] transition-colors hover:border-white/20">
+      <div aria-hidden className={cn('absolute inset-y-0 left-0 w-1 bg-gradient-to-b', cat.accent)} />
+
       {goal.vision_image_url && (
-        <div className="relative w-full h-32 overflow-hidden">
-          <img src={goal.vision_image_url} alt="Goal vision" className="w-full h-full object-cover" />
-          <div className="absolute inset-0 bg-gradient-to-b from-transparent to-slate-950/60" />
+        <div className="relative h-36 w-full overflow-hidden">
+          <img src={goal.vision_image_url} alt="Goal vision" className="h-full w-full object-cover transition-transform duration-700 group-hover:scale-105" />
+          <div className="absolute inset-0 bg-gradient-to-b from-transparent via-transparent to-slate-950/80" />
         </div>
       )}
 
-      <div className="flex items-start gap-3 p-4">
+      <div className="flex items-start gap-3 py-4 pl-5 pr-3">
         <button
           type="button"
           onClick={() => onComplete(goal.id)}
           disabled={!!markingId}
-          aria-label="Mark complete"
-          className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full border-2 border-white/30 hover:border-emerald-400 hover:bg-emerald-500/20 transition-all cursor-pointer"
+          aria-label="Mark achieved"
+          title="Mark achieved"
+          className="group/check mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full border-2 border-white/25 transition-all hover:border-emerald-400 hover:bg-emerald-500/20 active:scale-90"
         >
           {markingId === goal.id
-            ? <Loader2 className="h-3 w-3 animate-spin text-slate-400" />
-            : <Check className="h-3 w-3 text-white opacity-0 group-hover:opacity-60" />
+            ? <Loader2 className="h-3.5 w-3.5 animate-spin text-slate-400" />
+            : <Check className="h-3.5 w-3.5 text-emerald-300 opacity-0 transition-opacity group-hover/check:opacity-100 [@media(hover:none)]:opacity-30" strokeWidth={3} />
           }
         </button>
 
-        <div className="flex-1 min-w-0 space-y-1">
-          <div className="flex items-start gap-2 justify-between">
-            <div className="flex items-center gap-1.5 min-w-0">
-              <p className="text-sm font-medium text-white leading-snug">{goal.title}</p>
+        <div className="min-w-0 flex-1 space-y-1.5">
+          <div className="flex items-start gap-2">
+            <p className="min-w-0 flex-1 text-sm font-semibold leading-snug text-white">{goal.title}</p>
+            <div className={cn('-mr-1 -mt-1 flex shrink-0 items-center transition-opacity', REVEAL)}>
               <EditGoalModal
                 goal={goal}
                 onSave={onEdit}
                 trigger={
-                  <button
-                    type="button"
-                    className="opacity-0 group-hover:opacity-100 text-slate-600 hover:text-slate-400 transition-all shrink-0"
-                    aria-label="Edit goal"
-                  >
-                    <Pencil className="h-3 w-3" />
+                  <button type="button" className={CARD_ACTION} aria-label="Edit goal" title="Edit">
+                    <Pencil className="h-3.5 w-3.5" />
                   </button>
                 }
               />
-              <GoalVisionModal
-                goal={goal}
-                onImageSaved={url => onImageSaved(goal.id, url)}
-              />
+              <GoalVisionModal goal={goal} onImageSaved={url => onImageSaved(goal.id, url)} />
+              <button
+                type="button"
+                onClick={() => onDelete(goal.id)}
+                disabled={deletingId === goal.id}
+                aria-label="Delete goal"
+                title="Delete"
+                className={cn(CARD_ACTION, 'hover:bg-red-500/10 hover:text-red-400')}
+              >
+                {deletingId === goal.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
+              </button>
             </div>
-            <span className={cn('flex items-center gap-1 text-xs px-1.5 py-0.5 rounded-full shrink-0 border', cat.bg, cat.color, cat.border)}>
-              <CatIcon className="h-3 w-3" />
-              {cat.label}
-            </span>
           </div>
           {goal.description && (
-            <p className="text-xs text-slate-400 leading-relaxed">{goal.description}</p>
+            <p className="text-xs leading-relaxed text-slate-400">{goal.description}</p>
           )}
-          {goal.target_date && <DateStatus targetDate={goal.target_date} />}
+          <span className={cn('inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px]', cat.bg, cat.color, cat.border)}>
+            <CatIcon className="h-3 w-3" />
+            {cat.label}
+          </span>
+          <GoalTimeline goal={goal} accent={cat.accent} />
         </div>
-
-        <button
-          type="button"
-          onClick={() => onDelete(goal.id)}
-          disabled={deletingId === goal.id}
-          aria-label="Delete goal"
-          className="shrink-0 mt-0.5 text-slate-700 opacity-0 group-hover:opacity-100 hover:text-red-400 transition-all"
-        >
-          {deletingId === goal.id
-            ? <Loader2 className="h-4 w-4 animate-spin" />
-            : <Trash2 className="h-4 w-4" />}
-        </button>
       </div>
     </div>
   )
