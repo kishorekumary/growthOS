@@ -8,6 +8,9 @@ import {
   Image as ImageIcon, Maximize2,
 } from 'lucide-react'
 import GoalsFocusModal from './GoalsFocusModal'
+import GoalsOverview from './GoalsOverview'
+import EmptyState from '@/components/ui/empty-state'
+import { Skeleton, SkeletonCards } from '@/components/ui/skeleton'
 import { createSupabaseBrowserClient } from '@/lib/supabase'
 import { useCachedQuery } from '@/hooks/useCachedQuery'
 import { Button } from '@/components/ui/button'
@@ -1027,8 +1030,9 @@ export default function GoalsList() {
   }
 
   if (loading) return (
-    <div className="flex items-center justify-center py-16">
-      <Loader2 className="h-5 w-5 animate-spin text-slate-500" />
+    <div className="space-y-4">
+      <Skeleton className="h-36 w-full rounded-2xl" />
+      <SkeletonCards count={3} />
     </div>
   )
 
@@ -1050,7 +1054,10 @@ export default function GoalsList() {
 
   return (
     <div className="space-y-4">
-      {/* Header */}
+      {goals.length > 0 && <GoalsOverview goals={goals} />}
+
+      {/* Header (the empty state has its own Add button) */}
+      {goals.length > 0 && <>
       <div className="flex items-center justify-between">
         <p className="text-xs text-slate-500">
           {active.length} in progress
@@ -1097,8 +1104,26 @@ export default function GoalsList() {
         ))}
       </div>
 
+      </>}
+
+      {goals.length === 0 && isOffline && (
+        <div className="rounded-xl border border-dashed border-white/10 p-12 text-center">
+          <Target className="h-10 w-10 text-violet-400/30 mx-auto mb-3" />
+          <p className="text-slate-400 text-sm">Can&apos;t load — you&apos;re offline.</p>
+        </div>
+      )}
+      {goals.length === 0 && !isOffline && (
+        <EmptyState
+          icon={Target}
+          title="Your first goal starts here"
+          hint="Something you can finish this week, a habit to build this month, or a dream for this year. E.g. run 5k, read 2 books, save ₹50,000."
+        >
+          <AddGoalModal onAdd={fetchGoals} />
+        </EmptyState>
+      )}
+
       {/* ── By Timeframe tab ── */}
-      {tab === 'timeframe' && (
+      {goals.length > 0 && tab === 'timeframe' && (
         <div className="space-y-4">
           <GoalSection timeframe="week"   goals={weekGoals}   onAdd={fetchGoals} onComplete={markComplete} onDelete={deleteGoal} onEdit={fetchGoals} onImageSaved={handleImageSaved} markingId={markingId} deletingId={deletingId} />
           <GoalSection timeframe="month"  goals={monthGoals}  onAdd={fetchGoals} onComplete={markComplete} onDelete={deleteGoal} onEdit={fetchGoals} onImageSaved={handleImageSaved} markingId={markingId} deletingId={deletingId} />
@@ -1106,25 +1131,22 @@ export default function GoalsList() {
           {customGoals.length > 0 && (
             <GoalSection timeframe="custom" goals={customGoals} onAdd={fetchGoals} onComplete={markComplete} onDelete={deleteGoal} onEdit={fetchGoals} onImageSaved={handleImageSaved} markingId={markingId} deletingId={deletingId} />
           )}
-          {active.length === 0 && isOffline && (
-            <div className="rounded-xl border border-dashed border-white/10 p-12 text-center">
-              <Target className="h-10 w-10 text-violet-400/30 mx-auto mb-3" />
-              <p className="text-slate-400 text-sm">Can&apos;t load — you&apos;re offline.</p>
-            </div>
-          )}
-          {active.length === 0 && !isOffline && (
-            <div className="rounded-xl border border-dashed border-white/10 p-12 text-center">
-              <Target className="h-10 w-10 text-violet-400/30 mx-auto mb-3" />
-              <p className="text-slate-400 text-sm">No active goals yet.</p>
-              <p className="text-slate-600 text-xs mt-1">Add a weekly, monthly, or yearly goal above.</p>
-            </div>
+          {active.length === 0 && (
+            <EmptyState
+              icon={Target}
+              tone="emerald"
+              title="Every goal achieved. What's next?"
+              hint="Set the next one while the momentum is on your side."
+            >
+              <AddGoalModal onAdd={fetchGoals} />
+            </EmptyState>
           )}
           <CompletedList goals={completed} onDelete={deleteGoal} onUncomplete={markUncomplete} />
         </div>
       )}
 
       {/* ── By Category tab ── */}
-      {tab === 'category' && (
+      {goals.length > 0 && tab === 'category' && (
         <div className="space-y-4">
           {/* Category sub-tabs */}
           <div className="flex gap-1 rounded-lg border border-white/10 bg-white/3 p-1">
