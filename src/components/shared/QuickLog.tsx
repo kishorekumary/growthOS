@@ -26,7 +26,7 @@ import { matchHabit } from '@/lib/habitMatch'
 import { averageClock, topRepeats, usualWorkout } from '@/lib/logDefaults'
 import TodayLog from './TodayLog'
 import { sleepWindow } from '@/lib/todayLog'
-import { swipeIntent } from '@/lib/swipe'
+import { dragOffset, gestureAxis, swipeCommits } from '@/lib/swipe'
 
 type Panel = 'today' | 'plans' | 'voice' | 'meal' | 'workout' | 'finance' | 'journal' | 'task' | 'sleep'
 type MealType    = 'breakfast' | 'lunch' | 'dinner' | 'snack' | 'drink'
@@ -1952,19 +1952,32 @@ const PAGES: Panel[] = ['today', 'plans', 'meal', 'workout', 'sleep', 'finance',
 const pageLabel = (p: Panel) => p === 'today' ? 'Today' : TABS.find(t => t.id === p)!.label
 const SWIPE_HINT_KEY = 'growthos:quicklog-swipe-hint'
 
-// A swipe that starts in a text field or on something that scrolls
-// sideways itself (chip rows) belongs to that element, not to paging.
-function ownsHorizontalGesture(target: EventTarget | null, boundary: HTMLElement | null): boolean {
+// Swipes page from anywhere on the sheet, except while typing in a field
+// (and in multi-line text, where sideways drags select text).
+function isTypingTarget(target: EventTarget | null): boolean {
+  const el = target as HTMLElement | null
+  if (!el?.closest) return false
+  if (el.closest('textarea, [contenteditable="true"]')) return true
+  const field = el.closest('input, select')
+  return !!field && field === document.activeElement
+}
+
+// Nearest ancestor (below `boundary`) that scrolls sideways — chip rows.
+function horizontalScroller(target: EventTarget | null, boundary: HTMLElement): HTMLElement | null {
   let el = target as HTMLElement | null
   while (el && el !== boundary) {
-    if (el.matches?.('input, textarea, select, [contenteditable="true"]')) return true
     if (el.scrollWidth > el.clientWidth + 2) {
       const ox = getComputedStyle(el).overflowX
-      if (ox === 'auto' || ox === 'scroll') return true
+      if (ox === 'auto' || ox === 'scroll') return el
     }
     el = el.parentElement
   }
-  return false
+  return null
+}
+
+// Can `el` still scroll in the direction a finger moving by dx would push it?
+function canScrollFurther(el: HTMLElement, dx: number): boolean {
+  return dx < 0 ? el.scrollLeft + el.clientWidth < el.scrollWidth - 1 : el.scrollLeft > 0
 }
 
 // ─── Main export ──────────────────────────────────────────────────
@@ -1986,8 +1999,8 @@ export default function QuickLog() {
 
   // ── Paging between logs: swipe, ‹ › buttons, or arrow keys ──
   const [dir, setDir] = useState<1 | -1>(1)
-  const contentRef = useRef<HTMLDivElement>(null)
-  const touch = useRef<{ x: number; y: number; t: number; skip: boolean } | null>(null)
+  const sheetRef = useRef<HTMLDivElement>(null)
+  const slideRef = useRef<HTMLDivElement>(null)
   const [showHint, setShowHint] = useState(false)
 
   function goTo(next: Panel) {
@@ -2001,6 +2014,11 @@ export default function QuickLog() {
     goTo(PAGES[i])
     if (showHint) { setShowHint(false); try { localStorage.setItem(SWIPE_HINT_KEY, '1') } catch {} }
   }
+  // The native listeners below are attached once per open; read the latest.
+  const panelRef = useRef(panel)
+  panelRef.current = panel
+  const pageRef = useRef(page)
+  pageRef.current = page
 
   useEffect(() => {
     if (!open) return
@@ -2016,18 +2034,83 @@ export default function QuickLog() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, panel, showHint])
 
-  function onTouchStart(e: React.TouchEvent) {
-    const t = e.touches[0]
-    touch.current = { x: t.clientX, y: t.clientY, t: Date.now(), skip: e.touches.length > 1 || ownsHorizontalGesture(e.target, contentRef.current) }
-  }
-  function onTouchEnd(e: React.TouchEvent) {
-    const start = touch.current
-    touch.current = null
-    if (!start || start.skip) return
-    const t = e.changedTouches[0]
-    const intent = swipeIntent(t.clientX - start.x, t.clientY - start.y, Date.now() - start.t)
-    if (intent) page(intent === 'next' ? 1 : -1)
-  }
+  // While open, the page behind must not scroll or slide with the swipes.
+  useEffect(() => {
+    if (!open) return
+    const html = document.documentElement, body = document.body
+    const prev = [html.style.overflow, body.style.overflow, body.style.overscrollBehavior]
+    html.style.overflow = 'hidden'; body.style.overflow = 'hidden'; body.style.overscrollBehavior = 'none'
+    return () => { [html.style.overflow, body.style.overflow, body.style.overscrollBehavior] = prev }
+  }, [open])
+
+  // Drag to page: the current log follows the finger sideways and either
+  // slides away to the next log on release or springs back. Native
+  // listeners because a non-passive touchmove is needed to stop the
+  // browser treating the drag as a scroll or back gesture.
+  useEffect(() => {
+    if (!open) return
+    const sheet = sheetRef.current
+    if (!sheet) return
+    let g: { x: number; y: number; t: number; mode: 'undecided' | 'page' | 'native'; scroller: HTMLElement | null } | null = null
+
+    const place = (x: number, animate: boolean) => {
+      const el = slideRef.current
+      if (!el) return
+      el.style.transition = animate ? 'transform 220ms cubic-bezier(0.22, 1, 0.36, 1), opacity 220ms ease-out' : 'none'
+      el.style.transform = x ? `translateX(${x}px)` : ''
+      el.style.opacity = x ? String(Math.max(0.3, 1 - (Math.abs(x) / sheet.clientWidth) * 0.7)) : ''
+    }
+    const canGo = (dx: number) => {
+      const i = PAGES.indexOf(panelRef.current)
+      return dx < 0 ? i < PAGES.length - 1 : i > 0
+    }
+
+    function onStart(e: TouchEvent) {
+      if (e.touches.length > 1 || isTypingTarget(e.target)) { g = null; return }
+      const t = e.touches[0]
+      g = { x: t.clientX, y: t.clientY, t: Date.now(), mode: 'undecided', scroller: horizontalScroller(e.target, sheet!) }
+    }
+    function onMove(e: TouchEvent) {
+      if (!g || g.mode === 'native') return
+      const t = e.touches[0]
+      const dx = t.clientX - g.x, dy = t.clientY - g.y
+      if (g.mode === 'undecided') {
+        const axis = gestureAxis(dx, dy)
+        if (!axis) return
+        // A chip row scrolls first; once it's at its end, the swipe pages.
+        g.mode = axis === 'y' || (g.scroller && canScrollFurther(g.scroller, dx)) ? 'native' : 'page'
+        if (g.mode === 'native') return
+      }
+      e.preventDefault()
+      place(dragOffset(dx, canGo(dx)), false)
+    }
+    function onEnd(e: TouchEvent) {
+      const gesture = g
+      g = null
+      if (!gesture || gesture.mode !== 'page') return
+      const dx = e.changedTouches[0].clientX - gesture.x
+      if (canGo(dx) && swipeCommits(dx, Date.now() - gesture.t, sheet!.clientWidth)) {
+        const delta = dx < 0 ? 1 : -1
+        place(-delta * sheet!.clientWidth, true)
+        setTimeout(() => { place(0, false); pageRef.current(delta) }, 200)
+      } else {
+        place(0, true)
+      }
+    }
+    function onCancel() { if (g?.mode === 'page') place(0, true); g = null }
+
+    sheet.addEventListener('touchstart', onStart, { passive: true })
+    sheet.addEventListener('touchmove', onMove, { passive: false })
+    sheet.addEventListener('touchend', onEnd)
+    sheet.addEventListener('touchcancel', onCancel)
+    return () => {
+      sheet.removeEventListener('touchstart', onStart)
+      sheet.removeEventListener('touchmove', onMove)
+      sheet.removeEventListener('touchend', onEnd)
+      sheet.removeEventListener('touchcancel', onCancel)
+    }
+  }, [open])
+
   // Saving a detail form returns to Today (which reloads) to keep logging.
   function handleDone() { goTo('today') }
 
@@ -2053,10 +2136,10 @@ export default function QuickLog() {
       {/* ── Modal ── */}
       {open && (
         <div
-          className="sheet-in fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4 bg-black/60 backdrop-blur-sm"
+          className="sheet-in fixed inset-0 z-50 flex touch-none items-end sm:items-center justify-center p-4 bg-black/60 backdrop-blur-sm"
           onClick={e => { if (e.target === e.currentTarget) close() }}
         >
-          <div className="w-full max-w-md rounded-2xl border border-white/10 bg-slate-900 shadow-2xl flex flex-col max-h-[88vh]">
+          <div ref={sheetRef} className="w-full max-w-md overflow-hidden overscroll-contain rounded-2xl border border-white/10 bg-slate-900 shadow-2xl flex flex-col max-h-[88vh]">
 
             {/* Header: Today, or a detail form with a way back */}
             <div className="flex items-center justify-between gap-2 px-5 pt-5 pb-3 shrink-0">
@@ -2114,9 +2197,8 @@ export default function QuickLog() {
             )}
 
             {/* Panel content: swipe sideways to page */}
-            <div ref={contentRef} onTouchStart={onTouchStart} onTouchEnd={onTouchEnd}
-              className="flex-1 overflow-y-auto overflow-x-hidden px-5 pb-5 min-h-0">
-              <div key={panel} className={cn('animate-in fade-in-0 duration-200 motion-reduce:animate-none', dir > 0 ? 'slide-in-from-right-8' : 'slide-in-from-left-8')}>
+            <div className="flex-1 touch-pan-y overflow-y-auto overflow-x-hidden overscroll-contain px-5 pb-5 min-h-0">
+              <div ref={slideRef} key={panel} className={cn('animate-in fade-in-0 duration-200 motion-reduce:animate-none', dir > 0 ? 'slide-in-from-right-8' : 'slide-in-from-left-8')}>
               {panel === 'today'   && <TodayLog onOpen={goTo} />}
               {/* Plans' onDone fires when a plan link navigates away, so close. */}
               {panel === 'plans'   && <PlansPanel   onDone={close} />}
