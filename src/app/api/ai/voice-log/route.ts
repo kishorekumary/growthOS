@@ -41,6 +41,19 @@ Rules:
 - title: extract a short title if the user says one (e.g. "Journal title Today's wins: ..."), otherwise null.
 - content: the full journal text the user dictated.
 
+SLEEP (how long or when the user slept):
+{"type":"sleep","hours":<number|null>,"bedtime":"HH:MM"|null,"wake_time":"HH:MM"|null,"quality":<1-5|null>,"summary":"<1 sentence>"}
+- 24-hour times. "slept at 11, woke at 6:30" → bedtime "23:00", wake_time "06:30". "slept 7 hours" → hours 7.
+- quality only if stated: terrible/poor 1, okay/fair 2, good 3, great 4, perfect/amazing 5.
+
+WATER (water drunk):
+{"type":"water","amount_ml":<number>,"summary":"<1 sentence>"}
+- A glass is 250 ml, a bottle 500 ml, a litre 1000 ml. "3 glasses of water" → 750.
+
+MOOD (how the user feels right now):
+{"type":"mood","mood":<1-5>,"word":<one capitalised feeling word|null>,"summary":"<1 sentence>"}
+- 1 rough/awful, 2 low/sad, 3 okay/meh, 4 good, 5 great/amazing. word e.g. "Tired", "Grateful", "Stressed".
+
 UNKNOWN (cannot parse):
 {"type":"unknown","summary":"Could not understand the command."}
 
@@ -58,8 +71,13 @@ Examples:
 - "petrol 500"     → {type:"transaction",txn_type:"expense",amount:500,category:"Transport",description:"petrol",summary:"Logged ₹500 petrol expense"}
 Distinguish from meal: "had breakfast" / "ate breakfast" / "I had breakfast" → MEAL. Bare "breakfast 85" → TRANSACTION.
 
+SEVERAL THINGS IN ONE COMMAND:
+If the user mentions more than one separate thing to log ("ran 30 minutes, lunch was 250 rupees and slept 7 hours"),
+return {"items":[<one object per thing, each in its shape above>]} in the order said.
+For a single thing, return just that one object (no "items" wrapper).
+
 General rules:
-- Return ONLY the JSON object — no markdown, no code fences, no explanation.
+- Return ONLY the JSON — no markdown, no code fences, no explanation.
 - Amounts should always be numeric (strip currency words like rupees, dollars, INR, ₹).
 - Map workout activities: run/jog/walk/cycling/swim → cardio, gym/weights/push-ups/pull-ups → strength, yoga/pilates → yoga, football/cricket/tennis/basketball → sports.
 - If amount is mentioned with "spent", "paid", "bought" → expense. "earned", "received", "got paid" → income. "saved", "deposited", "invested" → savings.`
@@ -75,7 +93,7 @@ export async function POST(req: NextRequest) {
   try {
     const res = await openai.chat.completions.create({
       model:      'gpt-4o-mini',
-      max_tokens: 512,
+      max_tokens: 1024,
       messages: [
         { role: 'system', content: SYSTEM },
         { role: 'user',   content: transcript.trim() },

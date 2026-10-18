@@ -29,3 +29,14 @@ export function hoursBetween(bed: string, wake: string): number {
   if (mins < 0) mins += 1440
   return Math.round((mins / 60) * 10) / 10
 }
+
+// Bed and wake times for "slept N hours": anchored on the given (or usual)
+// wake time, counting back.
+export function sleepWindow(hours: number, wake: string): { bedtime: string; wake_time: string } {
+  const [wh, wm] = wake.split(':').map(Number)
+  const bedMins = ((wh * 60 + wm - Math.round(hours * 60)) % 1440 + 1440) % 1440
+  return {
+    bedtime: `${String(Math.floor(bedMins / 60)).padStart(2, '0')}:${String(bedMins % 60).padStart(2, '0')}`,
+    wake_time: wake,
+  }
+}
