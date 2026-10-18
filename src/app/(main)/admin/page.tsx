@@ -1,6 +1,8 @@
 import { createSupabaseAdminClient } from '@/lib/supabase-admin'
 import { createSupabaseServerClient } from '@/lib/supabase-server'
 import AdminDashboard from './AdminDashboard'
+import { loadActivity } from '@/lib/admin/loadActivity'
+import { latestByUser } from '@/lib/admin/activity'
 import type { GlobalGalleryItem, GlobalBookItem } from './AdminDashboard'
 
 function getWeekStart(): string {
@@ -26,18 +28,22 @@ export default async function AdminPage() {
     { data: globalHabits },
     { data: globalGallery },
     { data: globalBooks },
+    { data: rewards },
+    activity,
   ] = await Promise.all([
     adminClient.auth.admin.listUsers({ perPage: 1000 }),
-    adminClient.from('user_profiles').select('id, full_name, avatar_url, is_admin, is_superadmin, created_at'),
+    adminClient.from('user_profiles').select('id, full_name, avatar_url, is_admin, is_superadmin, created_at, country, occupation'),
     adminClient.from('personality_habits').select('id, user_id, is_global, streak_count').eq('is_global', false),
     adminClient.from('habit_logs').select('user_id, status').gte('log_date', getWeekStart()),
     adminClient.from('reading_log').select('user_id, status'),
-    adminClient.from('workout_logs').select('user_id').gte('date', getWeekStart()),
-    adminClient.from('user_goals').select('user_id, status'),
+    adminClient.from('workout_logs').select('user_id').gte('log_date', getWeekStart()),
+    adminClient.from('user_goals').select('user_id, is_completed'),
     adminClient.from('planner_items').select('user_id, is_completed, repeats, ended_at'),
     adminClient.from('personality_habits').select('id, habit_name, category, frequency, created_at').eq('is_global', true).order('created_at', { ascending: false }),
     adminClient.from('user_gallery').select('id, url, caption, mime_type, storage_path, created_at').eq('is_global', true).order('created_at', { ascending: false }),
     adminClient.from('reading_log').select('id, book_title, author, genre, status, key_lessons, created_at').eq('is_global', true).order('created_at', { ascending: false }),
+    adminClient.from('user_rewards').select('user_id, points_balance, current_perfect_streak'),
+    loadActivity(adminClient, { days: 90 }),
   ])
 
   // Build per-user stats maps
@@ -69,7 +75,7 @@ export default async function AdminPage() {
 
   const activeGoals: Record<string, number> = {}
   for (const g of goals ?? []) {
-    if (g.status === 'active' || !g.status) activeGoals[g.user_id] = (activeGoals[g.user_id] ?? 0) + 1
+    if (!g.is_completed) activeGoals[g.user_id] = (activeGoals[g.user_id] ?? 0) + 1
   }
 
   const openTodos: Record<string, number> = {}
@@ -82,6 +88,13 @@ export default async function AdminPage() {
   const { data: meProfile } = await supabase.from('user_profiles').select('is_superadmin').eq('id', me?.id ?? '').single()
 
   const profileMap = Object.fromEntries((profiles ?? []).map(p => [p.id, p]))
+  const rewardMap  = Object.fromEntries((rewards ?? []).map(r => [r.user_id, r]))
+
+  // Last activity: newest app action, or the last sign-in if that's later.
+  const latest = latestByUser([
+    ...activity,
+    ...(authUsers ?? []).filter(u => u.last_sign_in_at).map(u => ({ user_id: u.id, at: u.last_sign_in_at!, label: 'Signed in' })),
+  ])
 
   const users = (authUsers ?? []).map(u => ({
     id:             u.id,
@@ -100,6 +113,14 @@ export default async function AdminPage() {
     workoutsWeek:   workoutCounts[u.id] ?? 0,
     activeGoals:    activeGoals[u.id]   ?? 0,
     openTodos:      openTodos[u.id]     ?? 0,
+    lastActiveAt:   latest.get(u.id)?.at ?? null,
+    lastActiveLabel: latest.get(u.id)?.label ?? null,
+    lastSignIn:     u.last_sign_in_at ?? null,
+    provider:       (u.app_metadata?.provider as string | undefined) ?? 'email',
+    points:         rewardMap[u.id]?.points_balance ?? 0,
+    perfectStreak:  rewardMap[u.id]?.current_perfect_streak ?? 0,
+    country:        profileMap[u.id]?.country ?? null,
+    occupation:     profileMap[u.id]?.occupation ?? null,
   }))
 
   const galleryItems: GlobalGalleryItem[] = (globalGallery ?? []).map(r => ({

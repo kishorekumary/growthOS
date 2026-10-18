@@ -6,10 +6,25 @@ import {
   Users, Globe, Flame, BookOpen, Dumbbell, Target,
   CheckSquare, Plus, Trash2, Loader2, Shield, ShieldOff,
   ChevronRight, Search, ShieldCheck, Image, FileText, Music, Video, X,
-  Send, MessageSquare, Pencil, AlertCircle,
-} from 'lucide-react'
+  Send, MessageSquare, Pencil, AlertCircle, Activity, UserPlus, Moon } from 'lucide-react'
 import { HABIT_CATEGORIES, HABIT_CATEGORY_META } from '@/lib/habitCategories'
 import { cn } from '@/lib/utils'
+import { activityStatus, timeAgo, type ActivityStatus } from '@/lib/admin/activity'
+import PageHeader from '@/components/ui/page-header'
+import SegmentedTabs from '@/components/ui/segmented-tabs'
+import StatTile from '@/components/ui/stat-tile'
+
+// Status dot + wording for how recently a user did anything.
+const STATUS_META: Record<ActivityStatus, { dot: string; text: string; label: string }> = {
+  today:   { dot: 'bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.8)]', text: 'text-emerald-300', label: 'Active today' },
+  week:    { dot: 'bg-sky-400',     text: 'text-sky-300',     label: 'Active this week' },
+  month:   { dot: 'bg-amber-400',   text: 'text-amber-300',   label: 'Idle' },
+  dormant: { dot: 'bg-slate-500',   text: 'text-slate-400',   label: 'Dormant' },
+  never:   { dot: 'bg-slate-700',   text: 'text-slate-500',   label: 'No activity yet' },
+}
+
+type UserFilter = 'all' | 'today' | 'week' | 'dormant' | 'admins'
+type UserSort = 'active' | 'newest' | 'name' | 'streak'
 
 type Role = 'user' | 'admin' | 'superadmin'
 
@@ -19,6 +34,9 @@ interface UserRow {
   habitCount: number; topStreak: number; weekDone: number; weekTotal: number
   booksReading: number; booksCompleted: number; workoutsWeek: number
   activeGoals: number; openTodos: number
+  lastActiveAt: string | null; lastActiveLabel: string | null; lastSignIn: string | null
+  provider: string; points: number; perfectStreak: number
+  country: string | null; occupation: string | null
 }
 
 interface GlobalHabit {
@@ -76,10 +94,44 @@ export default function AdminDashboard({
   const [msgSending, setMsgSending] = useState(false)
   const [msgSent, setMsgSent]     = useState(false)
 
-  const filtered = users.filter(u =>
-    u.full_name.toLowerCase().includes(search.toLowerCase()) ||
-    u.email.toLowerCase().includes(search.toLowerCase())
-  )
+  // Delete-user confirmation: the admin types the user's email to confirm.
+  const [deleteTarget, setDeleteTarget] = useState<UserRow | null>(null)
+  const [deleteEmail, setDeleteEmail]   = useState('')
+  const [deleting, setDeleting]         = useState(false)
+  const [deleteError, setDeleteError]   = useState<string | null>(null)
+  const canDelete = (u: UserRow) => u.id !== meId && (isSuperadmin || !u.is_admin)
+  async function deleteUser() {
+    if (!deleteTarget) return
+    setDeleting(true); setDeleteError(null)
+    const res = await fetch('/api/admin/delete-user', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ userId: deleteTarget.id, confirmEmail: deleteEmail }),
+    })
+    const data = await res.json().catch(() => ({}))
+    setDeleting(false)
+    if (!res.ok) { setDeleteError(data.error ?? 'Could not delete this user'); return }
+    setUsers(prev => prev.filter(x => x.id !== deleteTarget.id))
+    setDeleteTarget(null); setDeleteEmail('')
+  }
+
+  const [filter, setFilter] = useState<UserFilter>('all')
+  const [sort, setSort]     = useState<UserSort>('active')
+  const statusOf = (u: UserRow) => activityStatus(u.lastActiveAt)
+  const q = search.trim().toLowerCase()
+  const filtered = users
+    .filter(u => !q || u.full_name.toLowerCase().includes(q) || u.email.toLowerCase().includes(q))
+    .filter(u =>
+      filter === 'all'     ? true
+      : filter === 'today' ? statusOf(u) === 'today'
+      : filter === 'week'  ? ['today', 'week'].includes(statusOf(u))
+      : filter === 'dormant' ? ['dormant', 'never'].includes(statusOf(u))
+      : u.is_admin)
+    .sort((a, b) =>
+      sort === 'active' ? (b.lastActiveAt ?? '').localeCompare(a.lastActiveAt ?? '')
+      : sort === 'newest' ? b.joined.localeCompare(a.joined)
+      : sort === 'name'   ? (a.full_name || a.email).localeCompare(b.full_name || b.email)
+      : b.topStreak - a.topStreak)
 
   function currentRole(u: UserRow): Role {
     if (u.is_superadmin) return 'superadmin'
@@ -185,241 +237,202 @@ export default function AdminDashboard({
   const totalUsers   = users.length
   const adminCount   = users.filter(u => u.is_admin).length
   const totalGlobal  = globalHabits.length
-  const activeThisWk = users.filter(u => u.weekDone > 0).length
+  const activeToday  = users.filter(u => statusOf(u) === 'today').length
+  const activeThisWk = users.filter(u => ['today', 'week'].includes(statusOf(u))).length
+  const newThisWk    = users.filter(u => Date.now() - new Date(u.joined).getTime() < 7 * 86_400_000).length
+  const dormantCount = users.filter(u => ['dormant', 'never'].includes(statusOf(u))).length
 
   return (
-    <div className="min-h-screen p-4 md:p-8 space-y-6 max-w-7xl mx-auto">
-      {/* Header */}
-      <div className="flex items-start justify-between gap-3 flex-wrap">
-        <div>
-          <h1 className="text-2xl font-bold text-white">Admin Dashboard</h1>
-          <p className="text-sm text-slate-500 mt-0.5">Manage users, monitor progress, and set global content</p>
-        </div>
-        <button
-          onClick={() => setMsgTarget('broadcast')}
-          className="flex items-center gap-2 rounded-xl border border-violet-500/30 bg-violet-500/10 px-4 py-2 text-sm font-medium text-violet-300 hover:bg-violet-500/20 transition-colors"
-        >
-          <MessageSquare className="h-4 w-4" />
-          Broadcast
-        </button>
+    <div className="mx-auto max-w-6xl space-y-6 px-4 py-8 md:px-8">
+      <PageHeader
+        icon={ShieldCheck}
+        tone="indigo"
+        title="Admin"
+        subtitle="People, activity and shared content"
+        className="mb-0"
+        right={
+          <button
+            onClick={() => setMsgTarget('broadcast')}
+            className="flex items-center gap-2 rounded-xl bg-gradient-to-br from-violet-500 to-indigo-600 px-3.5 py-2 text-sm font-medium text-snow shadow-[0_6px_20px_-8px_rgba(99,102,241,0.7)] transition active:scale-95"
+          >
+            <MessageSquare className="h-4 w-4" />
+            <span className="hidden sm:inline">Broadcast</span>
+          </button>
+        }
+      />
+
+      {/* People at a glance */}
+      <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+        <StatTile icon={Users} tone="violet" label="Users" value={totalUsers} sub={`${adminCount} admin${adminCount === 1 ? '' : 's'}`} />
+        <StatTile icon={Activity} tone="emerald" label="Active today" value={activeToday} sub={`${activeThisWk} this week`} />
+        <StatTile icon={UserPlus} tone="sky" label="New this week" value={newThisWk} />
+        <StatTile icon={Moon} tone="amber" label="Dormant 30d+" value={dormantCount} />
       </div>
 
-      {/* Stats row */}
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
-        {[
-          { label: 'Total Users',      value: totalUsers,            icon: Users,  color: 'text-indigo-400' },
-          { label: 'Admins',           value: adminCount,            icon: Shield, color: 'text-violet-400' },
-          { label: 'Active This Week', value: activeThisWk,          icon: Flame,  color: 'text-orange-400' },
-          { label: 'Global Habits',    value: totalGlobal,           icon: Globe,     color: 'text-emerald-400' },
-          { label: 'Global Gallery',   value: globalGallery.length,  icon: Image,     color: 'text-sky-400'     },
-          { label: 'Global Books',     value: globalBooks.length,    icon: BookOpen,  color: 'text-amber-400'   },
-        ].map(({ label, value, icon: Icon, color }) => (
-          <div key={label} className="rounded-xl border border-white/[0.06] bg-white/[0.03] p-4 flex items-center gap-3">
-            <div className={cn('p-2 rounded-lg bg-white/[0.05]', color)}>
-              <Icon className="h-4 w-4" />
+      <SegmentedTabs
+        className="mb-0"
+        value={tab}
+        onChange={setTab}
+        tabs={[
+          { value: 'users',   label: 'Users',   icon: Users,    badge: totalUsers },
+          { value: 'global',  label: 'Habits',  icon: Globe,    badge: totalGlobal },
+          { value: 'gallery', label: 'Gallery', icon: Image,    badge: globalGallery.length },
+          { value: 'books',   label: 'Books',   icon: BookOpen, badge: globalBooks.length },
+        ]}
+      />
+
+      {deleteTarget && (
+        <div className="sheet-in fixed inset-0 z-[100] flex items-end justify-center bg-black/70 p-4 backdrop-blur-sm sm:items-center" onClick={e => { if (e.target === e.currentTarget && !deleting) setDeleteTarget(null) }}>
+          <div className="w-full max-w-md space-y-4 rounded-2xl border border-red-500/30 bg-slate-900 p-5 shadow-2xl">
+            <div className="flex items-start gap-3">
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-red-500/15">
+                <AlertCircle className="h-5 w-5 text-red-400" />
+              </div>
+              <div>
+                <p className="text-base font-semibold text-white">Delete {deleteTarget.full_name || deleteTarget.email}?</p>
+                <p className="mt-1 text-xs leading-relaxed text-slate-400">
+                  This permanently deletes their account and everything in it: habits, plans, goals, journal, finances,
+                  fitness logs, rewards and their gallery files. It can&apos;t be undone.
+                </p>
+              </div>
             </div>
-            <div>
-              <p className="text-xl font-bold text-white">{value}</p>
-              <p className="text-xs text-slate-500">{label}</p>
+            <div className="space-y-1.5">
+              <label htmlFor="confirm-email" className="text-xs text-slate-400">
+                Type <span className="font-semibold text-slate-200">{deleteTarget.email}</span> to confirm
+              </label>
+              <input
+                id="confirm-email"
+                autoFocus
+                autoComplete="off"
+                value={deleteEmail}
+                onChange={e => setDeleteEmail(e.target.value)}
+                className="w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-white focus:border-red-500/50 focus:outline-none"
+              />
+            </div>
+            {deleteError && <p className="text-xs text-red-400">{deleteError}</p>}
+            <div className="flex gap-2">
+              <button onClick={() => setDeleteTarget(null)} disabled={deleting}
+                className="flex-1 rounded-xl border border-white/10 bg-white/5 py-2.5 text-sm text-slate-300 hover:bg-white/10">
+                Cancel
+              </button>
+              <button
+                onClick={deleteUser}
+                disabled={deleting || deleteEmail.trim().toLowerCase() !== deleteTarget.email.toLowerCase()}
+                className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-red-600 py-2.5 text-sm font-semibold text-snow hover:bg-red-700 disabled:opacity-40"
+              >
+                {deleting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
+                Delete
+              </button>
             </div>
           </div>
-        ))}
-      </div>
-
-      {/* Tabs */}
-      <div className="flex gap-1 border-b border-white/[0.06] overflow-x-auto pb-0 scrollbar-none">
-        {([
-          { key: 'users',   label: `Users (${totalUsers})` },
-          { key: 'global',  label: `Global Habits (${totalGlobal})` },
-          { key: 'gallery', label: `Global Gallery (${globalGallery.length})` },
-          { key: 'books',   label: `Global Books (${globalBooks.length})` },
-        ] as const).map(({ key, label }) => (
-          <button
-            key={key}
-            onClick={() => setTab(key)}
-            className={cn(
-              'shrink-0 px-4 py-2 text-sm font-medium transition-colors border-b-2 -mb-px whitespace-nowrap',
-              tab === key
-                ? 'border-indigo-500 text-white'
-                : 'border-transparent text-slate-500 hover:text-slate-300',
-            )}
-          >
-            {label}
-          </button>
-        ))}
-      </div>
+        </div>
+      )}
 
       {/* Users tab */}
       {tab === 'users' && (
         <div className="space-y-4">
-          {/* Search */}
-          <div className="relative max-w-sm">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-500" />
-            <input
-              value={search}
-              onChange={e => setSearch(e.target.value)}
-              placeholder="Search users…"
-              className="w-full pl-9 pr-3 py-2 rounded-lg bg-white/[0.04] border border-white/[0.08] text-sm text-white placeholder:text-slate-600 focus:outline-none focus:border-indigo-500/50"
-            />
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="relative min-w-0 flex-1 basis-56">
+              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" />
+              <input
+                value={search}
+                onChange={e => setSearch(e.target.value)}
+                placeholder="Search name or email…"
+                className="w-full rounded-xl border border-white/10 bg-white/[0.04] py-2 pl-9 pr-3 text-sm text-white placeholder:text-slate-600 focus:border-indigo-500/50 focus:outline-none"
+              />
+            </div>
+            <select
+              value={sort}
+              onChange={e => setSort(e.target.value as UserSort)}
+              aria-label="Sort users"
+              className="rounded-xl border border-white/10 bg-white/[0.04] px-3 py-2 text-sm text-slate-300 focus:outline-none"
+            >
+              <option value="active">Last active</option>
+              <option value="newest">Newest</option>
+              <option value="name">Name</option>
+              <option value="streak">Top streak</option>
+            </select>
           </div>
 
-          {/* Desktop Table */}
-          <div className="hidden md:block rounded-xl border border-white/[0.06] overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-white/[0.06] text-slate-500 text-xs">
-                  <th className="text-left px-4 py-3 font-medium">User</th>
-                  <th className="text-center px-3 py-3 font-medium">Habits</th>
-                  <th className="text-center px-3 py-3 font-medium">This Week</th>
-                  <th className="text-center px-3 py-3 font-medium hidden md:table-cell">Streak</th>
-                  <th className="text-center px-3 py-3 font-medium hidden lg:table-cell">Books</th>
-                  <th className="text-center px-3 py-3 font-medium hidden lg:table-cell">Workouts</th>
-                  <th className="text-center px-3 py-3 font-medium hidden lg:table-cell">Goals</th>
-                  <th className="text-center px-3 py-3 font-medium hidden lg:table-cell">Todos</th>
-                  <th className="text-right px-4 py-3 font-medium">Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filtered.map(u => {
-                  const initials = u.full_name.split(' ').map((n: string) => n[0]).join('').slice(0, 2).toUpperCase() || u.email[0].toUpperCase()
-                  const pct = u.weekTotal > 0 ? Math.round((u.weekDone / u.weekTotal) * 100) : null
-                  return (
-                    <tr key={u.id} className="border-b border-white/[0.04] last:border-0 hover:bg-white/[0.02] transition-colors">
-                      <td className="px-4 py-3">
-                        <div className="flex items-center gap-3">
-                          {u.avatar_url ? (
-                            <img src={u.avatar_url} alt={u.full_name} className="h-8 w-8 rounded-full object-cover ring-1 ring-white/10" />
-                          ) : (
-                            <div className="h-8 w-8 rounded-full bg-indigo-500/20 ring-1 ring-indigo-500/30 flex items-center justify-center text-[11px] font-semibold text-indigo-300">
-                              {initials}
-                            </div>
-                          )}
-                          <div className="min-w-0">
-                            <div className="flex items-center gap-1.5">
-                              <span className="text-white font-medium truncate">{u.full_name || '—'}</span>
-                              {u.is_superadmin && <ShieldCheck className="h-3 w-3 text-amber-400 shrink-0" />}
-                              {u.is_admin && !u.is_superadmin && <Shield className="h-3 w-3 text-violet-400 shrink-0" />}
-                            </div>
-                            <span className="text-slate-500 text-xs truncate block">{u.email}</span>
-                          </div>
-                        </div>
-                      </td>
-                      <td className="px-3 py-3 text-center text-slate-300">{u.habitCount}</td>
-                      <td className="px-3 py-3 text-center">
-                        {pct !== null ? (
-                          <span className={cn('font-medium', pct >= 70 ? 'text-emerald-400' : pct >= 40 ? 'text-amber-400' : 'text-red-400')}>
-                            {pct}%
-                          </span>
-                        ) : <span className="text-slate-600">—</span>}
-                      </td>
-                      <td className="px-3 py-3 text-center text-slate-300 hidden md:table-cell">
-                        {u.topStreak > 0 ? (
-                          <span className="flex items-center justify-center gap-1">
-                            <Flame className="h-3.5 w-3.5 text-orange-400" />{u.topStreak}
-                          </span>
-                        ) : <span className="text-slate-600">—</span>}
-                      </td>
-                      <td className="px-3 py-3 text-center hidden lg:table-cell">
-                        <span className="text-slate-300">{u.booksReading > 0 ? `${u.booksReading} reading` : ''}</span>
-                        {u.booksCompleted > 0 && <span className="text-slate-500 text-xs block">{u.booksCompleted} done</span>}
-                        {u.booksReading === 0 && u.booksCompleted === 0 && <span className="text-slate-600">—</span>}
-                      </td>
-                      <td className="px-3 py-3 text-center text-slate-300 hidden lg:table-cell">
-                        {u.workoutsWeek > 0 ? u.workoutsWeek : <span className="text-slate-600">—</span>}
-                      </td>
-                      <td className="px-3 py-3 text-center text-slate-300 hidden lg:table-cell">
-                        {u.activeGoals > 0 ? u.activeGoals : <span className="text-slate-600">—</span>}
-                      </td>
-                      <td className="px-3 py-3 text-center text-slate-300 hidden lg:table-cell">
-                        {u.openTodos > 0 ? u.openTodos : <span className="text-slate-600">—</span>}
-                      </td>
-                      <td className="px-4 py-3">
-                        <div className="flex items-center justify-end gap-2">
-                          {/* Role selector — hidden for self */}
-                          {u.id !== meId && (
-                            togglingId === u.id
-                              ? <Loader2 className="h-3.5 w-3.5 animate-spin text-slate-500" />
-                              : (
-                                <select
-                                  value={currentRole(u)}
-                                  onChange={e => setRole(u, e.target.value as Role)}
-                                  disabled={!isSuperadmin && currentRole(u) === 'superadmin'}
-                                  className="text-xs rounded-md bg-white/[0.04] border border-white/[0.10] text-slate-300 px-2 py-1 focus:outline-none focus:border-indigo-500/50 disabled:opacity-40"
-                                >
-                                  <option value="user">User</option>
-                                  <option value="admin">Admin</option>
-                                  {isSuperadmin && <option value="superadmin">Superadmin</option>}
-                                </select>
-                              )
-                          )}
-                          <button
-                            onClick={() => { setMsgTarget({ id: u.id, name: u.full_name || u.email }); setMsgTitle(''); setMsgBody('') }}
-                            title="Send message"
-                            className="flex items-center justify-center w-7 h-7 rounded-md border border-white/10 text-slate-500 hover:text-violet-300 hover:border-violet-500/30 transition-colors"
-                          >
-                            <MessageSquare className="h-3.5 w-3.5" />
-                          </button>
-                          <Link
-                            href={`/admin/users/${u.id}`}
-                            className="flex items-center justify-center w-7 h-7 rounded-md border border-white/10 text-slate-500 hover:text-white hover:border-white/20 transition-colors"
-                          >
-                            <ChevronRight className="h-3.5 w-3.5" />
-                          </Link>
-                        </div>
-                      </td>
-                    </tr>
-                  )
-                })}
-                {filtered.length === 0 && (
-                  <tr>
-                    <td colSpan={9} className="px-4 py-8 text-center text-slate-500 text-sm">No users found</td>
-                  </tr>
+          <div className="-mx-4 flex gap-2 overflow-x-auto px-4 pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+            {([
+              ['all', 'All', totalUsers],
+              ['today', 'Active today', activeToday],
+              ['week', 'This week', activeThisWk],
+              ['dormant', 'Dormant', dormantCount],
+              ['admins', 'Admins', adminCount],
+            ] as const).map(([value, label, count]) => (
+              <button
+                key={value}
+                type="button"
+                onClick={() => setFilter(value)}
+                className={cn(
+                  'flex shrink-0 items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-medium transition-all active:scale-95',
+                  filter === value ? 'border-indigo-400/50 bg-indigo-500/20 text-white' : 'border-white/10 bg-white/[0.03] text-slate-400 hover:text-white',
                 )}
-              </tbody>
-            </table>
+              >
+                {label}
+                <span className={cn('rounded-full px-1.5 text-[10px] font-bold leading-4', filter === value ? 'bg-white/20' : 'bg-white/10')}>{count}</span>
+              </button>
+            ))}
           </div>
 
-          {/* Mobile card list */}
-          <div className="md:hidden space-y-3">
+          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
             {filtered.map(u => {
-              const initials = u.full_name.split(' ').map((n: string) => n[0]).join('').slice(0,2).toUpperCase() || u.email[0].toUpperCase()
+              const initials = u.full_name.split(' ').map((n: string) => n[0]).join('').slice(0, 2).toUpperCase() || u.email[0].toUpperCase()
               const pct = u.weekTotal > 0 ? Math.round((u.weekDone / u.weekTotal) * 100) : null
+              const st = STATUS_META[statusOf(u)]
               return (
-                <div key={u.id} className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-4 space-y-3">
-                  {/* User row */}
-                  <div className="flex items-center gap-3">
-                    {u.avatar_url
-                      ? <img src={u.avatar_url} alt={u.full_name} className="h-10 w-10 rounded-full object-cover ring-1 ring-white/10 shrink-0" />
-                      : <div className="h-10 w-10 rounded-full bg-indigo-500/20 ring-1 ring-indigo-500/30 flex items-center justify-center text-xs font-semibold text-indigo-300 shrink-0">{initials}</div>
-                    }
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-1.5">
-                        <span className="text-sm font-medium text-white truncate">{u.full_name || '—'}</span>
-                        {u.is_superadmin && <ShieldCheck className="h-3 w-3 text-amber-400 shrink-0" />}
-                        {u.is_admin && !u.is_superadmin && <Shield className="h-3 w-3 text-violet-400 shrink-0" />}
-                      </div>
-                      <span className="text-xs text-slate-500 truncate block">{u.email}</span>
+                <div key={u.id} className="card-sheen flex flex-col gap-3 rounded-2xl border border-white/10 bg-gradient-to-br from-white/[0.05] to-white/[0.01] p-4">
+                  {/* Who + when */}
+                  <Link href={`/admin/users/${u.id}`} className="group flex items-center gap-3">
+                    <div className="relative shrink-0">
+                      {u.avatar_url
+                        ? <img src={u.avatar_url} alt={u.full_name} className="h-11 w-11 rounded-full object-cover ring-1 ring-white/10" />
+                        : <div className="flex h-11 w-11 items-center justify-center rounded-full bg-gradient-to-br from-indigo-500/40 to-violet-600/40 text-xs font-semibold text-indigo-100 ring-1 ring-indigo-400/30">{initials}</div>}
+                      <span className={cn('absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full ring-2 ring-slate-900', st.dot)} title={st.label} />
                     </div>
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-1.5">
+                        <span className="truncate text-sm font-semibold text-white group-hover:text-indigo-200">{u.full_name || '—'}</span>
+                        {u.is_superadmin && <ShieldCheck className="h-3.5 w-3.5 shrink-0 text-amber-400" />}
+                        {u.is_admin && !u.is_superadmin && <Shield className="h-3.5 w-3.5 shrink-0 text-violet-400" />}
+                      </div>
+                      <span className="block truncate text-xs text-slate-500">{u.email}</span>
+                    </div>
+                    <ChevronRight className="h-4 w-4 shrink-0 text-slate-600 transition-transform group-hover:translate-x-0.5 group-hover:text-white" />
+                  </Link>
+
+                  <div className="rounded-xl bg-white/[0.04] px-3 py-2">
+                    <p className={cn('text-xs font-semibold', st.text)}>
+                      {u.lastActiveAt ? `Active ${timeAgo(u.lastActiveAt)}` : st.label}
+                    </p>
+                    {u.lastActiveLabel && <p className="truncate text-[11px] text-slate-400">{u.lastActiveLabel}</p>}
+                    <p className="mt-0.5 text-[10px] text-slate-500">
+                      Joined {timeAgo(u.joined)}
+                      {u.lastSignIn && <> · signed in {timeAgo(u.lastSignIn)}</>}
+                      {u.provider !== 'email' && <> · via {u.provider}</>}
+                      {u.country && <> · {u.country}</>}
+                    </p>
                   </div>
-                  {/* Stats chips */}
-                  <div className="flex flex-wrap gap-2 text-xs">
+
+                  <div className="flex flex-wrap gap-1.5 text-[11px]">
                     {pct !== null && (
-                      <span className={cn('rounded-full px-2.5 py-1 font-medium', pct >= 70 ? 'bg-emerald-500/15 text-emerald-400' : pct >= 40 ? 'bg-amber-500/15 text-amber-400' : 'bg-red-500/15 text-red-400')}>
-                        {pct}% this week
+                      <span className={cn('rounded-full px-2 py-0.5 font-semibold', pct >= 70 ? 'bg-emerald-500/15 text-emerald-300' : pct >= 40 ? 'bg-amber-500/15 text-amber-300' : 'bg-red-500/15 text-red-300')}>
+                        {pct}% habits this week
                       </span>
                     )}
-                    {u.topStreak > 0 && (
-                      <span className="rounded-full px-2.5 py-1 bg-orange-500/10 text-orange-400 flex items-center gap-1">
-                        <Flame className="h-3 w-3" />{u.topStreak}d
-                      </span>
-                    )}
-                    {u.habitCount > 0 && <span className="rounded-full px-2.5 py-1 bg-white/5 text-slate-400">{u.habitCount} habits</span>}
-                    {u.booksReading > 0 && <span className="rounded-full px-2.5 py-1 bg-white/5 text-slate-400">{u.booksReading} reading</span>}
-                    {u.workoutsWeek > 0 && <span className="rounded-full px-2.5 py-1 bg-white/5 text-slate-400">{u.workoutsWeek} workouts</span>}
+                    {u.topStreak > 0 && <span className="flex items-center gap-1 rounded-full bg-orange-500/15 px-2 py-0.5 font-semibold text-orange-300"><Flame className="h-3 w-3" />{u.topStreak}d</span>}
+                    {u.points > 0 && <span className="rounded-full bg-amber-500/15 px-2 py-0.5 font-semibold text-amber-300">{u.points.toLocaleString()} pts</span>}
+                    {u.habitCount > 0 && <span className="rounded-full bg-white/[0.06] px-2 py-0.5 text-slate-300">{u.habitCount} habits</span>}
+                    {u.activeGoals > 0 && <span className="rounded-full bg-white/[0.06] px-2 py-0.5 text-slate-300">{u.activeGoals} goals</span>}
+                    {u.workoutsWeek > 0 && <span className="rounded-full bg-white/[0.06] px-2 py-0.5 text-slate-300">{u.workoutsWeek} workouts</span>}
+                    {(u.booksReading > 0 || u.booksCompleted > 0) && <span className="rounded-full bg-white/[0.06] px-2 py-0.5 text-slate-300">{u.booksReading} reading · {u.booksCompleted} read</span>}
+                    {u.openTodos > 0 && <span className="rounded-full bg-white/[0.06] px-2 py-0.5 text-slate-300">{u.openTodos} open plans</span>}
                   </div>
-                  {/* Actions */}
-                  <div className="flex items-center gap-2 pt-1">
-                    {u.id !== meId && (
+
+                  <div className="mt-auto flex items-center gap-2 border-t border-white/[0.06] pt-3">
+                    {u.id !== meId ? (
                       togglingId === u.id
                         ? <Loader2 className="h-4 w-4 animate-spin text-slate-500" />
                         : (
@@ -427,35 +440,39 @@ export default function AdminDashboard({
                             value={currentRole(u)}
                             onChange={e => setRole(u, e.target.value as Role)}
                             disabled={!isSuperadmin && currentRole(u) === 'superadmin'}
-                            className="flex-1 text-xs rounded-lg bg-white/[0.04] border border-white/[0.10] text-slate-300 px-3 py-2 focus:outline-none focus:border-indigo-500/50 disabled:opacity-40"
+                            aria-label="Role"
+                            className="flex-1 rounded-lg border border-white/10 bg-white/[0.04] px-2.5 py-1.5 text-xs text-slate-300 focus:outline-none disabled:opacity-40"
                           >
                             <option value="user">User</option>
                             <option value="admin">Admin</option>
                             {isSuperadmin && <option value="superadmin">Superadmin</option>}
                           </select>
                         )
-                    )}
+                    ) : <span className="flex-1 text-xs text-slate-500">This is you</span>}
                     <button
                       onClick={() => { setMsgTarget({ id: u.id, name: u.full_name || u.email }); setMsgTitle(''); setMsgBody('') }}
-                      className="flex items-center gap-1.5 rounded-lg border border-white/[0.08] bg-white/[0.03] px-3 py-2 text-xs text-slate-400 hover:text-white hover:border-white/20 transition-colors"
+                      className="flex items-center gap-1.5 rounded-lg border border-white/10 bg-white/[0.03] px-2.5 py-1.5 text-xs text-slate-300 transition-colors hover:border-violet-500/30 hover:text-violet-200"
                     >
-                      <MessageSquare className="h-3.5 w-3.5" />
-                      Message
+                      <MessageSquare className="h-3.5 w-3.5" /> Message
                     </button>
-                    <Link
-                      href={`/admin/users/${u.id}`}
-                      className="flex items-center gap-1.5 rounded-lg border border-white/[0.08] bg-white/[0.03] px-3 py-2 text-xs text-slate-400 hover:text-white hover:border-white/20 transition-colors"
-                    >
-                      View <ChevronRight className="h-3.5 w-3.5" />
-                    </Link>
+                    {canDelete(u) && (
+                      <button
+                        onClick={() => { setDeleteTarget(u); setDeleteEmail(''); setDeleteError(null) }}
+                        aria-label={`Delete ${u.full_name || u.email}`}
+                        title="Delete user"
+                        className="flex h-[30px] w-[30px] items-center justify-center rounded-lg border border-red-500/20 bg-red-500/[0.06] text-red-300/80 transition-colors hover:bg-red-500/15 hover:text-red-300"
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </button>
+                    )}
                   </div>
                 </div>
               )
             })}
-            {filtered.length === 0 && (
-              <p className="text-center text-slate-500 text-sm py-8">No users found</p>
-            )}
           </div>
+          {filtered.length === 0 && (
+            <p className="py-8 text-center text-sm text-slate-500">No users match.</p>
+          )}
         </div>
       )}
 
