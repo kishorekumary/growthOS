@@ -65,17 +65,17 @@ const TIMEFRAME_CONFIG: Record<Timeframe, {
 }> = {
   week:   {
     label: 'This Week', icon: CalendarDays,
-    sectionBg: 'bg-cyan-500/5', sectionBorder: 'border-cyan-500/30',
+    sectionBg: 'bg-gradient-to-b from-cyan-500/10 to-cyan-500/[0.02]', sectionBorder: 'border-cyan-500/20',
     accentColor: 'text-cyan-400', badgeBg: 'bg-cyan-500/15', badgeText: 'text-cyan-300',
   },
   month:  {
     label: 'This Month', icon: CalendarRange,
-    sectionBg: 'bg-amber-500/5', sectionBorder: 'border-amber-500/30',
+    sectionBg: 'bg-gradient-to-b from-amber-500/10 to-amber-500/[0.02]', sectionBorder: 'border-amber-500/20',
     accentColor: 'text-amber-400', badgeBg: 'bg-amber-500/15', badgeText: 'text-amber-300',
   },
   year:   {
     label: 'This Year', icon: TrendingUp,
-    sectionBg: 'bg-violet-500/5', sectionBorder: 'border-violet-500/30',
+    sectionBg: 'bg-gradient-to-b from-violet-500/10 to-violet-500/[0.02]', sectionBorder: 'border-violet-500/20',
     accentColor: 'text-violet-400', badgeBg: 'bg-violet-500/15', badgeText: 'text-violet-300',
   },
   custom: {
@@ -798,15 +798,17 @@ function GoalSection({
   const Icon = cfg.icon
 
   return (
-    <div className={cn('rounded-xl border transition-all', cfg.sectionBg, cfg.sectionBorder)}>
+    <div className={cn('rounded-2xl border transition-all', cfg.sectionBg, cfg.sectionBorder)}>
       {/* Section header — click anywhere to toggle */}
       <button
         type="button"
         onClick={() => setCollapsed(v => !v)}
         className="flex w-full items-center justify-between px-4 py-3 text-left"
       >
-        <div className="flex items-center gap-2">
-          <Icon className={cn('h-4 w-4', cfg.accentColor)} />
+        <div className="flex items-center gap-2.5">
+          <span className={cn('flex h-7 w-7 items-center justify-center rounded-lg', cfg.badgeBg)}>
+            <Icon className={cn('h-3.5 w-3.5', cfg.accentColor)} />
+          </span>
           <span className={cn('text-sm font-semibold', cfg.accentColor)}>{cfg.label}</span>
           {goals.length > 0 && (
             <span className={cn('text-xs font-bold px-1.5 py-0.5 rounded-full', cfg.badgeBg, cfg.badgeText)}>
@@ -824,8 +826,8 @@ function GoalSection({
                 role="button"
                 onClick={e => e.stopPropagation()}
                 className={cn(
-                  'flex items-center gap-1 text-xs font-medium transition-colors',
-                  cfg.accentColor, 'opacity-70 hover:opacity-100'
+                  'flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-medium transition-colors',
+                  cfg.badgeBg, cfg.badgeText, 'hover:brightness-125'
                 )}
               >
                 <Plus className="h-3.5 w-3.5" /> Add
@@ -896,7 +898,7 @@ function CategorySection({
   const Icon = cfg.icon
 
   return (
-    <div className={cn('rounded-xl border p-4 space-y-3', cfg.bg, cfg.border)}>
+    <div className={cn('rounded-2xl border p-4 space-y-3', cfg.bg, cfg.border)}>
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
           <Icon className={cn('h-4 w-4', cfg.color)} />
@@ -913,7 +915,7 @@ function CategorySection({
           trigger={
             <button
               type="button"
-              className={cn('flex items-center gap-1 text-xs font-medium opacity-70 hover:opacity-100 transition-colors', cfg.color)}
+              className={cn('flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-medium hover:brightness-125 transition-colors', cfg.bg, cfg.color)}
             >
               <Plus className="h-3.5 w-3.5" /> Add
             </button>
@@ -1128,24 +1130,39 @@ export default function GoalsList() {
 
       {/* Header (the empty state has its own Add button) */}
       {goals.length > 0 && <>
-      <div className="flex items-center justify-between">
-        <p className="text-xs text-slate-500">
-          {active.length} in progress
-          {completed.length > 0 && ` · ${completed.length} achieved`}
-        </p>
-        <div className="flex items-center gap-2">
-          {active.length > 0 && (
+      <div className="flex items-center gap-2">
+        {/* Timeline / Category switch with a sliding highlight */}
+        <div className="relative flex flex-1 rounded-xl border border-white/10 bg-white/[0.03] p-1">
+          <div
+            aria-hidden
+            className="absolute inset-y-1 left-1 w-[calc(50%-4px)] rounded-lg bg-gradient-to-br from-violet-500 to-indigo-600 shadow-[0_4px_14px_-4px_rgba(99,102,241,0.7)] transition-transform duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:transition-none"
+            style={{ transform: `translateX(${tab === 'timeframe' ? 0 : 100}%)` }}
+          />
+          {TABS.map(t => (
             <button
-              onClick={() => setFocusOpen(true)}
-              className="flex items-center gap-1.5 text-xs text-slate-500 hover:text-violet-400 transition-colors"
-              aria-label="Focus mode"
+              key={t.value}
+              type="button"
+              onClick={() => setTab(t.value)}
+              className={cn(
+                'relative flex-1 rounded-lg py-1.5 text-xs font-semibold transition-colors',
+                tab === t.value ? 'text-snow' : 'text-slate-400 hover:text-white',
+              )}
             >
-              <Maximize2 className="h-3.5 w-3.5" />
-              Focus
+              {t.label}
             </button>
-          )}
-          <AddGoalModal onAdd={fetchGoals} />
+          ))}
         </div>
+        {active.length > 0 && (
+          <button
+            onClick={() => setFocusOpen(true)}
+            className="flex h-9 w-9 items-center justify-center rounded-xl border border-white/10 bg-white/[0.03] text-slate-400 hover:text-violet-300 transition-colors"
+            aria-label="Focus mode"
+            title="Focus mode"
+          >
+            <Maximize2 className="h-4 w-4" />
+          </button>
+        )}
+        <AddGoalModal onAdd={fetchGoals} />
       </div>
 
       <GoalsFocusModal
@@ -1154,26 +1171,6 @@ export default function GoalsList() {
         open={focusOpen}
         onClose={() => setFocusOpen(false)}
       />
-
-      {/* Tabs */}
-      <div className="flex gap-1 rounded-lg border border-white/10 bg-white/3 p-1">
-        {TABS.map(t => (
-          <button
-            key={t.value}
-            type="button"
-            onClick={() => setTab(t.value)}
-            className={cn(
-              'flex-1 rounded-md py-1.5 text-xs font-medium transition-all',
-              tab === t.value
-                ? 'bg-violet-600 text-snow shadow'
-                : 'text-slate-400 hover:text-white'
-            )}
-          >
-            {t.label}
-          </button>
-        ))}
-      </div>
-
       </>}
 
       {goals.length === 0 && isOffline && (
@@ -1218,31 +1215,27 @@ export default function GoalsList() {
       {/* ── By Category tab ── */}
       {goals.length > 0 && tab === 'category' && (
         <div className="space-y-4">
-          {/* Category sub-tabs */}
-          <div className="flex gap-1 rounded-lg border border-white/10 bg-white/3 p-1">
+          {/* Category chips — scroll sideways on narrow screens */}
+          <div className="-mx-4 flex gap-2 overflow-x-auto px-4 pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
             {(['fitness', 'finance', 'books', 'general', 'career'] as Category[]).map(cat => {
               const cfg  = CATEGORY_CONFIG[cat]
               const Icon = cfg.icon
               const count = byCategory(cat).length
+              const on = activeCategory === cat
               return (
                 <button
                   key={cat}
                   type="button"
                   onClick={() => setActiveCat(cat)}
                   className={cn(
-                    'flex flex-1 items-center justify-center gap-1.5 rounded-md py-1.5 text-xs font-medium transition-all',
-                    activeCategory === cat
-                      ? cn('text-white shadow', cfg.bg, cfg.border, 'border')
-                      : 'text-slate-400 hover:text-white'
+                    'flex shrink-0 items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-medium transition-all active:scale-95',
+                    on ? cn(cfg.bg, cfg.border, 'text-white shadow') : 'border-white/10 bg-white/[0.03] text-slate-400 hover:text-white',
                   )}
                 >
-                  <Icon className={cn('h-3.5 w-3.5 shrink-0', activeCategory === cat ? cfg.color : '')} />
-                  <span className="hidden sm:inline">{cfg.label}</span>
+                  <Icon className={cn('h-3.5 w-3.5', on ? cfg.color : '')} />
+                  {cfg.label}
                   {count > 0 && (
-                    <span className={cn(
-                      'rounded-full px-1 text-[10px] font-bold leading-4',
-                      activeCategory === cat ? cn(cfg.bg, cfg.color) : 'bg-white/10 text-slate-400'
-                    )}>
+                    <span className={cn('rounded-full px-1.5 text-[10px] font-bold leading-4', on ? cn(cfg.bg, cfg.color) : 'bg-white/10 text-slate-400')}>
                       {count}
                     </span>
                   )}
