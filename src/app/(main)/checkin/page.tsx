@@ -1,4 +1,5 @@
 import { createSupabaseServerClient } from '@/lib/supabase-server'
+import PageHeader from '@/components/ui/page-header'
 import { redirect } from 'next/navigation'
 import { Smile } from 'lucide-react'
 import dynamic from 'next/dynamic'
@@ -102,18 +103,10 @@ export default async function CheckinPage() {
   }
 
   return (
-    <div className="min-h-screen bg-slate-950 p-4 md:p-8">
-      <div className="max-w-2xl mx-auto space-y-6">
+    <div className="mx-auto max-w-2xl px-4 py-8 md:px-8">
+      <div className="space-y-6">
         {/* Header */}
-        <div className="flex items-center gap-3">
-          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-500/20 border border-emerald-500/30">
-            <Smile className="h-5 w-5 text-emerald-400" />
-          </div>
-          <div>
-            <h1 className="text-xl font-bold text-white">Daily Check-in</h1>
-            <p className="text-sm text-slate-500">Mood · Life Balance</p>
-          </div>
-        </div>
+        <PageHeader icon={Smile} tone="emerald" title="Daily Check-in" subtitle="Mood · Life Balance" />
 
         {/* Wheel of Life (server-calculated, client-rendered) */}
         <WheelOfLife scores={scores} />

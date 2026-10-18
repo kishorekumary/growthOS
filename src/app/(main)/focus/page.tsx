@@ -1,5 +1,6 @@
 'use client'
 
+import PageHeader from '@/components/ui/page-header'
 import dynamic from 'next/dynamic'
 import Link from 'next/link'
 import { Timer, Brain, SearchCheck, ArrowRight, type LucideIcon } from 'lucide-react'
@@ -34,18 +35,7 @@ const TOOLS: { href: string; icon: LucideIcon; tone: keyof typeof TOOL_TONES; ti
 export default function FocusPage() {
   return (
     <div className="mx-auto max-w-2xl px-4 py-8 md:px-8">
-      <div className="mb-6 flex items-center gap-3">
-        <div className="relative">
-          <div aria-hidden className="absolute inset-0 rounded-2xl bg-violet-500/40 blur-xl" />
-          <div className="relative flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-violet-500 to-indigo-600 shadow-lg">
-            <Timer className="h-6 w-6 text-snow" />
-          </div>
-        </div>
-        <div>
-          <h1 className="text-2xl font-bold text-white">Focus</h1>
-          <p className="mt-0.5 text-sm text-slate-400">Protect your attention, one interval at a time</p>
-        </div>
-      </div>
+      <PageHeader icon={Timer} tone="violet" title="Focus" subtitle="Protect your attention, one interval at a time" />
 
       <FocusTimer />
 

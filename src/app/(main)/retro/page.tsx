@@ -1,4 +1,5 @@
 import { CalendarCheck } from 'lucide-react'
+import PageHeader from '@/components/ui/page-header'
 import dynamic from 'next/dynamic'
 import { format, subMonths } from 'date-fns'
 
@@ -7,17 +8,9 @@ const MonthlyRetro = dynamic(() => import('@/components/retro/MonthlyRetro'), { 
 export default function RetroPage() {
   const prevMonth = format(subMonths(new Date(), 1), 'MMMM yyyy')
   return (
-    <div className="min-h-screen bg-slate-950 p-4 md:p-8">
-      <div className="max-w-2xl mx-auto space-y-6">
-        <div className="flex items-center gap-3">
-          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-rose-500/20 border border-rose-500/30">
-            <CalendarCheck className="h-5 w-5 text-rose-400" />
-          </div>
-          <div>
-            <h1 className="text-xl font-bold text-white">Monthly Retrospective</h1>
-            <p className="text-sm text-slate-500">{prevMonth} · AI deep-dive review</p>
-          </div>
-        </div>
+    <div className="mx-auto max-w-2xl px-4 py-8 md:px-8">
+      <div className="space-y-6">
+        <PageHeader icon={CalendarCheck} tone="rose" title="Monthly Retrospective" subtitle={<>{prevMonth} · AI deep-dive review</>} />
         <MonthlyRetro />
       </div>
     </div>
