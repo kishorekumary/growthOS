@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import Link from 'next/link'
+import ThemeToggle from '@/components/layout/ThemeToggle'
 import { ArrowLeft, RefreshCw } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import CountUp from '@/components/ui/count-up'
@@ -147,6 +148,7 @@ export default function OverthinkingAuditPage() {
 
     return (
       <div className="mx-auto max-w-2xl px-4 py-10 md:px-8">
+        <div className="mb-4 hidden justify-end md:flex"><ThemeToggle /></div>
         <p className="text-xs text-slate-600 uppercase tracking-widest text-center mb-6">
           Your Overthinking Audit Result
         </p>
@@ -263,12 +265,12 @@ export default function OverthinkingAuditPage() {
   return (
     <div className="mx-auto max-w-2xl px-4 py-8 md:px-8">
       {/* Header */}
-      <Link
-        href="/focus"
-        className="inline-flex items-center gap-1.5 text-sm text-slate-400 hover:text-white mb-6 transition-colors"
-      >
-        <ArrowLeft className="h-4 w-4" /> Back
-      </Link>
+      <div className="mb-6 flex items-center justify-between gap-3">
+        <Link href="/focus" className="inline-flex items-center gap-1.5 text-sm text-slate-400 hover:text-white transition-colors">
+          <ArrowLeft className="h-4 w-4" /> Back
+        </Link>
+        <ThemeToggle className="hidden md:flex" />
+      </div>
 
       <div className="flex items-start justify-between mb-10">
         <h1 className="text-3xl font-bold text-white italic">The Overthinking Audit</h1>

@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
+import ThemeToggle from '@/components/layout/ThemeToggle'
 import { ChevronLeft, ChevronRight, Loader2, Check, ArrowLeft } from 'lucide-react'
 import { createSupabaseBrowserClient } from '@/lib/supabase'
 import { QUIZ_QUESTIONS, computeMbti, MBTI_TYPES } from '@/lib/mbti'
@@ -87,9 +88,12 @@ export default function AssessmentPage() {
 
     return (
       <div className="mx-auto max-w-2xl px-4 py-8 md:px-8">
-        <Link href="/personality" className="inline-flex items-center gap-1.5 text-sm text-slate-400 hover:text-white mb-6 transition-colors">
-          <ArrowLeft className="h-4 w-4" /> Back to Personality
-        </Link>
+        <div className="mb-6 flex items-center justify-between gap-3">
+          <Link href="/personality" className="inline-flex items-center gap-1.5 text-sm text-slate-400 hover:text-white transition-colors">
+            <ArrowLeft className="h-4 w-4" /> Back to Personality
+          </Link>
+          <ThemeToggle className="hidden md:flex" />
+        </div>
 
         {/* Type hero */}
         <div className="rounded-2xl border border-violet-500/20 bg-gradient-to-br from-violet-600/10 to-violet-600/5 p-8 text-center mb-6">
@@ -186,9 +190,12 @@ export default function AssessmentPage() {
   // ── Quiz screen ───────────────────────────────────────────
   return (
     <div className="mx-auto max-w-2xl px-4 py-8 md:px-8">
-      <Link href="/personality" className="inline-flex items-center gap-1.5 text-sm text-slate-400 hover:text-white mb-6 transition-colors">
-        <ArrowLeft className="h-4 w-4" /> Back
-      </Link>
+      <div className="mb-6 flex items-center justify-between gap-3">
+        <Link href="/personality" className="inline-flex items-center gap-1.5 text-sm text-slate-400 hover:text-white transition-colors">
+          <ArrowLeft className="h-4 w-4" /> Back
+        </Link>
+        <ThemeToggle className="hidden md:flex" />
+      </div>
 
       <div className="mb-6">
         <h1 className="text-2xl font-bold text-white mb-1">Personality Assessment</h1>
