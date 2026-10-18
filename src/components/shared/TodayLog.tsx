@@ -8,6 +8,7 @@ import { haptic } from '@/lib/effects'
 import { todayStr } from '@/lib/habitStreak'
 import { averageClock, topRepeats, usualWorkout } from '@/lib/logDefaults'
 import { arrangeTiles, hoursBetween, mealTypeFor, tileOrder, type TodayTile } from '@/lib/todayLog'
+import BankSyncNudge from '@/components/finance/BankSyncNudge'
 
 // The Quick Log home: one tile per thing worth logging today, each showing
 // whether it's done and logging with a single tap. "More" opens the full
@@ -357,6 +358,7 @@ export default function TodayLog({ onOpen }: { onOpen: (panel: DetailPanel) => v
             ) : (
               <p className="text-[11px] text-slate-500">Tap More to add an expense. Your regular ones will show up here as one-tap chips.</p>
             )}
+            <div className="mt-2"><BankSyncNudge compact /></div>
           </Tile>
         )
       case 'plans':

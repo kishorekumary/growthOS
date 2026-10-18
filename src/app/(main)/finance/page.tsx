@@ -6,6 +6,7 @@ import { SkeletonCards } from '@/components/ui/skeleton'
 import { cn } from '@/lib/utils'
 import { format, subMonths, startOfMonth, endOfMonth } from 'date-fns'
 import GoalsWidget from '@/components/goals/GoalsWidget'
+import BankSyncNudge from '@/components/finance/BankSyncNudge'
 
 const FinanceOverview  = dynamic(() => import('@/components/finance/FinanceOverview'),  { loading: () => <SectionSkeleton /> })
 const FinanceBudget    = dynamic(() => import('@/components/finance/FinanceBudget'),    { loading: () => <SectionSkeleton /> })
@@ -102,6 +103,7 @@ export default function FinancePage() {
           <SpendingChart start={selectedMonth.start} end={selectedMonth.end} />
 
           <div className="border-t border-white/10 pt-6">
+            <div className="mb-5 empty:hidden"><BankSyncNudge /></div>
             <ExpenseTracker start={selectedMonth.start} end={selectedMonth.end} />
           </div>
         </div>
