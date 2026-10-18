@@ -23,6 +23,7 @@ import RichTextEditor from './RichTextEditor'
 import OpenPlanList from '@/components/planner/OpenPlanList'
 import { mergeFinalTranscripts } from '@/lib/speechTranscript'
 import { matchHabit } from '@/lib/habitMatch'
+import { averageClock, topRepeats, usualWorkout } from '@/lib/logDefaults'
 
 type Panel = 'plans' | 'voice' | 'meal' | 'workout' | 'finance' | 'journal' | 'task' | 'sleep'
 type MealType    = 'breakfast' | 'lunch' | 'dinner' | 'snack' | 'drink'
@@ -43,6 +44,21 @@ interface Habit {
 
 interface HiddenMark {
   habit_id: string
+}
+
+async function sessionUserId(): Promise<string | null> {
+  const { data: { session } } = await createSupabaseBrowserClient().auth.getSession()
+  return session?.user?.id ?? null
+}
+
+// One-tap suggestion chip used across panels.
+function SuggestChip({ onClick, children, tone }: { onClick: () => void; children: React.ReactNode; tone: string }) {
+  return (
+    <button type="button" onClick={onClick}
+      className={cn('shrink-0 rounded-full border px-2.5 py-1 text-xs font-medium transition-all active:scale-95', tone)}>
+      {children}
+    </button>
+  )
 }
 
 // ─── Image resize (prevents 413 on large phone photos) ───────────
@@ -115,9 +131,19 @@ function MealPanel({ onDone }: { onDone: () => void }) {
   const [addingWater, setAddingWater] = useState<number | null>(null)
   const [userId, setUserId]           = useState<string | null>(null)
 
+  // Meals you've logged before — one tap fills name and nutrition.
+  const [recentMeals, setRecentMeals] = useState<NutritionEstimate[]>([])
+
   useEffect(() => {
-    createSupabaseBrowserClient().auth.getSession()
-      .then(({ data: { session } }) => setUserId(session?.user?.id ?? null))
+    sessionUserId().then(async uid => {
+      setUserId(uid)
+      if (!uid) return
+      const { data } = await createSupabaseBrowserClient().from('nutrition_logs')
+        .select('food_name, calories, protein_g, carbs_g, fiber_g, fat_g')
+        .eq('user_id', uid).order('logged_at', { ascending: false }).limit(150)
+      setRecentMeals(topRepeats(data ?? [], r => r.food_name.trim().toLowerCase(), 6)
+        .map(r => ({ ...r, protein_g: r.protein_g ?? 0, carbs_g: r.carbs_g ?? 0, fiber_g: r.fiber_g ?? 0, fat_g: r.fat_g ?? 0, notes: '' })))
+    })
   }, [])
 
   function handleFile(file: File) {
@@ -266,6 +292,20 @@ function MealPanel({ onDone }: { onDone: () => void }) {
         </div>
       )}
 
+      {recentMeals.length > 0 && !aiReady && (
+        <div className="space-y-1.5">
+          <p className="text-[11px] text-slate-500">Recent, tap to fill:</p>
+          <div className="flex gap-1.5 overflow-x-auto pb-0.5">
+            {recentMeals.map(m => (
+              <SuggestChip key={m.food_name} onClick={() => fillFromEstimate(m)}
+                tone="border-amber-500/25 bg-amber-500/10 text-amber-200 hover:bg-amber-500/20">
+                {m.food_name} · {m.calories} kcal
+              </SuggestChip>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* Food name + autofill (auto-triggers on Enter) */}
       <div className="flex gap-2">
         <input
@@ -361,24 +401,44 @@ const WORKOUT_TYPES: { value: WorkoutType; icon: string; label: string }[] = [
   { value: 'rest',     icon: '😴', label: 'Rest'     },
 ]
 
+const DURATION_CHIPS = [15, 20, 30, 45, 60, 90]
+
 function WorkoutPanel({ onDone }: { onDone: () => void }) {
   const [workoutType, setWorkoutType] = useState<WorkoutType>('strength')
-  const [duration, setDuration]       = useState('')
+  const [duration, setDuration]       = useState('30')
+  const [customDuration, setCustomDuration] = useState(false)
   const [notes, setNotes]             = useState('')
+  const [showNotes, setShowNotes]     = useState(false)
+  const [usual, setUsual]             = useState<{ workout_type: string; duration_mins: number } | null>(null)
   const [saving, setSaving]           = useState(false)
   const [saved, setSaved]             = useState(false)
 
-  async function handleSave() {
-    if (workoutType !== 'rest' && !duration) return
+  // Start from what you usually do.
+  useEffect(() => {
+    sessionUserId().then(async uid => {
+      if (!uid) return
+      const { data } = await createSupabaseBrowserClient().from('workout_logs')
+        .select('workout_type, duration_mins').eq('user_id', uid)
+        .order('log_date', { ascending: false }).limit(30)
+      const u = usualWorkout(data ?? [])
+      if (!u) return
+      setUsual(u)
+      setWorkoutType(u.workout_type as WorkoutType)
+      setDuration(String(u.duration_mins))
+      setCustomDuration(!DURATION_CHIPS.includes(u.duration_mins))
+    })
+  }, [])
+
+  async function save(type: WorkoutType, mins: number) {
+    if (type !== 'rest' && !mins) return
     setSaving(true)
-    const supabase = createSupabaseBrowserClient()
-    const { data: { session } } = await supabase.auth.getSession()
-    if (!session?.user) { setSaving(false); return }
-    await supabase.from('workout_logs').insert({
-      user_id:       session.user.id,
+    const uid = await sessionUserId()
+    if (!uid) { setSaving(false); return }
+    await createSupabaseBrowserClient().from('workout_logs').insert({
+      user_id:       uid,
       log_date:      todayStr(),
-      workout_type:  workoutType,
-      duration_mins: Number(duration) || 0,
+      workout_type:  type,
+      duration_mins: mins || 0,
       exercises:     [],
       notes:         notes.trim() || null,
     })
@@ -395,8 +455,21 @@ function WorkoutPanel({ onDone }: { onDone: () => void }) {
     </div>
   )
 
+  const usualMeta = usual && WORKOUT_TYPES.find(t => t.value === usual.workout_type)
   return (
     <div className="space-y-3.5">
+      {usual && usualMeta && (
+        <button type="button" onClick={() => save(usual.workout_type as WorkoutType, usual.duration_mins)} disabled={saving}
+          className="flex w-full items-center gap-3 rounded-xl border border-sky-500/30 bg-gradient-to-r from-sky-500/15 to-sky-500/5 px-3 py-2.5 text-left transition-all hover:bg-sky-500/20 active:scale-[0.98] disabled:opacity-60">
+          <span className="text-xl">{usualMeta.icon}</span>
+          <span className="flex-1">
+            <span className="block text-sm font-semibold text-white">Log your usual</span>
+            <span className="block text-[11px] text-sky-300">{usualMeta.label} · {usual.duration_mins} min · one tap</span>
+          </span>
+          {saving ? <Loader2 className="h-4 w-4 animate-spin text-sky-300" /> : <Check className="h-4 w-4 text-sky-300" />}
+        </button>
+      )}
+
       <div className="grid grid-cols-5 gap-1">
         {WORKOUT_TYPES.map(t => (
           <button key={t.value} type="button" onClick={() => setWorkoutType(t.value)}
@@ -411,31 +484,63 @@ function WorkoutPanel({ onDone }: { onDone: () => void }) {
           </button>
         ))}
       </div>
+
       {workoutType !== 'rest' && (
-        <input
-          autoFocus
-          type="number" min={1}
-          placeholder="Duration (minutes)"
-          value={duration}
-          onChange={e => setDuration(e.target.value)}
-          onKeyDown={e => { if (e.key === 'Enter') handleSave() }}
-          className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2.5 text-sm text-white placeholder:text-slate-600 focus:outline-none focus:border-sky-500"
-        />
+        <div className="space-y-2">
+          <div className="flex flex-wrap gap-1.5">
+            {DURATION_CHIPS.map(m => (
+              <button key={m} type="button" onClick={() => { setDuration(String(m)); setCustomDuration(false) }}
+                className={cn(
+                  'rounded-full border px-3 py-1.5 text-xs font-semibold transition-all active:scale-95',
+                  !customDuration && duration === String(m)
+                    ? 'border-sky-500 bg-sky-500/20 text-white'
+                    : 'border-white/10 bg-white/5 text-slate-400 hover:border-white/20',
+                )}>
+                {m}m
+              </button>
+            ))}
+            <button type="button" onClick={() => setCustomDuration(true)}
+              className={cn(
+                'rounded-full border px-3 py-1.5 text-xs font-semibold transition-all',
+                customDuration ? 'border-sky-500 bg-sky-500/20 text-white' : 'border-white/10 bg-white/5 text-slate-400 hover:border-white/20',
+              )}>
+              Other
+            </button>
+          </div>
+          {customDuration && (
+            <input
+              autoFocus
+              type="number" min={1} inputMode="numeric"
+              placeholder="Minutes"
+              value={duration}
+              onChange={e => setDuration(e.target.value)}
+              onKeyDown={e => { if (e.key === 'Enter') save(workoutType, Number(duration)) }}
+              className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2.5 text-sm text-white placeholder:text-slate-600 focus:outline-none focus:border-sky-500"
+            />
+          )}
+        </div>
       )}
-      <textarea
-        placeholder="Notes (optional)"
-        value={notes}
-        onChange={e => setNotes(e.target.value)}
-        rows={2}
-        className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2.5 text-sm text-white placeholder:text-slate-600 resize-none focus:outline-none focus:border-sky-500"
-      />
+
+      {showNotes ? (
+        <textarea
+          autoFocus
+          placeholder="Notes"
+          value={notes}
+          onChange={e => setNotes(e.target.value)}
+          rows={2}
+          className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2.5 text-sm text-white placeholder:text-slate-600 resize-none focus:outline-none focus:border-sky-500"
+        />
+      ) : (
+        <button type="button" onClick={() => setShowNotes(true)} className="text-xs text-slate-500 hover:text-slate-300">+ Add a note</button>
+      )}
+
       <button
-        onClick={handleSave}
-        disabled={saving || (workoutType !== 'rest' && !duration)}
+        onClick={() => save(workoutType, Number(duration))}
+        disabled={saving || (workoutType !== 'rest' && !Number(duration))}
         className="w-full flex items-center justify-center gap-2 rounded-xl bg-sky-600 hover:bg-sky-700 disabled:opacity-50 disabled:cursor-not-allowed px-4 py-3 text-sm font-semibold text-snow transition-all"
       >
         {saving && <Loader2 className="h-4 w-4 animate-spin" />}
-        Log Workout
+        {workoutType === 'rest' ? 'Log rest day' : Number(duration) ? `Log ${duration} min` : 'Pick how long'}
       </button>
     </div>
   )
@@ -459,6 +564,27 @@ function SleepPanel({ onDone }: { onDone: () => void }) {
   const [quality, setQuality]   = useState(0)
   const [saving, setSaving]     = useState(false)
   const [saved, setSaved]       = useState(false)
+  const [basedOn, setBasedOn]   = useState(0)
+
+  // Start from your own recent average (or tonight's entry if it exists).
+  useEffect(() => {
+    sessionUserId().then(async uid => {
+      if (!uid) return
+      const { data } = await createSupabaseBrowserClient().from('sleep_logs')
+        .select('sleep_date, bedtime, wake_time, quality').eq('user_id', uid)
+        .order('sleep_date', { ascending: false }).limit(14)
+      const rows = data ?? []
+      const today = rows.find(r => r.sleep_date === todayStr())
+      if (today?.bedtime && today?.wake_time) {
+        setBedtime(today.bedtime.slice(0, 5)); setWakeTime(today.wake_time.slice(0, 5)); setQuality(today.quality ?? 0)
+        return
+      }
+      const b = averageClock(rows.map(r => r.bedtime)), w = averageClock(rows.map(r => r.wake_time))
+      if (b) setBedtime(b)
+      if (w) setWakeTime(w)
+      setBasedOn(rows.length)
+    })
+  }, [])
 
   async function handleSave() {
     setSaving(true)
@@ -504,6 +630,7 @@ function SleepPanel({ onDone }: { onDone: () => void }) {
       {bedtime && wakeTime && (
         <p className="text-xs text-indigo-300 font-medium">
           ≈ {sleepHours(bedtime, wakeTime)} hours of sleep
+          {basedOn > 1 && <span className="font-normal text-slate-500"> · your usual, from the last {basedOn} nights</span>}
         </p>
       )}
 
@@ -841,6 +968,31 @@ function FinancePanel({ onDone }: { onDone: () => void }) {
 
   function handleTypeChange(t: TxnType) { setTxnType(t); setCategory(CATS[t][0]) }
 
+  // Your most repeated expenses — one tap fills category, amount, note.
+  const [frequent, setFrequent] = useState<{ category: string; amount: number; description: string | null }[]>([])
+  useEffect(() => {
+    sessionUserId().then(async uid => {
+      if (!uid) return
+      const since = new Date(); since.setDate(since.getDate() - 90)
+      const { data } = await createSupabaseBrowserClient().from('transactions')
+        .select('category, amount, description').eq('user_id', uid).eq('type', 'expense')
+        .gte('txn_date', since.toISOString().slice(0, 10))
+        .order('txn_date', { ascending: false }).limit(300)
+      setFrequent(topRepeats(data ?? [], r => `${r.category}|${Number(r.amount)}|${(r.description ?? '').trim().toLowerCase()}`, 6))
+    })
+  }, [])
+
+  function applyFrequent(f: { category: string; amount: number; description: string | null }) {
+    setTxnType('expense')
+    setCategory(CATS.expense.includes(f.category) ? f.category : 'Other')
+    setAmount(String(Number(f.amount)))
+    setDesc(f.description ?? '')
+  }
+
+  function bump(n: number) {
+    setAmount(a => String(Math.round(((Number(a) || 0) + n) * 100) / 100))
+  }
+
   async function handleSave() {
     if (!amount || Number(amount) <= 0) return
     setSaving(true)
@@ -896,9 +1048,29 @@ function FinancePanel({ onDone }: { onDone: () => void }) {
           </button>
         ))}
       </div>
+      {frequent.length > 0 && txnType === 'expense' && (
+        <div className="space-y-1.5">
+          <p className="text-[11px] text-slate-500">Your usual, tap to fill:</p>
+          <div className="flex gap-1.5 overflow-x-auto pb-0.5">
+            {frequent.map(f => (
+              <SuggestChip key={`${f.category}|${f.amount}|${f.description}`} onClick={() => applyFrequent(f)}
+                tone="border-violet-500/25 bg-violet-500/10 text-violet-200 hover:bg-violet-500/20">
+                {f.description || f.category} · ₹{Number(f.amount).toLocaleString('en-IN')}
+              </SuggestChip>
+            ))}
+          </div>
+        </div>
+      )}
+      <div className="flex gap-1.5">
+        {[10, 50, 100, 500].map(n => (
+          <button key={n} type="button" onClick={() => bump(n)}
+            className="flex-1 rounded-lg border border-white/10 bg-white/5 py-1.5 text-xs font-semibold text-slate-300 hover:border-violet-500/40 active:scale-95 transition-all">
+            +{n}
+          </button>
+        ))}
+      </div>
       <input
-        autoFocus
-        type="number" min={0} step="0.01"
+        type="number" min={0} step="0.01" inputMode="decimal"
         placeholder="Amount"
         value={amount}
         onChange={e => setAmount(e.target.value)}
