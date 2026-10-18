@@ -1,46 +1,26 @@
 'use client'
 
-import Link from 'next/link'
+import { Brain, Flame, Target, BookOpen, Sparkles } from 'lucide-react'
+import PageHeader from '@/components/ui/page-header'
+import SegmentedTabs from '@/components/ui/segmented-tabs'
 import { usePathname } from 'next/navigation'
-import { cn } from '@/lib/utils'
 
 const TABS = [
-  { label: 'Habits',  href: '/personality/habits' },
-  { label: 'Goals',   href: '/personality/goals' },
-  { label: 'Journal', href: '/personality/journal' },
-  { label: 'Coach',   href: '/personality/coach' },
+  { label: 'Habits',  href: '/personality/habits',  icon: Flame },
+  { label: 'Goals',   href: '/personality/goals',   icon: Target },
+  { label: 'Journal', href: '/personality/journal', icon: BookOpen },
+  { label: 'Coach',   href: '/personality/coach',   icon: Sparkles },
 ]
+const TAB_ITEMS = TABS.map(t => ({ value: t.href, label: t.label, icon: t.icon, href: t.href }))
 
 export default function PersonalityTabsLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()
 
   return (
     <div className="mx-auto max-w-2xl px-4 py-8 md:px-8">
-      <div className="mb-6">
-        <h1 className="text-2xl font-bold text-white">Personality</h1>
-        <p className="text-slate-400 text-sm mt-1">Know yourself, grow yourself</p>
-      </div>
+      <PageHeader icon={Brain} tone="fuchsia" title="Personality" subtitle="Know yourself, grow yourself" />
 
-      {/* Tab bar */}
-      <div className="flex gap-1 rounded-xl bg-white/5 p-1 mb-6">
-        {TABS.map(({ label, href }) => {
-          const active = pathname === href
-          return (
-            <Link
-              key={href}
-              href={href}
-              className={cn(
-                'flex-1 rounded-lg py-2 text-center text-sm font-medium transition-all',
-                active
-                  ? 'bg-violet-600 text-snow shadow-sm'
-                  : 'text-slate-400 hover:text-white'
-              )}
-            >
-              {label}
-            </Link>
-          )
-        })}
-      </div>
+      <SegmentedTabs tabs={TAB_ITEMS} value={pathname} />
 
       {children}
     </div>

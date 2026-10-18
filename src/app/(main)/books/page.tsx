@@ -1,9 +1,11 @@
 'use client'
 
+import { BookOpen, Library, Trophy, Sparkles, Compass } from 'lucide-react'
+import PageHeader from '@/components/ui/page-header'
+import SegmentedTabs from '@/components/ui/segmented-tabs'
 import { useState, useEffect } from 'react'
 import dynamic from 'next/dynamic'
 import { SkeletonCards } from '@/components/ui/skeleton'
-import { cn } from '@/lib/utils'
 import GoalsWidget from '@/components/goals/GoalsWidget'
 
 const BookDiscover  = dynamic(() => import('@/components/books/BookDiscover'),  { loading: () => <SectionSkeleton /> })
@@ -17,6 +19,8 @@ function SectionSkeleton() {
 
 const TABS = ['My List', 'Challenge', 'Coach', 'Discover'] as const
 type Tab = typeof TABS[number]
+const TAB_ICONS = { 'My List': Library, Challenge: Trophy, Coach: Sparkles, Discover: Compass }
+const TAB_ITEMS = TABS.map(t => ({ value: t, label: t, icon: TAB_ICONS[t] }))
 
 export default function BooksPage() {
   const [tab, setTab] = useState<Tab>('My List')
@@ -28,32 +32,12 @@ export default function BooksPage() {
 
   return (
     <div className="mx-auto max-w-2xl px-4 py-8 md:px-8">
-      <div className="mb-6">
-        <h1 className="text-2xl font-bold text-white">Books</h1>
-        <p className="text-slate-400 text-sm mt-1">Read intentionally, grow constantly</p>
-      </div>
+      <PageHeader icon={BookOpen} tone="amber" title="Books" subtitle="Read intentionally, grow constantly" />
 
       {/* Goals widget */}
       <GoalsWidget category="books" />
 
-      {/* Tab bar */}
-      <div className="flex gap-1 rounded-xl bg-white/5 p-1 mb-6">
-        {TABS.map(t => (
-          <button
-            key={t}
-            type="button"
-            onClick={() => setTab(t)}
-            className={cn(
-              'flex-1 rounded-lg py-2 text-center text-sm font-medium transition-all',
-              tab === t
-                ? 'bg-violet-600 text-snow shadow-sm'
-                : 'text-slate-400 hover:text-white'
-            )}
-          >
-            {t}
-          </button>
-        ))}
-      </div>
+      <SegmentedTabs tabs={TAB_ITEMS} value={tab} onChange={setTab} />
 
       {tab === 'Discover'   && <BookDiscover />}
       {tab === 'My List'    && <ReadingList />}

@@ -1,5 +1,8 @@
 'use client'
 
+import { Wallet, LayoutDashboard, Receipt, Target, PieChart, Sparkles } from 'lucide-react'
+import PageHeader from '@/components/ui/page-header'
+import SegmentedTabs from '@/components/ui/segmented-tabs'
 import { useState, useEffect } from 'react'
 import dynamic from 'next/dynamic'
 import { SkeletonCards } from '@/components/ui/skeleton'
@@ -35,6 +38,8 @@ const MONTHS = buildMonths()
 
 const TABS = ['Overview', 'Tracker', 'Goals', 'Budget', 'Coach'] as const
 type Tab = typeof TABS[number]
+const TAB_ICONS = { Overview: LayoutDashboard, Tracker: Receipt, Goals: Target, Budget: PieChart, Coach: Sparkles }
+const TAB_ITEMS = TABS.map(t => ({ value: t, label: t, icon: TAB_ICONS[t] }))
 
 export default function FinancePage() {
   const [tab, setTab] = useState<Tab>('Overview')
@@ -48,32 +53,12 @@ export default function FinancePage() {
 
   return (
     <div className="mx-auto max-w-2xl px-4 py-8 md:px-8">
-      <div className="mb-6">
-        <h1 className="text-2xl font-bold text-white">Finance</h1>
-        <p className="text-slate-400 text-sm mt-1">Build wealth, reduce stress</p>
-      </div>
+      <PageHeader icon={Wallet} tone="sky" title="Finance" subtitle="Build wealth, reduce stress" />
 
       {/* Goals widget — hidden on the Goals tab to avoid showing two goal lists */}
       {tab !== 'Goals' && <GoalsWidget category="finance" />}
 
-      {/* Tab bar */}
-      <div className="flex gap-1 rounded-xl bg-white/5 p-1 mb-6 overflow-x-auto">
-        {TABS.map(t => (
-          <button
-            key={t}
-            type="button"
-            onClick={() => setTab(t)}
-            className={cn(
-              'flex-1 whitespace-nowrap rounded-lg py-2 px-3 text-center text-sm font-medium transition-all',
-              tab === t
-                ? 'bg-violet-600 text-snow shadow-sm'
-                : 'text-slate-400 hover:text-white'
-            )}
-          >
-            {t}
-          </button>
-        ))}
-      </div>
+      <SegmentedTabs tabs={TAB_ITEMS} value={tab} onChange={setTab} />
 
       {tab === 'Overview' && <FinanceOverview />}
       {tab === 'Budget'   && <FinanceBudget />}
