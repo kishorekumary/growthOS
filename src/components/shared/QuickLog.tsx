@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation'
 import {
   Plus, X, Utensils, Dumbbell, CreditCard, BookOpen,
   Loader2, Check, Camera, Image as ImageIcon, Zap, Sparkles, AlertCircle, CheckCircle2,
-  Mic, MicOff, RefreshCw, ClipboardList, Moon, Flame, ListChecks, ChevronLeft, ExternalLink,
+  Mic, MicOff, RefreshCw, ClipboardList, Moon, Flame, ListChecks, ChevronLeft, ChevronRight, ExternalLink,
 } from 'lucide-react'
 import { createSupabaseBrowserClient } from '@/lib/supabase'
 import { useCachedQuery } from '@/hooks/useCachedQuery'
@@ -26,6 +26,7 @@ import { matchHabit } from '@/lib/habitMatch'
 import { averageClock, topRepeats, usualWorkout } from '@/lib/logDefaults'
 import TodayLog from './TodayLog'
 import { sleepWindow } from '@/lib/todayLog'
+import { swipeIntent } from '@/lib/swipe'
 
 type Panel = 'today' | 'plans' | 'voice' | 'meal' | 'workout' | 'finance' | 'journal' | 'task' | 'sleep'
 type MealType    = 'breakfast' | 'lunch' | 'dinner' | 'snack' | 'drink'
@@ -1946,6 +1947,26 @@ const TABS: {
   },
 ]
 
+// Swipe order: Today first, then each log.
+const PAGES: Panel[] = ['today', 'plans', 'meal', 'workout', 'sleep', 'finance', 'journal', 'task', 'voice']
+const pageLabel = (p: Panel) => p === 'today' ? 'Today' : TABS.find(t => t.id === p)!.label
+const SWIPE_HINT_KEY = 'growthos:quicklog-swipe-hint'
+
+// A swipe that starts in a text field or on something that scrolls
+// sideways itself (chip rows) belongs to that element, not to paging.
+function ownsHorizontalGesture(target: EventTarget | null, boundary: HTMLElement | null): boolean {
+  let el = target as HTMLElement | null
+  while (el && el !== boundary) {
+    if (el.matches?.('input, textarea, select, [contenteditable="true"]')) return true
+    if (el.scrollWidth > el.clientWidth + 2) {
+      const ox = getComputedStyle(el).overflowX
+      if (ox === 'auto' || ox === 'scroll') return true
+    }
+    el = el.parentElement
+  }
+  return false
+}
+
 // ─── Main export ──────────────────────────────────────────────────
 
 export default function QuickLog() {
@@ -1962,8 +1983,53 @@ export default function QuickLog() {
 
   // Always reopen on the Today sheet.
   function close() { setOpen(false); setPanel('today') }
+
+  // ── Paging between logs: swipe, ‹ › buttons, or arrow keys ──
+  const [dir, setDir] = useState<1 | -1>(1)
+  const contentRef = useRef<HTMLDivElement>(null)
+  const touch = useRef<{ x: number; y: number; t: number; skip: boolean } | null>(null)
+  const [showHint, setShowHint] = useState(false)
+
+  function goTo(next: Panel) {
+    if (next === panel) return
+    setDir(PAGES.indexOf(next) >= PAGES.indexOf(panel) ? 1 : -1)
+    setPanel(next)
+  }
+  function page(delta: 1 | -1) {
+    const i = PAGES.indexOf(panel) + delta
+    if (i < 0 || i >= PAGES.length) return
+    goTo(PAGES[i])
+    if (showHint) { setShowHint(false); try { localStorage.setItem(SWIPE_HINT_KEY, '1') } catch {} }
+  }
+
+  useEffect(() => {
+    if (!open) return
+    try { setShowHint(localStorage.getItem(SWIPE_HINT_KEY) !== '1') } catch {}
+    function onKey(e: KeyboardEvent) {
+      const el = document.activeElement
+      if (el?.matches('input, textarea, select, [contenteditable="true"]')) return
+      if (e.key === 'ArrowRight') page(1)
+      else if (e.key === 'ArrowLeft') page(-1)
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, panel, showHint])
+
+  function onTouchStart(e: React.TouchEvent) {
+    const t = e.touches[0]
+    touch.current = { x: t.clientX, y: t.clientY, t: Date.now(), skip: e.touches.length > 1 || ownsHorizontalGesture(e.target, contentRef.current) }
+  }
+  function onTouchEnd(e: React.TouchEvent) {
+    const start = touch.current
+    touch.current = null
+    if (!start || start.skip) return
+    const t = e.changedTouches[0]
+    const intent = swipeIntent(t.clientX - start.x, t.clientY - start.y, Date.now() - start.t)
+    if (intent) page(intent === 'next' ? 1 : -1)
+  }
   // Saving a detail form returns to Today (which reloads) to keep logging.
-  function handleDone() { setPanel('today') }
+  function handleDone() { goTo('today') }
 
   return (
     <>
@@ -2003,7 +2069,7 @@ export default function QuickLog() {
                 const tab = TABS.find(t => t.id === panel)!
                 return (
                   <div className="flex min-w-0 items-center gap-1">
-                    <button onClick={() => setPanel('today')} className="flex items-center gap-0.5 rounded-lg py-1 pr-2 text-xs text-slate-400 hover:text-white" aria-label="Back to Today">
+                    <button onClick={() => goTo('today')} className="flex items-center gap-0.5 rounded-lg py-1 pr-2 text-xs text-slate-400 hover:text-white" aria-label="Back to Today">
                       <ChevronLeft className="h-4 w-4" /> Today
                     </button>
                     <span className="text-slate-700">/</span>
@@ -2024,9 +2090,34 @@ export default function QuickLog() {
               </button>
             </div>
 
-            {/* Panel content */}
-            <div className="flex-1 overflow-y-auto px-5 pb-5 min-h-0">
-              {panel === 'today'   && <TodayLog onOpen={setPanel} />}
+            {/* Pager: where you are, and what's either side */}
+            <div className="flex items-center gap-2 px-5 pb-3 shrink-0">
+              <button onClick={() => page(-1)} disabled={panel === PAGES[0]} aria-label="Previous log"
+                className="flex w-20 items-center gap-0.5 truncate text-[11px] text-slate-500 hover:text-white disabled:invisible">
+                <ChevronLeft className="h-3.5 w-3.5 shrink-0" />{panel !== PAGES[0] && pageLabel(PAGES[PAGES.indexOf(panel) - 1])}
+              </button>
+              <div className="flex flex-1 items-center justify-center gap-1.5">
+                {PAGES.map(p => (
+                  <button key={p} onClick={() => goTo(p)} aria-label={pageLabel(p)} title={pageLabel(p)}
+                    className={cn('h-1.5 rounded-full transition-all duration-300', p === panel ? 'w-5 bg-emerald-400' : 'w-1.5 bg-white/20 hover:bg-white/40')} />
+                ))}
+              </div>
+              <button onClick={() => page(1)} disabled={panel === PAGES[PAGES.length - 1]} aria-label="Next log"
+                className="flex w-20 items-center justify-end gap-0.5 truncate text-[11px] text-slate-500 hover:text-white disabled:invisible">
+                {panel !== PAGES[PAGES.length - 1] && pageLabel(PAGES[PAGES.indexOf(panel) + 1])}<ChevronRight className="h-3.5 w-3.5 shrink-0" />
+              </button>
+            </div>
+            {showHint && (
+              <p className="-mt-1 mb-2 shrink-0 text-center text-[11px] text-emerald-300/80 animate-pulse motion-reduce:animate-none">
+                Swipe ← → to move between logs
+              </p>
+            )}
+
+            {/* Panel content: swipe sideways to page */}
+            <div ref={contentRef} onTouchStart={onTouchStart} onTouchEnd={onTouchEnd}
+              className="flex-1 overflow-y-auto overflow-x-hidden px-5 pb-5 min-h-0">
+              <div key={panel} className={cn('animate-in fade-in-0 duration-200 motion-reduce:animate-none', dir > 0 ? 'slide-in-from-right-8' : 'slide-in-from-left-8')}>
+              {panel === 'today'   && <TodayLog onOpen={goTo} />}
               {/* Plans' onDone fires when a plan link navigates away, so close. */}
               {panel === 'plans'   && <PlansPanel   onDone={close} />}
               {panel === 'voice'   && <VoicePanel   onDone={handleDone} />}
@@ -2036,6 +2127,7 @@ export default function QuickLog() {
               {panel === 'finance' && <FinancePanel onDone={handleDone} />}
               {panel === 'journal' && <JournalPanel onDone={handleDone} />}
               {panel === 'task'    && <TaskPanel    onDone={handleDone} />}
+              </div>
             </div>
 
           </div>
