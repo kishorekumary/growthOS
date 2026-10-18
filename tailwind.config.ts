@@ -126,6 +126,7 @@ const config: Config = {
         'page-in':  { '0%': { opacity: '0', transform: 'translateY(6px)' }, '100%': { opacity: '1', transform: 'translateY(0)' } },
         float:      { '0%, 100%': { transform: 'translateY(0)' }, '50%': { transform: 'translateY(-4px)' } },
         flicker:    { '0%, 100%': { transform: 'scale(1) rotate(0deg)' }, '25%': { transform: 'scale(1.08, 1.14) rotate(-3deg)' }, '50%': { transform: 'scale(0.96, 1.02) rotate(2deg)' }, '75%': { transform: 'scale(1.04, 1.1) rotate(-1deg)' } },
+        breathe:    { '0%, 100%': { transform: 'scale(0.9)', opacity: '0.55' }, '50%': { transform: 'scale(1.08)', opacity: '0.95' } },
       },
       animation: {
         pop:        'pop 250ms ease-out',
@@ -133,6 +134,7 @@ const config: Config = {
         'page-in':  'page-in 220ms cubic-bezier(0.22, 1, 0.36, 1)',
         float:      'float 3.2s ease-in-out infinite',
         flicker:    'flicker 1.8s ease-in-out infinite',
+        breathe:    'breathe 6s ease-in-out infinite',
       },
     },
   },

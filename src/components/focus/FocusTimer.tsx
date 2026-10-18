@@ -13,6 +13,7 @@ import { Label } from '@/components/ui/label'
 import { cn } from '@/lib/utils'
 import { useTimer, playAlarm, showNotification, type Sequence } from '@/contexts/TimerContext'
 import EmptyState from '@/components/ui/empty-state'
+import { sessionProgress, stepTone, type StepTone } from '@/lib/focusSession'
 
 // ─── Types ────────────────────────────────────────────────────
 
@@ -34,6 +35,13 @@ function fmtDuration(secs: number) {
   return `${s}s`
 }
 
+// Whole-session time left: rounded up to minutes ("35m", "1h 5m").
+function fmtLeft(secs: number) {
+  const m = Math.ceil(secs / 60)
+  const h = Math.floor(m / 60)
+  return h ? `${h}h${m % 60 ? ` ${m % 60}m` : ''}` : `${m}m`
+}
+
 function fmtCountdown(secs: number) {
   const h = Math.floor(secs / 3600)
   const m = Math.floor((secs % 3600) / 60)
@@ -42,29 +50,92 @@ function fmtCountdown(secs: number) {
   return `${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`
 }
 
-// ─── Circular countdown ring ──────────────────────────────────
+// ─── Focus ring ───────────────────────────────────────────────
 
-function CircularTimer({ progress, label, seconds, color }: {
-  progress: number; label: string; seconds: number; color: string
+const TONE = {
+  focus: { from: '#c4b5fd', to: '#6366f1', glow: 'rgba(129,140,248,0.55)', text: 'text-violet-300', aura: 'bg-violet-500/30', bar: 'from-violet-400 to-indigo-500' },
+  break: { from: '#6ee7b7', to: '#14b8a6', glow: 'rgba(45,212,191,0.5)',   text: 'text-emerald-300', aura: 'bg-teal-500/30',   bar: 'from-emerald-300 to-teal-500' },
+} as const
+
+// The running step: a gradient arc that empties as time passes, a glowing
+// head dot, and a soft halo that "breathes" while the timer runs.
+function FocusRing({ progress, seconds, label, tone, paused }: {
+  progress: number; seconds: number; label: string; tone: StepTone; paused: boolean
 }) {
-  const r    = 84
+  const t = TONE[tone]
+  const size = 260, r = 112, c = size / 2
   const circ = 2 * Math.PI * r
-  const offset = circ * (1 - Math.max(0, Math.min(1, progress)))
+  const p = Math.max(0, Math.min(1, progress))
+  const angle = p * 2 * Math.PI
   return (
-    <div className="relative">
-      <svg width="210" height="210" className="-rotate-90">
-        <circle cx="105" cy="105" r={r} fill="none" stroke="rgb(var(--c-white) / 0.05)" strokeWidth="12" />
-        <circle cx="105" cy="105" r={r} fill="none" stroke="currentColor" strokeWidth="12" strokeLinecap="round"
-          strokeDasharray={circ} strokeDashoffset={offset}
-          className={cn('transition-[stroke-dashoffset] duration-500', color)}
+    <div className="relative flex items-center justify-center">
+      <div
+        aria-hidden
+        className={cn(
+          'absolute h-52 w-52 rounded-full blur-3xl transition-opacity duration-700',
+          t.aura,
+          paused ? 'opacity-20' : 'animate-breathe motion-reduce:animate-none',
+        )}
+      />
+      <svg viewBox={`0 0 ${size} ${size}`} className={cn('relative h-[260px] w-[260px] -rotate-90 transition-opacity duration-500', paused && 'opacity-50')}>
+        <defs>
+          <linearGradient id="focus-ring-grad" x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0%" stopColor={t.from} />
+            <stop offset="100%" stopColor={t.to} />
+          </linearGradient>
+        </defs>
+        <circle cx={c} cy={c} r={r} fill="none" stroke="rgb(var(--c-white) / 0.06)" strokeWidth="10" />
+        <circle
+          cx={c} cy={c} r={r} fill="none" stroke="url(#focus-ring-grad)" strokeWidth="10" strokeLinecap="round"
+          strokeDasharray={circ} strokeDashoffset={circ * (1 - p)}
+          className="transition-[stroke-dashoffset] duration-1000 ease-linear"
+          style={{ filter: `drop-shadow(0 0 8px ${t.glow})` }}
         />
+        {p > 0.005 && (
+          <circle
+            cx={c + r * Math.cos(angle)} cy={c + r * Math.sin(angle)} r="7" fill="white"
+            className="transition-all duration-1000 ease-linear"
+            style={{ filter: `drop-shadow(0 0 6px ${t.glow})` }}
+          />
+        )}
       </svg>
-      <div className="absolute inset-0 flex flex-col items-center justify-center gap-1 px-4">
-        <span className="text-[2.4rem] font-bold text-white tabular-nums leading-none">
-          {fmtCountdown(seconds)}
+      <div className="absolute inset-0 flex flex-col items-center justify-center px-10 text-center">
+        <span className={cn('text-[11px] font-semibold uppercase tracking-[0.2em]', paused ? 'animate-pulse text-slate-400' : t.text)}>
+          {paused ? 'Paused' : tone === 'break' ? 'Break' : 'Focus'}
         </span>
-        <span className={cn('text-xl font-bold text-center leading-snug mt-1 max-w-[150px] line-clamp-2', color)}>
-          {label}
+        <span className="mt-1 text-5xl font-semibold leading-none tabular-nums text-white">{fmtCountdown(seconds)}</span>
+        <span className="mt-2 line-clamp-2 max-w-[170px] text-base font-medium leading-snug text-slate-300">{label}</span>
+      </div>
+    </div>
+  )
+}
+
+// The whole sequence as one bar: a segment per step, sized by its length,
+// filling as the session goes.
+function SessionBar({ steps, stepIdx, secondsLeft, paused }: {
+  steps: Step[]; stepIdx: number; secondsLeft: number; paused: boolean
+}) {
+  const { segments, remaining } = sessionProgress(steps, stepIdx, secondsLeft)
+  const endsAt = new Date(Date.now() + remaining * 1000).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })
+  return (
+    <div className="w-full">
+      <div className="flex h-2 gap-1">
+        {segments.map((seg, i) => (
+          <div key={i} className="relative min-w-[6px] overflow-hidden rounded-full bg-white/[0.07]" style={{ flexGrow: seg.share, flexBasis: 0 }}>
+            <div
+              className={cn('h-full rounded-full bg-gradient-to-r transition-[width] duration-1000 ease-linear', TONE[seg.tone].bar)}
+              style={{ width: `${seg.filled * 100}%` }}
+            />
+          </div>
+        ))}
+      </div>
+      <div className="mt-2 flex items-center justify-between gap-3 text-[11px] text-slate-500">
+        <span className="min-w-0 truncate">
+          Step {stepIdx + 1} of {steps.length}
+          {stepIdx < steps.length - 1 && <> · Next: <span className="text-slate-400">{steps[stepIdx + 1].label}</span></>}
+        </span>
+        <span className="shrink-0 tabular-nums">
+          {fmtLeft(remaining)} left{!paused && <> · ends {endsAt}</>}
         </span>
       </div>
     </div>
@@ -538,7 +609,7 @@ export default function FocusTimer() {
   if (runSeq) {
     const step     = runSeq.steps[stepIdx]
     const progress = step ? secondsLeft / step.duration : 0
-    const ringColor = done ? 'text-emerald-400' : paused ? 'text-slate-500' : 'text-violet-400'
+    const tone     = stepTone(step?.label ?? '')
 
     return (
       <div className="flex flex-col items-center gap-5">
@@ -561,38 +632,34 @@ export default function FocusTimer() {
           </div>
         ) : (
           <>
-            <CircularTimer progress={progress} label={step?.label ?? ''} seconds={secondsLeft} color={ringColor} />
-            <div className="flex flex-col items-center gap-0.5">
-              <p className="text-xs text-slate-500">Step {stepIdx + 1} of {runSeq.steps.length}</p>
-              {stepIdx < runSeq.steps.length - 1 && (
-                <p className="text-[11px] text-slate-600">
-                  Next: <span className="text-slate-400">{runSeq.steps[stepIdx + 1].label}</span>
-                </p>
-              )}
-            </div>
+            <FocusRing progress={progress} seconds={secondsLeft} label={step?.label ?? ''} tone={tone} paused={paused} />
+
+            <SessionBar steps={runSeq.steps} stepIdx={stepIdx} secondsLeft={secondsLeft} paused={paused} />
 
             <div className="flex items-center gap-4">
-              <button onClick={restartStep} title="Restart this step"
-                className="flex h-11 w-11 items-center justify-center rounded-full border-2 border-white/10 bg-white/5 text-slate-400 hover:border-white/20 hover:text-white transition-all">
+              <button onClick={restartStep} title="Restart this step" aria-label="Restart this step"
+                className="flex h-11 w-11 items-center justify-center rounded-full border border-white/10 bg-white/5 text-slate-400 hover:border-white/20 hover:text-white active:scale-95 transition-all">
                 <RotateCcw className="h-4 w-4" />
               </button>
-              <button onClick={togglePause}
-                className={cn('flex h-14 w-14 items-center justify-center rounded-full border-2 transition-all',
-                  paused
-                    ? 'border-violet-400 bg-violet-500/20 text-violet-300 hover:bg-violet-500/30'
-                    : 'border-white/20 bg-white/5 text-white hover:border-violet-400 hover:bg-violet-500/10')}>
-                {paused ? <Play className="h-6 w-6" /> : <Pause className="h-6 w-6" />}
+              <button onClick={togglePause} aria-label={paused ? 'Resume' : 'Pause'}
+                className={cn(
+                  'flex h-[72px] w-[72px] items-center justify-center rounded-full bg-gradient-to-br text-snow transition-all active:scale-95',
+                  tone === 'break' ? 'from-emerald-400 to-teal-600 shadow-[0_8px_30px_-6px_rgba(20,184,166,0.6)]' : 'from-violet-500 to-indigo-600 shadow-[0_8px_30px_-6px_rgba(99,102,241,0.65)]',
+                  paused && 'animate-pulse motion-reduce:animate-none',
+                )}>
+                {paused ? <Play className="ml-1 h-7 w-7" fill="currentColor" /> : <Pause className="h-7 w-7" fill="currentColor" />}
               </button>
-              {stepIdx < runSeq.steps.length - 1 && (
-                <button onClick={skipStep} title="Skip to next step"
-                  className="flex h-11 w-11 items-center justify-center rounded-full border-2 border-white/10 bg-white/5 text-slate-400 hover:border-amber-400/40 hover:text-amber-300 transition-all">
+              {stepIdx < runSeq.steps.length - 1 ? (
+                <button onClick={skipStep} title="Skip to next step" aria-label="Skip to next step"
+                  className="flex h-11 w-11 items-center justify-center rounded-full border border-white/10 bg-white/5 text-slate-400 hover:border-amber-400/40 hover:text-amber-300 active:scale-95 transition-all">
                   <SkipForward className="h-4 w-4" />
                 </button>
+              ) : (
+                <button onClick={stopTimer} title="End session" aria-label="End session"
+                  className="flex h-11 w-11 items-center justify-center rounded-full border border-red-500/30 bg-red-500/10 text-red-400 hover:bg-red-500/20 active:scale-95 transition-all">
+                  <Square className="h-4 w-4" />
+                </button>
               )}
-              <button onClick={stopTimer} title="End session"
-                className="flex h-11 w-11 items-center justify-center rounded-full border-2 border-red-500/30 bg-red-500/10 text-red-400 hover:bg-red-500/20 transition-all">
-                <Square className="h-4 w-4" />
-              </button>
             </div>
 
             {'Notification' in window && Notification.permission === 'denied' && (
@@ -608,10 +675,12 @@ export default function FocusTimer() {
               {runSeq.steps.map((s, i) => (
                 <div key={i} className={cn('flex items-center gap-3 rounded-lg px-3 py-2 text-sm transition-all',
                   i < stepIdx   && 'text-slate-600',
-                  i === stepIdx && 'border border-violet-500/20 bg-violet-500/10 text-white font-medium',
+                  i === stepIdx && (tone === 'break'
+                    ? 'border border-emerald-500/20 bg-emerald-500/10 text-white font-medium'
+                    : 'border border-violet-500/20 bg-violet-500/10 text-white font-medium'),
                   i > stepIdx   && 'text-slate-500')}>
                   {i < stepIdx   ? <Check className="h-3.5 w-3.5 text-emerald-500/60 shrink-0" />
-                  : i === stepIdx ? <div className={cn('h-2 w-2 rounded-full shrink-0', paused ? 'bg-slate-500' : 'bg-violet-400 animate-pulse')} />
+                  : i === stepIdx ? <div className={cn('h-2 w-2 rounded-full shrink-0', paused ? 'bg-slate-500' : tone === 'break' ? 'bg-emerald-400 animate-pulse' : 'bg-violet-400 animate-pulse')} />
                   :                 <div className="h-2 w-2 rounded-full bg-slate-700 shrink-0" />}
                   <span className={cn('flex-1 truncate', i < stepIdx && 'line-through')}>{s.label}</span>
                   <span className="text-xs text-slate-600 shrink-0">{fmtDuration(s.duration)}</span>
