@@ -2,9 +2,13 @@
 
 import { useState } from 'react'
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
+import { activityStatus, timeAgo, type ActivityEvent, type ActivityStatus } from '@/lib/admin/activity'
+import StatTile from '@/components/ui/stat-tile'
 import {
   ChevronLeft, Flame, BookOpen, Dumbbell, Target, CheckSquare,
   Globe, Pencil, Trash2, Plus, Loader2, Check, X, Save,
+  ShieldCheck, Shield, Coins, Trophy, CalendarCheck, Activity, AlertCircle,
 } from 'lucide-react'
 import { HABIT_CATEGORIES, HABIT_CATEGORY_META } from '@/lib/habitCategories'
 import { cn } from '@/lib/utils'
@@ -16,8 +20,24 @@ const CATEGORY_COLOR: Record<string, string> = Object.fromEntries(
 type Habit   = { id: string; habit_name: string; category: string; frequency: string; streak_count: number; longest_streak: number; is_keystone: boolean; is_global: boolean }
 type HabitLog = { habit_id: string; log_date: string; status: string }
 type Book    = { id: string; book_title: string; author: string | null; status: string }
-type Workout = { id: string; date: string; exercise_type: string | null; duration_min: number | null }
-type Goal    = { id: string; title: string; status: string | null; target_date: string | null }
+type Workout = { id: string; log_date: string; workout_type: string | null; duration_mins: number | null }
+type Goal    = { id: string; title: string; is_completed: boolean; target_date: string | null }
+type Account = {
+  joined: string; lastSignIn: string | null; emailVerified: boolean; provider: string
+  timezone: string | null; points: number; perfectStreak: number; bestPerfect: number
+}
+
+const STATUS_META: Record<ActivityStatus, { dot: string; text: string; label: string }> = {
+  today:   { dot: 'bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.8)]', text: 'text-emerald-300', label: 'Active today' },
+  week:    { dot: 'bg-sky-400',   text: 'text-sky-300',   label: 'Active this week' },
+  month:   { dot: 'bg-amber-400', text: 'text-amber-300', label: 'Idle' },
+  dormant: { dot: 'bg-slate-500', text: 'text-slate-400', label: 'Dormant' },
+  never:   { dot: 'bg-slate-700', text: 'text-slate-500', label: 'No activity yet' },
+}
+
+// "7 Sept 2026 (3d ago)" — the relative part only when it adds something.
+const withAgo = (iso: string) => { const rel = timeAgo(iso); return rel.endsWith('ago') || rel === 'just now' ? `${fmtDate(iso)} (${rel})` : fmtDate(iso) }
+const fmtDate = (iso: string | null) => iso ? new Date(iso).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }) : '—'
 type Todo    = { id: string; title: string; completed: boolean }
 type Profile = Record<string, unknown>
 
@@ -71,13 +91,32 @@ export default function UserDetailClient({
   userId, email, profile: initialProfile,
   habits: initialHabits, habitLogs, today,
   books: initialBooks, workouts, goals: initialGoals, todos: initialTodos,
-  isSuperadmin,
+  isSuperadmin, meId, account, activity,
 }: {
   userId: string; email: string; profile: Profile
   habits: Habit[]; habitLogs: HabitLog[]; today: string
   books: Book[]; workouts: Workout[]; goals: Goal[]; todos: Todo[]
-  isSuperadmin: boolean
+  isSuperadmin: boolean; meId: string; account: Account; activity: ActivityEvent[]
 }) {
+  const router = useRouter()
+  const [deleteOpen, setDeleteOpen]   = useState(false)
+  const [deleteEmail, setDeleteEmail] = useState('')
+  const [deleting, setDeleting]       = useState(false)
+  const [deleteError, setDeleteError] = useState<string | null>(null)
+  const targetIsAdmin = !!(initialProfile.is_admin || initialProfile.is_superadmin)
+  const canDelete = userId !== meId && (isSuperadmin || !targetIsAdmin)
+  async function deleteUser() {
+    setDeleting(true); setDeleteError(null)
+    const res = await fetch('/api/admin/delete-user', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ userId, confirmEmail: deleteEmail }),
+    })
+    const data = await res.json().catch(() => ({}))
+    setDeleting(false)
+    if (!res.ok) { setDeleteError(data.error ?? 'Could not delete this user'); return }
+    router.push('/admin')
+    router.refresh()
+  }
   const [editMode, setEditMode] = useState(false)
   const [profile, setProfile]   = useState(initialProfile)
   const [habits, setHabits]     = useState(initialHabits)
@@ -176,7 +215,7 @@ export default function UserDetailClient({
   async function addGoal() {
     if (!newGoal.title.trim()) return
     setBusy('new-goal')
-    const { row } = await apiPost('user_goals', { ...newGoal, user_id: userId, status: 'active' })
+    const { row } = await apiPost('user_goals', { ...newGoal, user_id: userId })
     if (row) setGoals(p => [row, ...p])
     setNewGoal({ title: '' })
     setAddingGoal(false)
@@ -213,8 +252,8 @@ export default function UserDetailClient({
 
   // ── Render ────────────────────────────────────────────────────
 
-  const activeGoals    = goals.filter(g => g.status === 'active' || !g.status)
-  const completedGoals = goals.filter(g => g.status === 'completed')
+  const activeGoals    = goals.filter(g => !g.is_completed)
+  const completedGoals = goals.filter(g => g.is_completed)
   const booksReading   = books.filter(b => b.status === 'reading')
   const booksCompleted = books.filter(b => b.status === 'completed')
 
@@ -225,82 +264,163 @@ export default function UserDetailClient({
   const weekPct        = weekTotal > 0 ? Math.round((weekDone / weekTotal) * 100) : null
 
   return (
-    <div className="min-h-screen p-4 md:p-8 space-y-6 max-w-5xl mx-auto">
-      {/* Back + edit toggle */}
-      <div className="flex items-center justify-between">
-        <Link href="/admin" className="inline-flex items-center gap-1.5 text-sm text-slate-500 hover:text-white transition-colors">
-          <ChevronLeft className="h-4 w-4" /> Back to Admin
+    <div className="mx-auto max-w-5xl space-y-6 px-4 py-8 md:px-8">
+      {/* Back + actions */}
+      <div className="flex items-center gap-2">
+        <Link href="/admin" className="inline-flex items-center gap-1 text-sm text-slate-400 transition-colors hover:text-white">
+          <ChevronLeft className="h-4 w-4" /> Admin
         </Link>
-        {isSuperadmin && (
-          <button
-            onClick={() => setEditMode(e => !e)}
-            className={cn(
-              'flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium border transition-colors',
-              editMode
-                ? 'bg-indigo-600 border-indigo-500 text-snow hover:bg-indigo-500'
-                : 'border-white/10 text-slate-400 hover:text-white hover:border-white/20',
-            )}
-          >
-            {editMode ? <><Save className="h-3.5 w-3.5" /> Editing</> : <><Pencil className="h-3.5 w-3.5" /> Edit</>}
-          </button>
-        )}
+        <div className="ml-auto flex items-center gap-2">
+          {isSuperadmin && (
+            <button
+              onClick={() => setEditMode(e => !e)}
+              className={cn(
+                'flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-sm font-medium transition-colors',
+                editMode ? 'border-indigo-500 bg-indigo-600 text-snow hover:bg-indigo-500' : 'border-white/10 text-slate-300 hover:border-white/20 hover:text-white',
+              )}
+            >
+              {editMode ? <><Save className="h-3.5 w-3.5" /> Editing</> : <><Pencil className="h-3.5 w-3.5" /> Edit</>}
+            </button>
+          )}
+          {canDelete && (
+            <button
+              onClick={() => { setDeleteOpen(true); setDeleteEmail(''); setDeleteError(null) }}
+              className="flex items-center gap-1.5 rounded-lg border border-red-500/25 bg-red-500/[0.06] px-3 py-1.5 text-sm font-medium text-red-300 transition-colors hover:bg-red-500/15"
+            >
+              <Trash2 className="h-3.5 w-3.5" /> Delete
+            </button>
+          )}
+        </div>
       </div>
 
-      {/* User header */}
-      <div className="flex items-center gap-4 rounded-xl border border-white/[0.06] bg-white/[0.02] p-5">
-        {profile.avatar_url ? (
-          <img src={profile.avatar_url as string} alt={fullName} className="h-14 w-14 rounded-full object-cover ring-2 ring-white/10" />
-        ) : (
-          <div className="h-14 w-14 rounded-full bg-indigo-500/20 ring-2 ring-indigo-500/20 flex items-center justify-center text-lg font-bold text-indigo-300">
-            {initials}
-          </div>
-        )}
-        <div className="flex-1 min-w-0">
-          <p className="text-lg font-bold text-white">
-            {editMode
-              ? <InlineText value={fullName} onSave={v => saveProfile('full_name', v)} className="text-white" />
-              : fullName || '—'}
-          </p>
-          <p className="text-sm text-slate-500">{email}</p>
-          <div className="flex items-center gap-3 mt-1 flex-wrap">
-            {editMode ? (
-              <>
-                <InlineText value={(profile.occupation as string) ?? ''} onSave={v => saveProfile('occupation', v)} className="text-xs text-slate-400" />
-                <InlineText value={(profile.country as string) ?? ''} onSave={v => saveProfile('country', v)} className="text-xs text-slate-400" />
-              </>
-            ) : (
-              <>
-                {profile.occupation && <span className="text-xs text-slate-600">{profile.occupation as string}</span>}
-                {profile.country    && <span className="text-xs text-slate-600">{profile.country as string}</span>}
-              </>
-            )}
-          </div>
-        </div>
-        <div className="hidden md:grid grid-cols-4 gap-3 text-center shrink-0">
-          {/* Habits — streak-first */}
-          <div className="rounded-lg border border-white/[0.06] px-3 py-2">
-            <Flame className="h-3.5 w-3.5 text-orange-400 mx-auto mb-1" />
-            <p className="text-base font-bold text-orange-400">{topStreak}</p>
-            <p className="text-[10px] text-slate-500">Top Streak</p>
-            <p className="text-[10px] text-slate-600">
-              {habits.length} habit{habits.length !== 1 ? 's' : ''}
-              {bestEver > topStreak ? ` · best ${bestEver}` : ''}
-            </p>
-          </div>
-          {[
-            { icon: Dumbbell, label: 'Workouts', value: workouts.length,                              sub: 'recent 10' },
-            { icon: BookOpen,  label: 'Books',    value: booksReading.length + booksCompleted.length,  sub: `${booksCompleted.length} done` },
-            { icon: Target,    label: 'Goals',    value: activeGoals.length,                           sub: `${completedGoals.length} done` },
-          ].map(({ icon: Icon, label, value, sub }) => (
-            <div key={label} className="rounded-lg border border-white/[0.06] px-3 py-2">
-              <Icon className="h-3.5 w-3.5 text-slate-500 mx-auto mb-1" />
-              <p className="text-base font-bold text-white">{value}</p>
-              <p className="text-[10px] text-slate-500">{label}</p>
-              <p className="text-[10px] text-slate-600">{sub}</p>
+      {/* Profile */}
+      {(() => {
+        const last = activity[0]?.at ?? null
+        const st = STATUS_META[activityStatus(last)]
+        return (
+          <div className="card-sheen relative overflow-hidden rounded-2xl border border-indigo-500/25 bg-gradient-to-br from-indigo-500/15 via-violet-500/5 to-transparent p-5">
+            <div aria-hidden className="pointer-events-none absolute -right-12 -top-12 h-40 w-40 rounded-full bg-indigo-500/25 blur-3xl" />
+            <div className="relative flex items-center gap-4">
+              <div className="relative shrink-0">
+                {profile.avatar_url
+                  ? <img src={profile.avatar_url as string} alt={fullName} className="h-16 w-16 rounded-full object-cover ring-2 ring-white/10" />
+                  : <div className="flex h-16 w-16 items-center justify-center rounded-full bg-gradient-to-br from-indigo-500/50 to-violet-600/50 text-xl font-bold text-indigo-50 ring-2 ring-indigo-400/30">{initials}</div>}
+                <span className={cn('absolute bottom-0.5 right-0.5 h-3.5 w-3.5 rounded-full ring-2 ring-slate-900', st.dot)} title={st.label} />
+              </div>
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center gap-2">
+                  <p className="truncate text-xl font-bold text-white">
+                    {editMode ? <InlineText value={fullName} onSave={v => saveProfile('full_name', v)} className="text-white" /> : fullName || '—'}
+                  </p>
+                  {profile.is_superadmin
+                    ? <span className="flex items-center gap-1 rounded-full bg-amber-500/15 px-2 py-0.5 text-[11px] font-semibold text-amber-300"><ShieldCheck className="h-3 w-3" /> Superadmin</span>
+                    : profile.is_admin
+                      ? <span className="flex items-center gap-1 rounded-full bg-violet-500/15 px-2 py-0.5 text-[11px] font-semibold text-violet-300"><Shield className="h-3 w-3" /> Admin</span>
+                      : null}
+                </div>
+                <p className="truncate text-sm text-slate-400">{email}</p>
+                <p className={cn('mt-1 text-xs font-semibold', st.text)}>
+                  {last ? `Active ${timeAgo(last)}` : st.label}
+                  {activity[0] && <span className="font-normal text-slate-400"> · {activity[0].label}</span>}
+                </p>
+              </div>
             </div>
-          ))}
+          </div>
+        )
+      })()}
+
+      {/* Headline numbers */}
+      <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+        <StatTile icon={Coins} tone="amber" label="Points" value={account.points.toLocaleString()} />
+        <StatTile icon={Trophy} tone="orange" label="Perfect-day streak" value={account.perfectStreak} sub={`best ${account.bestPerfect}`} />
+        <StatTile icon={Flame} tone="rose" label="Top habit streak" value={topStreak} sub={`${habits.length} habit${habits.length === 1 ? '' : 's'} · best ${bestEver}`} />
+        <StatTile icon={CalendarCheck} tone="emerald" label="Habits this week" value={weekPct === null ? '—' : `${weekPct}%`} sub={`${weekDone}/${weekTotal} logged`} />
+      </div>
+
+      <div className="grid gap-4 md:grid-cols-2">
+        {/* Account & profile details */}
+        <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
+          <p className="mb-3 text-xs font-semibold uppercase tracking-wider text-slate-500">Details</p>
+          <dl className="grid grid-cols-[auto,1fr] gap-x-4 gap-y-2 text-sm">
+            {([
+              ['Joined', withAgo(account.joined)],
+              ['Last sign-in', account.lastSignIn ? withAgo(account.lastSignIn) : 'Never'],
+              ['Signs in with', account.provider === 'email' ? 'Email & password' : account.provider[0].toUpperCase() + account.provider.slice(1)],
+              ['Email verified', account.emailVerified ? 'Yes' : 'No'],
+              ['Timezone', account.timezone ?? '—'],
+              ['Age', profile.age ? String(profile.age) : '—'],
+              ['Gender', (profile.gender as string) || '—'],
+              ['Occupation', editMode ? <InlineText key="occ" value={(profile.occupation as string) ?? ''} onSave={v => saveProfile('occupation', v)} className="text-slate-200" /> : ((profile.occupation as string) || '—')],
+              ['Country', editMode ? <InlineText key="cty" value={(profile.country as string) ?? ''} onSave={v => saveProfile('country', v)} className="text-slate-200" /> : ((profile.country as string) || '—')],
+              ['Currency', (profile.currency as string) || '—'],
+              ['Onboarding', profile.onboarding_done ? 'Completed' : 'Not finished'],
+            ] as [string, React.ReactNode][]).map(([k, v]) => (
+              <div key={k} className="contents">
+                <dt className="text-slate-500">{k}</dt>
+                <dd className="min-w-0 truncate text-slate-200">{v}</dd>
+              </div>
+            ))}
+          </dl>
+          {Array.isArray(profile.primary_goals) && (profile.primary_goals as string[]).length > 0 && (
+            <div className="mt-3 flex flex-wrap gap-1.5">
+              <span className="mr-1 text-xs text-slate-500">Focus areas:</span>
+              {(profile.primary_goals as string[]).map(g => (
+                <span key={g} className="rounded-full bg-indigo-500/15 px-2 py-0.5 text-[11px] font-medium capitalize text-indigo-200">{g}</span>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* Recent activity */}
+        <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
+          <p className="mb-3 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-slate-500">
+            <Activity className="h-3.5 w-3.5" /> Recent activity
+          </p>
+          {activity.length === 0 ? (
+            <p className="text-sm text-slate-500">Nothing in the last 90 days.</p>
+          ) : (
+            <ol className="relative space-y-3 border-l border-white/10 pl-4">
+              {activity.map((e, i) => (
+                <li key={i} className="relative">
+                  <span className={cn('absolute -left-[21px] top-1.5 h-2.5 w-2.5 rounded-full ring-4 ring-slate-900', i === 0 ? 'bg-indigo-400' : 'bg-slate-600')} />
+                  <p className="truncate text-sm text-slate-200">{e.label}</p>
+                  <p className="text-[11px] text-slate-500">{timeAgo(e.at)} · {new Date(e.at).toLocaleString('en-IN', { day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' })}</p>
+                </li>
+              ))}
+            </ol>
+          )}
         </div>
       </div>
+
+      {deleteOpen && (
+        <div className="sheet-in fixed inset-0 z-[100] flex items-end justify-center bg-black/70 p-4 backdrop-blur-sm sm:items-center" onClick={e => { if (e.target === e.currentTarget && !deleting) setDeleteOpen(false) }}>
+          <div className="w-full max-w-md space-y-4 rounded-2xl border border-red-500/30 bg-slate-900 p-5 shadow-2xl">
+            <div className="flex items-start gap-3">
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-red-500/15"><AlertCircle className="h-5 w-5 text-red-400" /></div>
+              <div>
+                <p className="text-base font-semibold text-white">Delete {fullName || email}?</p>
+                <p className="mt-1 text-xs leading-relaxed text-slate-400">
+                  This permanently deletes their account and everything in it: habits, plans, goals, journal, finances,
+                  fitness logs, rewards and their gallery files. It can&apos;t be undone.
+                </p>
+              </div>
+            </div>
+            <div className="space-y-1.5">
+              <label htmlFor="confirm-email" className="text-xs text-slate-400">Type <span className="font-semibold text-slate-200">{email}</span> to confirm</label>
+              <input id="confirm-email" autoFocus autoComplete="off" value={deleteEmail} onChange={e => setDeleteEmail(e.target.value)}
+                className="w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-white focus:border-red-500/50 focus:outline-none" />
+            </div>
+            {deleteError && <p className="text-xs text-red-400">{deleteError}</p>}
+            <div className="flex gap-2">
+              <button onClick={() => setDeleteOpen(false)} disabled={deleting} className="flex-1 rounded-xl border border-white/10 bg-white/5 py-2.5 text-sm text-slate-300 hover:bg-white/10">Cancel</button>
+              <button onClick={deleteUser} disabled={deleting || deleteEmail.trim().toLowerCase() !== email.toLowerCase()}
+                className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-red-600 py-2.5 text-sm font-semibold text-snow hover:bg-red-700 disabled:opacity-40">
+                {deleting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />} Delete
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       <div className="grid md:grid-cols-2 gap-6">
         {/* ── Habits ── */}
@@ -480,12 +600,19 @@ export default function UserDetailClient({
                   {g.target_date && <p className="text-[11px] text-slate-600 mt-0.5">Due {g.target_date}</p>}
                 </div>
                 {editMode ? (
-                  <select value={g.status ?? 'active'} onChange={e => saveGoal(g.id, { status: e.target.value })}
+                  <select value={g.is_completed ? 'completed' : 'active'}
+                    onChange={e => {
+                      const done = e.target.value === 'completed'
+                      setGoals(p => p.map(x => x.id === g.id ? { ...x, is_completed: done } : x))
+                      apiPatch('user_goals', g.id, { is_completed: done, completed_at: done ? new Date().toISOString() : null })
+                    }}
                     className="text-xs bg-transparent border-0 text-slate-400 focus:outline-none cursor-pointer shrink-0">
-                    <option value="active">Active</option><option value="completed">Completed</option>
+                    <option value="active">Active</option><option value="completed">Achieved</option>
                   </select>
                 ) : (
-                  <span className={cn('text-xs shrink-0', g.status === 'completed' ? 'text-emerald-400' : 'text-sky-400')}>{g.status ?? 'active'}</span>
+                  <span className={cn('shrink-0 rounded-full px-2 py-0.5 text-[11px] font-medium', g.is_completed ? 'bg-emerald-500/15 text-emerald-300' : 'bg-sky-500/15 text-sky-300')}>
+                    {g.is_completed ? 'Achieved' : 'Active'}
+                  </span>
                 )}
                 {editMode && (
                   <button onClick={() => deleteGoal(g.id)} disabled={busy === g.id} className="text-slate-600 hover:text-red-400 shrink-0 transition-colors">
@@ -546,10 +673,10 @@ export default function UserDetailClient({
             </h2>
             {workouts.slice(0, 5).map((w, i) => (
               <div key={i} className="rounded-xl border border-white/[0.06] bg-white/[0.02] px-4 py-2.5 flex items-center justify-between gap-3">
-                <span className="text-sm text-white capitalize">{w.exercise_type || 'Workout'}</span>
+                <span className="text-sm text-white capitalize">{w.workout_type || 'Workout'}</span>
                 <div className="text-right">
-                  <span className="text-xs text-slate-500">{w.date}</span>
-                  {w.duration_min && <span className="text-xs text-slate-600 block">{w.duration_min} min</span>}
+                  <span className="text-xs text-slate-500">{fmtDate(w.log_date)}</span>
+                  {!!w.duration_mins && <span className="text-xs text-slate-600 block">{w.duration_mins} min</span>}
                 </div>
               </div>
             ))}
