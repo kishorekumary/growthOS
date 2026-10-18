@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation'
 import {
   Plus, X, Utensils, Dumbbell, CreditCard, BookOpen,
   Loader2, Check, Camera, Image as ImageIcon, Zap, Sparkles, AlertCircle, CheckCircle2,
-  Mic, MicOff, RefreshCw, ClipboardList, Moon, Flame, ListChecks,
+  Mic, MicOff, RefreshCw, ClipboardList, Moon, Flame, ListChecks, ChevronLeft, ExternalLink,
 } from 'lucide-react'
 import { createSupabaseBrowserClient } from '@/lib/supabase'
 import { useCachedQuery } from '@/hooks/useCachedQuery'
@@ -24,8 +24,9 @@ import OpenPlanList from '@/components/planner/OpenPlanList'
 import { mergeFinalTranscripts } from '@/lib/speechTranscript'
 import { matchHabit } from '@/lib/habitMatch'
 import { averageClock, topRepeats, usualWorkout } from '@/lib/logDefaults'
+import TodayLog from './TodayLog'
 
-type Panel = 'plans' | 'voice' | 'meal' | 'workout' | 'finance' | 'journal' | 'task' | 'sleep'
+type Panel = 'today' | 'plans' | 'voice' | 'meal' | 'workout' | 'finance' | 'journal' | 'task' | 'sleep'
 type MealType    = 'breakfast' | 'lunch' | 'dinner' | 'snack' | 'drink'
 type WorkoutType = 'cardio' | 'strength' | 'yoga' | 'sports' | 'rest'
 type TxnType     = 'expense' | 'income' | 'savings'
@@ -1724,8 +1725,9 @@ function TaskPanel({ onDone }: { onDone: () => void }) {
 
 // ─── Tab config ───────────────────────────────────────────────────
 
+// Detail forms opened from the Today sheet: their title, icon and full page.
 const TABS: {
-  id: Panel; label: string; Icon: React.ElementType
+  id: Exclude<Panel, 'today'>; label: string; Icon: React.ElementType
   activeClass: string; inactiveClass: string; route: string
 }[] = [
   {
@@ -1783,7 +1785,7 @@ const TABS: {
 export default function QuickLog() {
   const router = useRouter()
   const [open, setOpen]       = useState(false)
-  const [panel, setPanel]     = useState<Panel>('plans')
+  const [panel, setPanel]     = useState<Panel>('today')
   const [pinging, setPinging] = useState(true)
   const fab = useDraggableFab('quicklog_fab_pos')
 
@@ -1792,8 +1794,10 @@ export default function QuickLog() {
     return () => clearTimeout(t)
   }, [])
 
-  function close() { setOpen(false) }
-  function handleDone() { close() }
+  // Always reopen on the Today sheet.
+  function close() { setOpen(false); setPanel('today') }
+  // Saving a detail form returns to Today (which reloads) to keep logging.
+  function handleDone() { setPanel('today') }
 
   return (
     <>
@@ -1807,7 +1811,7 @@ export default function QuickLog() {
         {pinging && <span className="absolute inset-0 rounded-full animate-ping bg-emerald-500/30 pointer-events-none" />}
         <button
           onClick={() => { if (!fab.wasDragged()) setOpen(true) }}
-          title="Quick Log"
+          title="Log today"
           className="relative flex h-12 w-12 items-center justify-center rounded-full bg-gradient-to-br from-emerald-600 to-sky-600 shadow-lg shadow-emerald-500/30 hover:shadow-emerald-500/50 hover:scale-105 active:scale-95 transition-all"
         >
           <Plus className="h-5 w-5 text-white" />
@@ -1822,37 +1826,43 @@ export default function QuickLog() {
         >
           <div className="w-full max-w-md rounded-2xl border border-white/10 bg-slate-900 shadow-2xl flex flex-col max-h-[88vh]">
 
-            {/* Header */}
-            <div className="flex items-center justify-between px-5 pt-5 shrink-0">
-              <p className="text-sm font-semibold text-white">Quick Log</p>
-              <button onClick={close} className="text-slate-500 hover:text-white transition-colors p-1 rounded">
+            {/* Header: Today, or a detail form with a way back */}
+            <div className="flex items-center justify-between gap-2 px-5 pt-5 pb-3 shrink-0">
+              {panel === 'today' ? (
+                <div>
+                  <p className="text-base font-semibold text-white">Today</p>
+                  <p className="text-[11px] text-slate-500">{new Date().toLocaleDateString([], { weekday: 'long', day: 'numeric', month: 'long' })}</p>
+                </div>
+              ) : (() => {
+                const tab = TABS.find(t => t.id === panel)!
+                return (
+                  <div className="flex min-w-0 items-center gap-1">
+                    <button onClick={() => setPanel('today')} className="flex items-center gap-0.5 rounded-lg py-1 pr-2 text-xs text-slate-400 hover:text-white" aria-label="Back to Today">
+                      <ChevronLeft className="h-4 w-4" /> Today
+                    </button>
+                    <span className="text-slate-700">/</span>
+                    <p className="flex items-center gap-1.5 truncate pl-1 text-sm font-semibold text-white">
+                      <tab.Icon className="h-3.5 w-3.5 text-slate-400" /> {tab.label}
+                    </p>
+                    {tab.route !== '/' && (
+                      <button onClick={() => { close(); router.push(tab.route) }} title={`Open ${tab.label} page`} aria-label={`Open ${tab.label} page`}
+                        className="ml-1 rounded p-1 text-slate-600 hover:text-slate-300">
+                        <ExternalLink className="h-3.5 w-3.5" />
+                      </button>
+                    )}
+                  </div>
+                )
+              })()}
+              <button onClick={close} className="text-slate-500 hover:text-white transition-colors p-1 rounded" aria-label="Close">
                 <X className="h-4 w-4" />
               </button>
             </div>
 
-            {/* Tab strip — single click switches tab, double click navigates to full section */}
-            <div className="flex gap-1.5 px-5 py-3 shrink-0">
-              {TABS.map(({ id, label, Icon, activeClass, inactiveClass, route }) => (
-                <button
-                  key={id}
-                  type="button"
-                  onClick={() => setPanel(id)}
-                  onDoubleClick={() => { close(); router.push(route) }}
-                  title={`Double-click to open ${label}`}
-                  className={cn(
-                    'flex-1 flex flex-col items-center gap-1 rounded-xl border py-2.5 text-[10px] font-medium transition-all',
-                    panel === id ? activeClass : inactiveClass,
-                  )}
-                >
-                  <Icon className="h-3.5 w-3.5" />
-                  {label}
-                </button>
-              ))}
-            </div>
-
             {/* Panel content */}
             <div className="flex-1 overflow-y-auto px-5 pb-5 min-h-0">
-              {panel === 'plans'   && <PlansPanel   onDone={handleDone} />}
+              {panel === 'today'   && <TodayLog onOpen={setPanel} />}
+              {/* Plans' onDone fires when a plan link navigates away, so close. */}
+              {panel === 'plans'   && <PlansPanel   onDone={close} />}
               {panel === 'voice'   && <VoicePanel   onDone={handleDone} />}
               {panel === 'meal'    && <MealPanel    onDone={handleDone} />}
               {panel === 'workout' && <WorkoutPanel onDone={handleDone} />}
