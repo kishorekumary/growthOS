@@ -34,7 +34,7 @@ export default async function GalleryPage() {
   }))
 
   return (
-    <div className="min-h-screen bg-surface-deep">
+    <div className="mx-auto max-w-4xl px-4 py-8 md:px-8">
       <Gallery initialItems={items} userId={user.id} isAdmin={profile?.is_admin ?? false} />
     </div>
   )

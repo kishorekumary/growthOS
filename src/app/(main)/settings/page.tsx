@@ -1,9 +1,10 @@
 'use client'
 
+import PageHeader from '@/components/ui/page-header'
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import dynamic from 'next/dynamic'
-import { Bell, ShieldCheck, ChevronRight, Mail, Sun, PartyPopper, Palette } from 'lucide-react'
+import { Bell, ShieldCheck, ChevronRight, Mail, Sun, PartyPopper, Palette, Settings } from 'lucide-react'
 import { SkeletonCards } from '@/components/ui/skeleton'
 import { createSupabaseBrowserClient } from '@/lib/supabase'
 import EffectsSettings from '@/components/settings/EffectsSettings'
@@ -45,10 +46,7 @@ export default function SettingsPage() {
 
   return (
     <div className="mx-auto max-w-2xl px-4 py-8 md:px-8">
-      <div className="mb-6">
-        <h1 className="text-2xl font-bold text-white">Settings</h1>
-        <p className="text-slate-400 text-sm mt-1">Manage your notification preferences</p>
-      </div>
+      <PageHeader icon={Settings} tone="slate" title="Settings" subtitle="Notifications, appearance, celebrations and integrations" />
 
       {/* Admin section — only visible to admins */}
       {isAdmin === true && (

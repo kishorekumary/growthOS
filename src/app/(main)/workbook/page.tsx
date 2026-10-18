@@ -1,5 +1,6 @@
 'use client'
 
+import PageHeader from '@/components/ui/page-header'
 import dynamic from 'next/dynamic'
 import { ClipboardList } from 'lucide-react'
 import { SkeletonCards } from '@/components/ui/skeleton'
@@ -11,15 +12,7 @@ const WorkbookApp = dynamic(() => import('@/components/workbook/WorkbookApp'), {
 export default function WorkbookPage() {
   return (
     <div className="mx-auto max-w-2xl px-4 py-8 md:px-8">
-      <div className="mb-6 flex items-center gap-3">
-        <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-violet-600/20 border border-violet-500/30">
-          <ClipboardList className="h-5 w-5 text-violet-400" />
-        </div>
-        <div>
-          <h1 className="text-2xl font-bold text-white">Workbook</h1>
-          <p className="text-slate-400 text-sm mt-0.5">Change happens on paper first. One exercise a day.</p>
-        </div>
-      </div>
+      <PageHeader icon={ClipboardList} tone="violet" title="Workbook" subtitle="Change happens on paper first. One exercise a day." />
 
       <WorkbookApp />
     </div>

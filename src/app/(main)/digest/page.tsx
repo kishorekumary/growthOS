@@ -1,21 +1,14 @@
 import { Newspaper } from 'lucide-react'
+import PageHeader from '@/components/ui/page-header'
 import dynamic from 'next/dynamic'
 
 const WeeklyDigest = dynamic(() => import('@/components/digest/WeeklyDigest'), { ssr: false })
 
 export default function DigestPage() {
   return (
-    <div className="min-h-screen bg-slate-950 p-4 md:p-8">
-      <div className="max-w-2xl mx-auto space-y-6">
-        <div className="flex items-center gap-3">
-          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-purple-500/20 border border-purple-500/30">
-            <Newspaper className="h-5 w-5 text-purple-400" />
-          </div>
-          <div>
-            <h1 className="text-xl font-bold text-white">Weekly Digest</h1>
-            <p className="text-sm text-slate-500">AI-powered review of your week</p>
-          </div>
-        </div>
+    <div className="mx-auto max-w-2xl px-4 py-8 md:px-8">
+      <div className="space-y-6">
+        <PageHeader icon={Newspaper} tone="fuchsia" title="Weekly Digest" subtitle="AI-powered review of your week" />
         <WeeklyDigest />
       </div>
     </div>

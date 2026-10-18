@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { Flame, Plus, Trash2, Pencil, Gift, Loader2, AlertCircle, Sparkles, Snowflake } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import PageHeader from '@/components/ui/page-header'
 import { FREEZE_COST, FREEZE_MAX } from '@/lib/dailyChest'
 import CountUp from '@/components/ui/count-up'
 import EmptyState from '@/components/ui/empty-state'
@@ -295,10 +296,7 @@ export default function RewardsClient({
 
   return (
     <div className="mx-auto max-w-2xl px-4 py-8 md:px-8 space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold text-white">Rewards</h1>
-        <p className="text-slate-400 text-sm mt-1">Turn consistent habits into real-world celebrations</p>
-      </div>
+      <PageHeader icon={Gift} tone="amber" title="Rewards" subtitle="Turn consistent habits into real-world celebrations" className="mb-0" />
 
       {error && (
         <div className="flex items-start gap-3 rounded-xl border border-red-500/20 bg-red-500/10 px-4 py-3">

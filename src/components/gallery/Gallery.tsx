@@ -1,11 +1,12 @@
 'use client'
 
+import PageHeader from '@/components/ui/page-header'
+import EmptyState from '@/components/ui/empty-state'
 import { useState, useRef, useEffect, useCallback } from 'react'
 import {
   Upload, X, Trash2, ZoomIn, ChevronLeft, ChevronRight,
   Loader2, Pencil, Check, Plus, Tag,
-  FileText, ExternalLink, FolderOpen, Music, Video, Globe,
-} from 'lucide-react'
+  FileText, ExternalLink, FolderOpen, Music, Video, Globe, Images } from 'lucide-react'
 import { createSupabaseBrowserClient } from '@/lib/supabase'
 import { cn } from '@/lib/utils'
 import { format } from 'date-fns'
@@ -221,25 +222,30 @@ export default function Gallery({ initialItems, userId, isAdmin = false }: { ini
     <div className="space-y-6">
 
       {/* ── Header ── */}
-      <div className="flex items-center justify-between gap-3">
-        <div>
-          <h1 className="text-xl font-bold text-white">Gallery</h1>
-          <p className="text-sm text-slate-500 mt-0.5">
-            {items.filter(i => !i.is_global).length} file{items.filter(i => !i.is_global).length !== 1 ? 's' : ''}
-            {items.some(i => i.is_global) && (
-              <span> · <Globe className="inline h-3 w-3 text-sky-400 mb-0.5" /> {items.filter(i => i.is_global).length} global</span>
-            )}
-            {' '}· {(items.filter(i => !i.is_global).reduce((s, i) => s + i.file_size, 0) / (1024 * 1024)).toFixed(1)} / {Math.round(MAX_UPLOAD_BYTES / (1024 * 1024))} MB · drag-drop, click, or ⌘V to paste
-          </p>
-        </div>
-        <button
-          onClick={() => fileRef.current?.click()}
-          disabled={uploading}
-          className="flex shrink-0 items-center gap-2 rounded-xl bg-violet-600 hover:bg-violet-700 disabled:opacity-50 px-4 py-2 text-sm font-medium text-snow transition-colors"
-        >
-          {uploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
-          Upload
-        </button>
+      <PageHeader
+        icon={Images}
+        tone="cyan"
+        title="Gallery"
+        className="mb-0"
+        subtitle={<>
+          {items.filter(i => !i.is_global).length} file{items.filter(i => !i.is_global).length !== 1 ? 's' : ''}
+          {items.some(i => i.is_global) && (
+            <span> · <Globe className="inline h-3 w-3 text-sky-400 mb-0.5" /> {items.filter(i => i.is_global).length} global</span>
+          )}
+          {' '}· {(items.filter(i => !i.is_global).reduce((s, i) => s + i.file_size, 0) / (1024 * 1024)).toFixed(1)} / {Math.round(MAX_UPLOAD_BYTES / (1024 * 1024))} MB
+        </>}
+        right={
+          <button
+            onClick={() => fileRef.current?.click()}
+            disabled={uploading}
+            className="flex items-center gap-2 rounded-xl bg-gradient-to-br from-violet-500 to-indigo-600 px-4 py-2 text-sm font-medium text-snow shadow-[0_6px_20px_-8px_rgba(99,102,241,0.7)] transition active:scale-95 disabled:opacity-50"
+          >
+            {uploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
+            Upload
+          </button>
+        }
+      />
+      <div className="hidden">
         <input
           ref={fileRef}
           type="file"
@@ -320,12 +326,13 @@ export default function Gallery({ initialItems, userId, isAdmin = false }: { ini
 
       {/* ── Grid ── */}
       {filtered.length === 0 ? (
-        <div className="py-20 text-center">
-          <FolderOpen className="h-12 w-12 text-slate-700 mx-auto mb-3" />
-          <p className="text-slate-400 text-sm">
-            {filterTag ? `No files tagged #${filterTag}` : 'No files yet — upload images, audio, video, or PDFs to get started'}
-          </p>
-        </div>
+        <EmptyState
+          icon={FolderOpen}
+          tone="sky"
+          title={filterTag ? `No files tagged #${filterTag}` : 'Your gallery is empty'}
+          hint={filterTag ? 'Try another tag, or clear the filter.' : 'Upload images, audio, video or PDFs, or paste a screenshot.'}
+          className="border-none bg-transparent"
+        />
       ) : (
         <div className="columns-2 sm:columns-3 lg:columns-4 gap-3">
           {filtered.map((item, idx) => {
