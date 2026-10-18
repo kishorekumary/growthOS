@@ -383,7 +383,7 @@ export default function BookInsights({
                         )}
                       </div>
                       {!isReadOnly && (
-                        <div className="flex items-start gap-1 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
+                        <div className="flex items-start gap-1 opacity-0 group-hover:opacity-100 [@media(hover:none)]:opacity-100 transition-opacity shrink-0">
                           <button onClick={() => startEditQuote(q)} className="p-1 rounded text-slate-600 hover:text-slate-300 transition-colors">
                             <Pencil className="h-3.5 w-3.5" />
                           </button>
@@ -498,7 +498,7 @@ export default function BookInsights({
                         <p className="text-sm font-semibold text-white mb-1.5">{s.title}</p>
                         <div className="rich-display text-sm text-slate-100" dangerouslySetInnerHTML={{ __html: s.text }} /></div>
                       {!isReadOnly && (
-                        <div className="flex items-start gap-1 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
+                        <div className="flex items-start gap-1 opacity-0 group-hover:opacity-100 [@media(hover:none)]:opacity-100 transition-opacity shrink-0">
                           <button onClick={() => startEditStory(s)} className="p-1 rounded text-slate-600 hover:text-slate-300 transition-colors">
                             <Pencil className="h-3.5 w-3.5" />
                           </button>

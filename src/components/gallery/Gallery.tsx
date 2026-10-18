@@ -403,7 +403,7 @@ export default function Gallery({ initialItems, userId, isAdmin = false }: { ini
                 )}
 
                 {/* Top-right actions */}
-                <div className="absolute top-2 right-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                <div className="absolute top-2 right-2 flex gap-1 opacity-0 group-hover:opacity-100 [@media(hover:none)]:opacity-100 transition-opacity">
                   <button
                     onClick={() => setLightbox(idx)}
                     className="flex h-7 w-7 items-center justify-center rounded-lg bg-black/60 backdrop-blur-sm text-white hover:bg-black/80 transition-colors"
@@ -549,7 +549,7 @@ export default function Gallery({ initialItems, userId, isAdmin = false }: { ini
                     onClick={() => { setEditCaptionId(lightboxItem.id); setCaptionDraft(lightboxItem.caption ?? '') }}
                     className="flex items-center gap-2 text-sm text-slate-300 hover:text-white transition-colors group w-full text-left"
                   >
-                    <Pencil className="h-3.5 w-3.5 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity" />
+                    <Pencil className="h-3.5 w-3.5 shrink-0 opacity-0 group-hover:opacity-100 [@media(hover:none)]:opacity-100 transition-opacity" />
                     {lightboxItem.caption
                       ? <span>{lightboxItem.caption}</span>
                       : <span className="text-slate-600 italic">Add a caption…</span>}

@@ -9,15 +9,17 @@ export interface SegmentedTab<T extends string> {
   value: T
   label: string
   icon?: LucideIcon
-  href?: string  // render as a link (route-based tabs)
+  href?: string            // render as a link (route-based tabs)
+  badge?: React.ReactNode   // e.g. a count, after the label
 }
 
 // Tab bar with a gradient highlight that slides to the active tab. Scrolls
 // sideways when the tabs don't fit, keeping the active one in view.
-export default function SegmentedTabs<T extends string>({ tabs, value, onChange, className }: {
+export default function SegmentedTabs<T extends string>({ tabs, value, onChange, size = 'md', className }: {
   tabs:      readonly SegmentedTab<T>[]
   value:     T
   onChange?: (v: T) => void
+  size?:     'md' | 'sm'   // sm: nested sub-tabs
   className?: string
 }) {
   const scroller = useRef<HTMLDivElement>(null)
@@ -65,10 +67,18 @@ export default function SegmentedTabs<T extends string>({ tabs, value, onChange,
             'relative flex flex-1 items-center justify-center whitespace-nowrap rounded-lg font-medium transition-colors',
             t.icon
               ? 'flex-col gap-0.5 px-2 py-1.5 text-[11px] sm:flex-row sm:gap-1.5 sm:px-3 sm:py-2 sm:text-sm'
-              : 'gap-1.5 px-3 py-2 text-sm',
+              : size === 'sm' ? 'gap-1 px-2.5 py-1.5 text-xs' : 'gap-1.5 px-3 py-2 text-sm',
             active ? 'text-snow' : 'text-slate-400 hover:text-white',
           )
-          const body = <>{t.icon && <t.icon className="h-4 w-4" />}{t.label}</>
+          const body = <>
+            {t.icon && <t.icon className="h-4 w-4" />}
+            <span className="flex items-center gap-1">
+              {t.label}
+              {t.badge !== undefined && t.badge !== null && (
+                <span className={cn('rounded-full px-1.5 text-[10px] font-semibold leading-4', active ? 'bg-white/20 text-snow' : 'bg-white/10 text-slate-400')}>{t.badge}</span>
+              )}
+            </span>
+          </>
           const ref = (el: HTMLElement | null) => { if (el) items.current.set(t.value, el); else items.current.delete(t.value) }
           return t.href
             ? <Link key={t.value} href={t.href} ref={ref} className={cls} aria-current={active ? 'page' : undefined}>{body}</Link>

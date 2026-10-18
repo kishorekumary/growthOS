@@ -517,7 +517,7 @@ export default function AdminDashboard({
                       onClick={() => removeFromGlobalGallery(item.id)}
                       disabled={removingGalleryId === item.id}
                       title="Remove from global gallery"
-                      className="absolute top-1.5 right-1.5 flex h-6 w-6 items-center justify-center rounded-full bg-black/60 text-slate-400 opacity-0 group-hover:opacity-100 hover:text-red-400 hover:bg-black/80 transition-all"
+                      className="absolute top-1.5 right-1.5 flex h-6 w-6 items-center justify-center rounded-full bg-black/60 text-slate-400 opacity-0 group-hover:opacity-100 [@media(hover:none)]:opacity-100 hover:text-red-400 hover:bg-black/80 transition-all"
                     >
                       {removingGalleryId === item.id
                         ? <Loader2 className="h-3 w-3 animate-spin" />
@@ -580,7 +580,7 @@ export default function AdminDashboard({
                     onClick={() => removeFromGlobalBooks(book.id)}
                     disabled={removingBookId === book.id}
                     title="Remove from global"
-                    className="flex items-center justify-center w-7 h-7 rounded-md border border-white/10 text-slate-500 opacity-0 group-hover:opacity-100 hover:text-red-400 hover:border-red-500/30 transition-all"
+                    className="flex items-center justify-center w-7 h-7 rounded-md border border-white/10 text-slate-500 opacity-0 group-hover:opacity-100 [@media(hover:none)]:opacity-100 hover:text-red-400 hover:border-red-500/30 transition-all"
                   >
                     {removingBookId === book.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <X className="h-3.5 w-3.5" />}
                   </button>

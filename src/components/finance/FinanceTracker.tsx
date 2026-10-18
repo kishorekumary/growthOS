@@ -261,13 +261,13 @@ export default function FinanceTracker() {
                       </p>
                       <TxnModal initial={txn} onSave={fetchTxns} trigger={
                         <button type="button" aria-label="Edit transaction"
-                          className="shrink-0 text-slate-700 opacity-0 group-hover:opacity-100 hover:text-violet-400 transition-all">
+                          className="shrink-0 text-slate-700 opacity-0 group-hover:opacity-100 [@media(hover:none)]:opacity-100 hover:text-violet-400 transition-all">
                           <Pencil className="h-4 w-4" />
                         </button>
                       } />
                       <button type="button" onClick={() => deleteTxn(txn.id)} disabled={deletingId === txn.id}
                         aria-label="Delete transaction"
-                        className="shrink-0 text-slate-700 opacity-0 group-hover:opacity-100 hover:text-red-400 transition-all disabled:opacity-50">
+                        className="shrink-0 text-slate-700 opacity-0 group-hover:opacity-100 [@media(hover:none)]:opacity-100 hover:text-red-400 transition-all disabled:opacity-50">
                         {deletingId === txn.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
                       </button>
                     </div>

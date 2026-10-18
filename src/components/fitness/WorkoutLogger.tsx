@@ -512,7 +512,7 @@ export default function WorkoutLogger() {
                     type="button"
                     onClick={() => startEdit(log)}
                     title="Edit workout"
-                    className="opacity-0 group-hover:opacity-100 text-slate-600 hover:text-violet-400 transition-all shrink-0"
+                    className="opacity-0 group-hover:opacity-100 [@media(hover:none)]:opacity-100 text-slate-600 hover:text-violet-400 transition-all shrink-0"
                   >
                     <Pencil className="h-3.5 w-3.5" />
                   </button>

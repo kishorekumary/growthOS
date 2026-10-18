@@ -320,7 +320,7 @@ export default function JournalApp() {
                     )}
                     <p className="text-sm text-slate-400 line-clamp-2 leading-relaxed">{entry.content}</p>
                   </div>
-                  <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
+                  <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 [@media(hover:none)]:opacity-100 transition-opacity shrink-0">
                     <button
                       onClick={() => openEdit(entry)}
                       className="rounded-lg p-1.5 text-slate-500 hover:text-white hover:bg-white/8 transition-colors"

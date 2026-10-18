@@ -1,5 +1,6 @@
 'use client'
 
+import SegmentedTabs from '@/components/ui/segmented-tabs'
 import { useState, useEffect, useRef } from 'react'
 import { Loader2, Plus, Star, Sparkles, BookOpen, AlertCircle, GitBranch, Trash2, Quote, Scroll, Globe } from 'lucide-react'
 import { createSupabaseBrowserClient } from '@/lib/supabase'
@@ -520,26 +521,13 @@ export default function ReadingList() {
       </div>
 
       {/* Status tabs */}
-      <div className="flex gap-1 rounded-xl bg-white/5 p-1">
-        {STATUS_TABS.map(({ value, label, icon }) => (
-          <button
-            key={value}
-            type="button"
-            onClick={() => setActiveStatus(value)}
-            className={cn(
-              'flex-1 rounded-lg py-2 text-center text-xs font-medium transition-all',
-              activeStatus === value ? 'bg-violet-600 text-snow shadow-sm' : 'text-slate-400 hover:text-white'
-            )}
-          >
-            {icon} {label}
-            {counts[value] > 0 && (
-              <span className={cn('ml-1.5 rounded-full px-1.5 py-0.5 text-xs', activeStatus === value ? 'bg-white/20' : 'bg-white/10')}>
-                {counts[value]}
-              </span>
-            )}
-          </button>
-        ))}
-      </div>
+      <SegmentedTabs
+        className="mb-0"
+        size="sm"
+        value={activeStatus}
+        onChange={setActiveStatus}
+        tabs={STATUS_TABS.map(({ value, label, icon }) => ({ value, label: `${icon} ${label}`, badge: counts[value] > 0 ? counts[value] : undefined }))}
+      />
 
       {/* Book list */}
       {filtered.length === 0 ? (
@@ -681,7 +669,7 @@ export default function ReadingList() {
                   disabled={!!togglingGlobalId}
                   title={book.is_global ? 'Remove from global' : 'Share globally'}
                   className={cn(
-                    'shrink-0 flex items-center justify-center rounded-lg border p-1.5 opacity-0 group-hover:opacity-100 transition-all',
+                    'shrink-0 flex items-center justify-center rounded-lg border p-1.5 opacity-0 group-hover:opacity-100 [@media(hover:none)]:opacity-100 transition-all',
                     book.is_global
                       ? 'border-sky-500/40 bg-sky-500/15 text-sky-400 hover:bg-sky-500/25'
                       : 'border-white/10 bg-white/5 text-slate-500 hover:text-sky-400 hover:border-sky-500/30',
@@ -699,7 +687,7 @@ export default function ReadingList() {
                   type="button"
                   onClick={() => setDeleteTarget(book)}
                   title="Delete book"
-                  className="shrink-0 mr-3 flex items-center justify-center rounded-lg border border-red-500/30 bg-red-500/10 p-1.5 text-red-400 opacity-0 group-hover:opacity-100 hover:bg-red-500/20 transition-all"
+                  className="shrink-0 mr-3 flex items-center justify-center rounded-lg border border-red-500/30 bg-red-500/10 p-1.5 text-red-400 opacity-0 group-hover:opacity-100 [@media(hover:none)]:opacity-100 hover:bg-red-500/20 transition-all"
                 >
                   <Trash2 className="h-3.5 w-3.5" />
                 </button>
