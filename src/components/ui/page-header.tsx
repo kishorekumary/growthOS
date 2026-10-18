@@ -1,5 +1,6 @@
 import type { LucideIcon } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import ThemeToggle from '@/components/layout/ThemeToggle'
 
 // Full class names per tone so Tailwind's scanner picks them up.
 const TONES = {
@@ -17,7 +18,9 @@ const TONES = {
 export type HeaderTone = keyof typeof TONES
 
 // The standard section header: a glowing gradient icon tile, title and
-// subtitle, with optional actions on the right.
+// subtitle, with optional actions on the right. On desktop it always ends
+// with the light/dark toggle, so it sits in the same spot on every page
+// (phones have it in the top bar instead — src/app/(main)/layout.tsx).
 export default function PageHeader({ icon: Icon, title, subtitle, tone = 'violet', right, className }: {
   icon:       LucideIcon
   title:      string
@@ -40,6 +43,7 @@ export default function PageHeader({ icon: Icon, title, subtitle, tone = 'violet
         {subtitle && <p className="mt-0.5 text-sm text-slate-400">{subtitle}</p>}
       </div>
       {right && <div className="shrink-0">{right}</div>}
+      <ThemeToggle className="hidden shrink-0 md:flex" />
     </div>
   )
 }

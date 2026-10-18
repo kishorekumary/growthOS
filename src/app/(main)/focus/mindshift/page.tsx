@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import Link from 'next/link'
+import ThemeToggle from '@/components/layout/ThemeToggle'
 import { ArrowLeft, RefreshCw, Zap } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import CountUp from '@/components/ui/count-up'
@@ -236,6 +237,7 @@ export default function MindshiftSurveyPage() {
 
     return (
       <div className="mx-auto max-w-3xl px-4 py-8 md:px-8">
+        <div className="mb-4 hidden justify-end md:flex"><ThemeToggle /></div>
         {/* Top progress bar */}
         <div className="mb-1">
           <div className="h-0.5 w-full bg-blue-500" />
@@ -342,12 +344,12 @@ export default function MindshiftSurveyPage() {
   return (
     <div className="mx-auto max-w-3xl px-4 py-8 md:px-8">
       {/* Back link */}
-      <Link
-        href="/focus"
-        className="inline-flex items-center gap-1.5 text-sm text-slate-400 hover:text-white mb-6 transition-colors"
-      >
-        <ArrowLeft className="h-4 w-4" /> Back
-      </Link>
+      <div className="mb-6 flex items-center justify-between gap-3">
+        <Link href="/focus" className="inline-flex items-center gap-1.5 text-sm text-slate-400 hover:text-white transition-colors">
+          <ArrowLeft className="h-4 w-4" /> Back
+        </Link>
+        <ThemeToggle className="hidden md:flex" />
+      </div>
 
       {/* Top progress bar */}
       <div className="mb-1">

@@ -9,7 +9,6 @@ import PlannerWidget from '@/components/planner/PlannerWidget'
 import DashboardGoalsCard from '@/components/goals/DashboardGoalsCard'
 import TodayHabits from '@/components/dashboard/TodayHabits'
 import RewardsProgressCard from '@/components/dashboard/RewardsProgressCard'
-import ThemeToggle from '@/components/layout/ThemeToggle'
 import PageHeader from '@/components/ui/page-header'
 import PowerQuestions from '@/components/dashboard/PowerQuestions'
 import DecisionsDue from '@/components/dashboard/DecisionsDue'
@@ -147,8 +146,7 @@ export default async function DashboardPage() {
   return (
     <div className="mx-auto max-w-2xl px-4 py-8 md:px-8">
       {/* Header */}
-      {/* Phones have the theme toggle in the top bar (src/app/(main)/layout.tsx). */}
-      <PageHeader icon={Sparkles} title="Today" subtitle={today} right={<ThemeToggle className="hidden md:flex" />} />
+      <PageHeader icon={Sparkles} title="Today" subtitle={today} />
 
       {/* Today's habits first — opening the app should be enough to act */}
       <div className="mb-6">
