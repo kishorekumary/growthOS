@@ -30,7 +30,7 @@ function fmtDuration(secs: number) {
   const h = Math.floor(secs / 3600)
   const m = Math.floor((secs % 3600) / 60)
   const s = secs % 60
-  if (h > 0) return `${h}h ${m}m`
+  if (h > 0) return m ? `${h}h ${m}m` : `${h}h`
   if (m > 0 && s > 0) return `${m}m ${s}s`
   if (m > 0) return `${m}m`
   return `${s}s`
@@ -480,6 +480,47 @@ function saveOrder(seqs: Sequence[]) {
 
 type LocalMode = 'list' | 'build'
 
+// One-tap starting points (empty list, and as chips for any not saved yet).
+const TEMPLATES: { emoji: string; name: string; blurb: string; steps: Step[] }[] = [
+  {
+    emoji: '🍅', name: 'Pomodoro', blurb: '4 × 25m focus, short breaks, long break',
+    steps: [
+      { label: 'Focus', duration: 25 * 60 }, { label: 'Short break', duration: 5 * 60 },
+      { label: 'Focus', duration: 25 * 60 }, { label: 'Short break', duration: 5 * 60 },
+      { label: 'Focus', duration: 25 * 60 }, { label: 'Short break', duration: 5 * 60 },
+      { label: 'Focus', duration: 25 * 60 }, { label: 'Long break', duration: 15 * 60 },
+    ],
+  },
+  {
+    emoji: '🧠', name: 'Deep Work', blurb: '2 × 50m deep work with 10m breaks',
+    steps: [
+      { label: 'Deep work', duration: 50 * 60 }, { label: 'Break', duration: 10 * 60 },
+      { label: 'Deep work', duration: 50 * 60 }, { label: 'Break', duration: 10 * 60 },
+    ],
+  },
+  {
+    emoji: '⚡', name: 'Quick Sprint', blurb: '15m sprint, 3m breather',
+    steps: [{ label: 'Sprint', duration: 15 * 60 }, { label: 'Breather break', duration: 3 * 60 }],
+  },
+]
+
+// A sequence's steps as one bar, each segment sized by its length.
+function StepTimeline({ steps }: { steps: Step[] }) {
+  const total = totalSecs(steps) || 1
+  return (
+    <div className="flex h-2 gap-[3px]">
+      {steps.map((st, i) => (
+        <div
+          key={i}
+          title={`${st.label} · ${fmtDuration(st.duration)}`}
+          className={cn('min-w-[4px] rounded-full bg-gradient-to-r', TONE[stepTone(st.label)].bar)}
+          style={{ flexGrow: st.duration / total, flexBasis: 0 }}
+        />
+      ))}
+    </div>
+  )
+}
+
 const DEFAULT_STEPS: Step[] = [
   { label: 'Focus',       duration: 25 * 60 },
   { label: 'Short break', duration: 5  * 60 },
@@ -558,6 +599,18 @@ export default function FocusTimer() {
     if (!session?.user) return
     await supabase.from('focus_sequences').insert({ user_id: session.user.id, name: `Copy of ${seq.name}`, steps: seq.steps })
     fetchSeqs()
+  }
+
+  const [addingTemplate, setAddingTemplate] = useState<string | null>(null)
+  async function addTemplate(t: typeof TEMPLATES[number]) {
+    setAddingTemplate(t.name)
+    const supabase = createSupabaseBrowserClient()
+    const { data: { session } } = await supabase.auth.getSession()
+    if (session?.user) {
+      await supabase.from('focus_sequences').insert({ user_id: session.user.id, name: t.name, steps: t.steps })
+      await fetchSeqs()
+    }
+    setAddingTemplate(null)
   }
 
   async function saveSequence() {
@@ -816,66 +869,110 @@ export default function FocusTimer() {
         <EmptyState
           icon={Timer}
           title="No focus sequences yet"
-          hint="Build a sequence of timed intervals and go deep."
-        />
+          hint="Start from a proven template, or build your own with New Sequence."
+        >
+          <div className="mx-auto grid max-w-sm gap-2 text-left">
+            {TEMPLATES.map(t => (
+              <button
+                key={t.name}
+                type="button"
+                onClick={() => addTemplate(t)}
+                disabled={addingTemplate !== null}
+                className="flex items-center gap-3 rounded-xl border border-white/10 bg-white/[0.04] px-3 py-2.5 text-left hover:border-violet-500/40 hover:bg-violet-500/10 active:scale-[0.98] disabled:opacity-50 transition-all"
+              >
+                <span className="text-xl">{t.emoji}</span>
+                <span className="min-w-0 flex-1">
+                  <span className="block text-sm font-semibold text-white">{t.name}</span>
+                  <span className="block text-[11px] text-slate-500">{t.blurb}</span>
+                </span>
+                {addingTemplate === t.name ? <Loader2 className="h-4 w-4 animate-spin text-slate-400" /> : <Plus className="h-4 w-4 text-violet-300" />}
+              </button>
+            ))}
+          </div>
+        </EmptyState>
       ) : (
         <div className="space-y-3">
           {sequences.map((seq, idx) => {
             const total = totalSecs(seq.steps)
             return (
               <div key={seq.id}
-                className="group rounded-xl border border-white/10 bg-white/3 p-4 hover:border-white/20 transition-all">
-                <div className="flex items-start gap-3">
-                  <div className="flex flex-col shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
-                    <button onClick={() => moveSequence(idx, idx - 1)} disabled={idx === 0} title="Move up"
-                      className={cn('flex h-4 w-4 items-center justify-center rounded transition-colors',
-                        idx === 0 ? 'text-slate-800 cursor-not-allowed' : 'text-slate-500 hover:text-white hover:bg-white/10')}>
-                      <ChevronUp className="h-3.5 w-3.5" />
-                    </button>
-                    <button onClick={() => moveSequence(idx, idx + 1)} disabled={idx === sequences.length - 1} title="Move down"
-                      className={cn('flex h-4 w-4 items-center justify-center rounded transition-colors',
-                        idx === sequences.length - 1 ? 'text-slate-800 cursor-not-allowed' : 'text-slate-500 hover:text-white hover:bg-white/10')}>
-                      <ChevronDown className="h-3.5 w-3.5" />
-                    </button>
-                  </div>
-                  <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-violet-500/15 border border-violet-500/20">
-                    <Timer className="h-4 w-4 text-violet-400" />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-semibold text-white">{seq.name}</p>
-                    <p className="text-xs text-slate-500 mt-0.5">
-                      {seq.steps.length} step{seq.steps.length !== 1 ? 's' : ''} · {fmtDuration(total)}
+                className="card-sheen group rounded-2xl border border-white/10 bg-gradient-to-br from-white/[0.05] to-white/[0.015] p-4 hover:border-violet-500/30 transition-colors">
+                <div className="flex items-center gap-3">
+                  <button
+                    onClick={() => startSequence(seq)}
+                    aria-label={`Start ${seq.name}`}
+                    className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-violet-500 to-indigo-600 text-snow shadow-[0_6px_20px_-6px_rgba(99,102,241,0.7)] hover:brightness-110 active:scale-95 transition"
+                  >
+                    <Play className="ml-0.5 h-5 w-5" fill="currentColor" />
+                  </button>
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm font-semibold text-white">{seq.name}</p>
+                    <p className="mt-0.5 text-xs text-slate-500">
+                      <span className="font-medium text-slate-300">{fmtDuration(total)}</span>
+                      {' · '}{seq.steps.length} step{seq.steps.length !== 1 ? 's' : ''}
                     </p>
-                    <div className="flex flex-wrap gap-1 mt-2">
-                      {seq.steps.map((s, i) => (
-                        <span key={i} className="text-[10px] rounded-full bg-white/5 border border-white/8 px-2 py-0.5 text-slate-400">
-                          {s.label} · {fmtDuration(s.duration)}
+                  </div>
+                </div>
+
+                <div className="mt-3">
+                  <StepTimeline steps={seq.steps} />
+                  <div className="mt-2 flex items-start gap-2">
+                    <div className="flex min-w-0 flex-1 flex-wrap gap-1">
+                      {seq.steps.map((st, i) => (
+                        <span key={i} className="flex items-center gap-1 rounded-full border border-white/8 bg-white/[0.04] px-2 py-0.5 text-[10px] text-slate-400">
+                          <span className={cn('h-1.5 w-1.5 rounded-full', stepTone(st.label) === 'break' ? 'bg-teal-400' : 'bg-violet-400')} />
+                          {st.label} · {fmtDuration(st.duration)}
                         </span>
                       ))}
                     </div>
-                  </div>
-                  <div className="flex items-center gap-1.5 shrink-0">
-                    <button onClick={() => openEdit(seq)} title="Edit"
-                      className="flex h-7 w-7 items-center justify-center rounded-md text-slate-500 opacity-0 group-hover:opacity-100 hover:text-white hover:bg-white/8 transition-all">
-                      <Pencil className="h-3.5 w-3.5" />
-                    </button>
-                    <button onClick={() => duplicateSequence(seq)} title="Duplicate"
-                      className="flex h-7 w-7 items-center justify-center rounded-md text-slate-500 opacity-0 group-hover:opacity-100 hover:text-white hover:bg-white/8 transition-all">
-                      <Copy className="h-3.5 w-3.5" />
-                    </button>
-                    <button onClick={() => deleteSequence(seq.id)} title="Delete"
-                      className="flex h-7 w-7 items-center justify-center rounded-md text-slate-600 opacity-0 group-hover:opacity-100 hover:text-red-400 hover:bg-red-500/10 transition-all">
-                      <Trash2 className="h-3.5 w-3.5" />
-                    </button>
-                    <Button size="sm" onClick={() => startSequence(seq)}
-                      className="bg-violet-600 hover:bg-violet-700 text-snow gap-1 ml-1">
-                      <Play className="h-3.5 w-3.5" /> Start
-                    </Button>
+                    <div className={cn(
+                      'flex shrink-0 items-center gap-0.5 transition-opacity',
+                      'opacity-0 group-hover:opacity-100 focus-within:opacity-100 [@media(hover:none)]:opacity-100',
+                    )}>
+                      <button onClick={() => moveSequence(idx, idx - 1)} disabled={idx === 0} title="Move up" aria-label="Move up"
+                        className="flex h-7 w-6 items-center justify-center rounded-md text-slate-500 hover:bg-white/8 hover:text-white disabled:opacity-25 transition-all">
+                        <ChevronUp className="h-3.5 w-3.5" />
+                      </button>
+                      <button onClick={() => moveSequence(idx, idx + 1)} disabled={idx === sequences.length - 1} title="Move down" aria-label="Move down"
+                        className="flex h-7 w-6 items-center justify-center rounded-md text-slate-500 hover:bg-white/8 hover:text-white disabled:opacity-25 transition-all">
+                        <ChevronDown className="h-3.5 w-3.5" />
+                      </button>
+                      <button onClick={() => openEdit(seq)} title="Edit" aria-label="Edit"
+                        className="flex h-7 w-7 items-center justify-center rounded-md text-slate-500 hover:bg-white/8 hover:text-white transition-all">
+                        <Pencil className="h-3.5 w-3.5" />
+                      </button>
+                      <button onClick={() => duplicateSequence(seq)} title="Duplicate" aria-label="Duplicate"
+                        className="flex h-7 w-7 items-center justify-center rounded-md text-slate-500 hover:bg-white/8 hover:text-white transition-all">
+                        <Copy className="h-3.5 w-3.5" />
+                      </button>
+                      <button onClick={() => deleteSequence(seq.id)} title="Delete" aria-label="Delete"
+                        className="flex h-7 w-7 items-center justify-center rounded-md text-slate-600 hover:bg-red-500/10 hover:text-red-400 transition-all">
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
                   </div>
                 </div>
               </div>
             )
           })}
+          {TEMPLATES.some(t => !sequences.some(q => q.name === t.name)) && (
+            <div className="flex flex-wrap items-center gap-1.5 pt-1">
+              <span className="text-[11px] text-slate-500">Templates:</span>
+              {TEMPLATES.filter(t => !sequences.some(q => q.name === t.name)).map(t => (
+                <button
+                  key={t.name}
+                  type="button"
+                  onClick={() => addTemplate(t)}
+                  disabled={addingTemplate !== null}
+                  title={t.blurb}
+                  className="flex items-center gap-1 rounded-full border border-white/10 bg-white/[0.04] px-2.5 py-1 text-[11px] text-slate-300 hover:border-violet-500/40 hover:text-white disabled:opacity-50 transition-colors"
+                >
+                  {addingTemplate === t.name ? <Loader2 className="h-3 w-3 animate-spin" /> : <span>{t.emoji}</span>}
+                  {t.name}
+                </button>
+              ))}
+            </div>
+          )}
         </div>
       )}
     </div>
