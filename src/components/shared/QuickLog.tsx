@@ -25,6 +25,7 @@ import { mergeFinalTranscripts } from '@/lib/speechTranscript'
 import { matchHabit } from '@/lib/habitMatch'
 import { averageClock, topRepeats, usualWorkout } from '@/lib/logDefaults'
 import TodayLog from './TodayLog'
+import { sleepWindow } from '@/lib/todayLog'
 
 type Panel = 'today' | 'plans' | 'voice' | 'meal' | 'workout' | 'finance' | 'journal' | 'task' | 'sleep'
 type MealType    = 'breakfast' | 'lunch' | 'dinner' | 'snack' | 'drink'
@@ -1187,7 +1188,7 @@ function JournalPanel({ onDone }: { onDone: () => void }) {
 
 // ─── Voice Panel ─────────────────────────────────────────────────
 
-type VoiceState = 'idle' | 'listening' | 'parsing' | 'confirm' | 'saving' | 'done' | 'error' | 'unsupported'
+type VoiceState = 'idle' | 'listening' | 'parsing' | 'confirm' | 'confirmMany' | 'saving' | 'done' | 'error' | 'unsupported'
 
 type VoiceResult =
   | { type: 'transaction'; txn_type: 'expense' | 'income' | 'savings'; amount: number; category: string; description: string; summary: string }
@@ -1195,7 +1196,76 @@ type VoiceResult =
   | { type: 'meal';        meal_type: string; food_name: string; summary: string }
   | { type: 'habit';       habit_name: string; summary: string }
   | { type: 'journal';     title: string | null; content: string; summary: string }
+  | { type: 'sleep';       hours: number | null; bedtime: string | null; wake_time: string | null; quality: number | null; summary: string }
+  | { type: 'water';       amount_ml: number; summary: string }
+  | { type: 'mood';        mood: number; word: string | null; summary: string }
   | { type: 'unknown';     summary: string }
+
+// One entry on the "log several things" screen.
+interface VoiceItem {
+  result:    VoiceResult
+  include:   boolean
+  nutrition: NutritionEstimate | null
+  habit:     Habit | null
+  note:      string | null   // why it can't be logged as-is
+}
+
+const VOICE_ITEM_ICON: Record<VoiceResult['type'], string> = {
+  transaction: '💸', workout: '💪', meal: '🍽', habit: '✅', journal: '📓', sleep: '😴', water: '💧', mood: '😊', unknown: '❓',
+}
+
+// Writes one parsed voice entry (habits are completed by the caller, which
+// also runs the celebration).
+async function saveVoiceItem(
+  supabase: ReturnType<typeof createSupabaseBrowserClient>, uid: string,
+  result: VoiceResult, nutrition: NutritionEstimate | null,
+) {
+  const today = todayStr()
+  if (result.type === 'transaction') {
+    await supabase.from('transactions').insert({
+      user_id: uid, txn_date: today, type: result.txn_type, category: result.category,
+      amount: result.amount, description: result.description || null,
+    })
+  } else if (result.type === 'workout') {
+    await supabase.from('workout_logs').insert({
+      user_id: uid, log_date: today, workout_type: result.workout_type,
+      duration_mins: result.duration_mins ?? 0, exercises: [], notes: result.notes || null,
+    })
+  } else if (result.type === 'meal') {
+    await supabase.from('nutrition_logs').insert({
+      user_id: uid, log_date: today, meal_type: result.meal_type,
+      food_name: nutrition?.food_name || result.food_name,
+      calories: nutrition?.calories ?? 0, protein_g: nutrition?.protein_g ?? 0, carbs_g: nutrition?.carbs_g ?? 0,
+      fat_g: nutrition?.fat_g ?? 0, fiber_g: nutrition?.fiber_g ?? 0, logged_at: new Date().toISOString(),
+    })
+  } else if (result.type === 'journal') {
+    await supabase.from('journal_entries').insert({
+      title: result.title?.trim() || null, content: result.content.trim(), mood: null, entry_date: today,
+    })
+  } else if (result.type === 'water') {
+    await supabase.from('water_logs').insert({ user_id: uid, log_date: today, amount_ml: result.amount_ml, logged_at: new Date().toISOString() })
+  } else if (result.type === 'mood') {
+    const { data: existing } = await supabase.from('mood_checkins').select('energy').eq('user_id', uid).eq('checked_at', today).maybeSingle()
+    await supabase.from('mood_checkins').upsert({
+      user_id: uid, checked_at: today, mood: Math.min(5, Math.max(1, Math.round(result.mood))),
+      energy: existing?.energy ?? 3, word: result.word,
+    }, { onConflict: 'user_id,checked_at' })
+  } else if (result.type === 'sleep') {
+    let bedtime = result.bedtime, wake = result.wake_time
+    if (!(bedtime && wake) && result.hours) {
+      // "slept 7 hours": count back from the given or usual wake time.
+      const { data: recent } = await supabase.from('sleep_logs').select('wake_time').eq('user_id', uid)
+        .order('sleep_date', { ascending: false }).limit(14)
+      const usualWake = wake ?? averageClock((recent ?? []).map(r => r.wake_time)) ?? '06:30'
+      ;({ bedtime, wake_time: wake } = sleepWindow(result.hours, usualWake))
+    }
+    if (!bedtime || !wake) throw new Error('Say how long you slept, or when you slept and woke')
+    await supabase.from('sleep_logs').upsert({
+      user_id: uid, sleep_date: today, bedtime, wake_time: wake,
+      quality: result.quality ?? null, updated_at: new Date().toISOString(),
+    }, { onConflict: 'user_id,sleep_date' })
+  }
+}
 
 const INTENT_META: Record<string, { label: string; color: string; bg: string }> = {
   transaction: { label: 'Finance',  color: 'text-violet-300', bg: 'border-violet-500/30 bg-violet-500/10' },
@@ -1217,6 +1287,7 @@ function VoicePanel({ onDone }: { onDone: () => void }) {
   const [habitOptions, setHabitOptions]   = useState<Habit[]>([])
   const [nutritionData, setNutritionData] = useState<NutritionEstimate | null>(null)
   const [parsingMsg, setParsingMsg]       = useState('Understanding your command…')
+  const [many, setMany]                   = useState<VoiceItem[]>([])
   const { celebrate, celebrationNode } = useHabitCelebration()
   const { celebrateMilestones } = useReward()
 
@@ -1312,8 +1383,16 @@ function VoicePanel({ onDone }: { onDone: () => void }) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ transcript: text }),
       })
-      let data: VoiceResult = await res.json()
-      if (!res.ok) throw new Error((data as unknown as { error: string }).error ?? 'Parse failed')
+      const raw = await res.json()
+      if (!res.ok) throw new Error(raw.error ?? 'Parse failed')
+      const list: VoiceResult[] = Array.isArray(raw.items) ? raw.items : [raw]
+      // Several things, or a kind the single-entry screen doesn't show:
+      // go to the "log several things" screen.
+      if (list.length > 1 || ['sleep', 'water', 'mood'].includes(list[0]?.type)) {
+        await prepareMany(list)
+        return
+      }
+      let data: VoiceResult = list[0]
 
       // For meal intents: chain the nutrition autofill to get macros
       if (data.type === 'meal') {
@@ -1368,6 +1447,70 @@ function VoicePanel({ onDone }: { onDone: () => void }) {
     }
   }
 
+  async function prepareMany(list: VoiceResult[]) {
+    setParsingMsg(`Preparing ${list.length} entries…`)
+    const supabase = createSupabaseBrowserClient()
+    const { data: { session } } = await supabase.auth.getSession()
+    let habits: Habit[] = []
+    if (session?.user && list.some(r => r.type === 'habit')) {
+      const [{ data: hs }, { data: hidden }] = await Promise.all([
+        supabase.from('personality_habits')
+          .select('id, habit_name, category, streak_count, longest_streak, last_done_at, frequency, is_keystone, is_global')
+          .or(`user_id.eq.${session.user.id},is_global.eq.true`),
+        supabase.from('user_hidden_habits').select('habit_id').eq('user_id', session.user.id),
+      ])
+      const hiddenIds = new Set((hidden ?? []).map(h => h.habit_id as string))
+      habits = ((hs ?? []) as Habit[]).filter(h => !h.is_global || !hiddenIds.has(h.id))
+    }
+    const items = await Promise.all(list.map(async (r): Promise<VoiceItem> => {
+      if (r.type === 'unknown') return { result: r, include: false, nutrition: null, habit: null, note: "Didn't catch this one" }
+      if (r.type === 'habit') {
+        const { match } = matchHabit([r.habit_name], habits)
+        return match
+          ? { result: r, include: true, nutrition: null, habit: match, note: null }
+          : { result: r, include: false, nutrition: null, habit: null, note: 'Not sure which habit. Say it on its own to pick' }
+      }
+      if (r.type === 'meal') {
+        try {
+          const nr = await fetch('/api/nutrition/autofill', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ foodName: r.food_name }),
+          })
+          if (nr.ok) return { result: r, include: true, nutrition: await nr.json(), habit: null, note: null }
+        } catch { /* log without macros */ }
+      }
+      return { result: r, include: true, nutrition: null, habit: null, note: null }
+    }))
+    setMany(items)
+    setState('confirmMany')
+  }
+
+  async function saveMany() {
+    setState('saving')
+    const supabase = createSupabaseBrowserClient()
+    const { data: { session } } = await supabase.auth.getSession()
+    if (!session?.user) { setState('error'); setErrorMsg('Not signed in'); return }
+    let n = 0
+    const failed: string[] = []
+    for (const item of many.filter(i => i.include)) {
+      try {
+        if (item.result.type === 'habit' && item.habit) {
+          const { milestones } = await completeHabit(item.habit.id)
+          celebrate()
+          celebrateMilestones(milestones)
+        } else {
+          await saveVoiceItem(supabase, session.user.id, item.result, item.nutrition)
+        }
+        n++
+      } catch (e) {
+        failed.push(`${item.result.summary}: ${e instanceof Error ? e.message : 'failed'}`)
+      }
+    }
+    if (failed.length && !n) { setErrorMsg(failed.join('\n')); setState('error'); return }
+    setResult({ type: 'unknown', summary: failed.length ? `Logged ${n}. Couldn't log: ${failed.join('; ')}` : `Logged ${n} thing${n === 1 ? '' : 's'}` })
+    setState('done')
+    setTimeout(onDone, failed.length ? 3000 : 1500)
+  }
+
   async function confirmLog() {
     if (!result) return
     setState('saving')
@@ -1375,51 +1518,14 @@ function VoicePanel({ onDone }: { onDone: () => void }) {
     const { data: { session } } = await supabase.auth.getSession()
     if (!session?.user) { setState('error'); setErrorMsg('Not signed in'); return }
     const uid   = session.user.id
-    const today = todayStr()
 
     try {
-      if (result.type === 'transaction') {
-        await supabase.from('transactions').insert({
-          user_id:     uid,
-          txn_date:    today,
-          type:        result.txn_type,
-          category:    result.category,
-          amount:      result.amount,
-          description: result.description || null,
-        })
-      } else if (result.type === 'workout') {
-        await supabase.from('workout_logs').insert({
-          user_id:       uid,
-          log_date:      today,
-          workout_type:  result.workout_type,
-          duration_mins: result.duration_mins ?? 0,
-          exercises:     [],
-          notes:         result.notes || null,
-        })
-      } else if (result.type === 'meal') {
-        await supabase.from('nutrition_logs').insert({
-          user_id:   uid,
-          log_date:  today,
-          meal_type: result.meal_type,
-          food_name: nutritionData?.food_name || result.food_name,
-          calories:  nutritionData?.calories  ?? 0,
-          protein_g: nutritionData?.protein_g ?? 0,
-          carbs_g:   nutritionData?.carbs_g   ?? 0,
-          fat_g:     nutritionData?.fat_g     ?? 0,
-          fiber_g:   nutritionData?.fiber_g   ?? 0,
-          logged_at: new Date().toISOString(),
-        })
-      } else if (result.type === 'habit' && matchedHabit) {
+      if (result.type === 'habit' && matchedHabit) {
         const { milestones } = await completeHabit(matchedHabit.id)
         celebrate()
         celebrateMilestones(milestones)
-      } else if (result.type === 'journal') {
-        await supabase.from('journal_entries').insert({
-          title:      result.title?.trim() || null,
-          content:    result.content.trim(),
-          mood:       null,
-          entry_date: today,
-        })
+      } else {
+        await saveVoiceItem(supabase, uid, result, nutritionData)
       }
       setState('done')
       setTimeout(onDone, 1200)
@@ -1432,6 +1538,7 @@ function VoicePanel({ onDone }: { onDone: () => void }) {
   function retry() {
     setTranscript(''); setResult(null); setErrorMsg('')
     setMatchedHabit(null); setHabitOptions([]); setNutritionData(null)
+    setMany([])
     setState('idle')
   }
 
@@ -1479,12 +1586,13 @@ function VoicePanel({ onDone }: { onDone: () => void }) {
           Tap the mic and say something like<br />
           <span className="text-slate-400">"Had two egg dosa for breakfast"</span><br />
           <span className="text-slate-400">"breakfast 85"</span> · <span className="text-slate-400">"lunch 200"</span> · <span className="text-slate-400">"chai 30"</span><br />
-          <span className="text-slate-400">"Spent ₹150 on coffee"</span> · <span className="text-slate-400">"Did yoga for 30 mins"</span>
+          <span className="text-slate-400">"Spent ₹150 on coffee"</span> · <span className="text-slate-400">"Did yoga for 30 mins"</span><br />
+          <span className="mt-1 inline-block text-emerald-300/80">Or several at once: "Ran 30 minutes, lunch 250, slept 7 hours"</span>
         </p>
       )}
 
       {/* Transcript display */}
-      {(state === 'listening' || state === 'parsing' || state === 'confirm') && (
+      {(state === 'listening' || state === 'parsing' || state === 'confirm' || state === 'confirmMany') && (
         <div className="rounded-xl border border-white/10 bg-white/5 px-4 py-3 min-h-[52px]">
           <p className="text-sm text-white leading-relaxed">
             {transcript}
@@ -1605,6 +1713,64 @@ function VoicePanel({ onDone }: { onDone: () => void }) {
               {result.content}
             </p>
           )}
+        </div>
+      )}
+
+      {/* Several entries: tick what to keep, log them together */}
+      {state === 'confirmMany' && (
+        <div className="space-y-3">
+          <p className="text-xs text-slate-400">I&apos;ll log {many.filter(i => i.include).length} of these:</p>
+          <div className="space-y-2">
+            {many.map((item, i) => {
+              const r = item.result
+              const detail =
+                r.type === 'transaction' ? `₹${r.amount.toLocaleString('en-IN')} · ${r.category}`
+                : r.type === 'workout'   ? `${r.workout_type}${r.duration_mins ? ` · ${r.duration_mins} min` : ''}`
+                : r.type === 'meal'      ? `${item.nutrition?.food_name ?? r.food_name}${item.nutrition ? ` · ${item.nutrition.calories} kcal` : ''}`
+                : r.type === 'habit'     ? (item.habit ? `Habit: ${item.habit.habit_name}` : r.habit_name)
+                : r.type === 'sleep'     ? (r.bedtime && r.wake_time ? `${r.bedtime} → ${r.wake_time}` : r.hours ? `${r.hours} hours` : '')
+                : r.type === 'water'     ? `${r.amount_ml} ml`
+                : r.type === 'mood'      ? `${['Rough', 'Low', 'Okay', 'Good', 'Great'][Math.min(5, Math.max(1, r.mood)) - 1]}${r.word ? ` · ${r.word}` : ''}`
+                : ''
+              const loggable = !item.note
+              return (
+                <button
+                  key={i}
+                  type="button"
+                  disabled={!loggable}
+                  onClick={() => setMany(prev => prev.map((x, j) => j === i ? { ...x, include: !x.include } : x))}
+                  className={cn(
+                    'flex w-full items-center gap-3 rounded-xl border px-3 py-2.5 text-left transition-all',
+                    item.include ? 'border-emerald-500/30 bg-emerald-500/10' : 'border-white/10 bg-white/[0.03] opacity-70',
+                  )}
+                >
+                  <span className="text-lg">{VOICE_ITEM_ICON[r.type]}</span>
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate text-sm text-white">{r.summary}</span>
+                    <span className={cn('block truncate text-[11px]', item.note ? 'text-amber-300/80' : 'text-slate-400')}>{item.note ?? detail}</span>
+                  </span>
+                  {loggable && (
+                    <span className={cn('flex h-5 w-5 shrink-0 items-center justify-center rounded-md border', item.include ? 'border-emerald-400 bg-emerald-500' : 'border-white/20')}>
+                      {item.include && <Check className="h-3.5 w-3.5 text-emerald-950" strokeWidth={3} />}
+                    </span>
+                  )}
+                </button>
+              )
+            })}
+          </div>
+          <div className="flex gap-2">
+            <button
+              onClick={saveMany}
+              disabled={!many.some(i => i.include)}
+              className="flex-1 flex items-center justify-center gap-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 px-4 py-3 text-sm font-semibold text-snow transition-all"
+            >
+              <Check className="h-4 w-4" /> Log {many.filter(i => i.include).length === 1 ? 'it' : `all ${many.filter(i => i.include).length}`}
+            </button>
+            <button onClick={retry} aria-label="Try again"
+              className="flex items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/5 hover:bg-white/10 px-4 py-3 text-sm text-slate-400 transition-all">
+              <RefreshCw className="h-4 w-4" />
+            </button>
+          </div>
         </div>
       )}
 

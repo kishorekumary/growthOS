@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { arrangeTiles, hoursBetween, mealTypeFor, tileOrder } from '@/lib/todayLog'
+import { arrangeTiles, hoursBetween, mealTypeFor, sleepWindow, tileOrder } from '@/lib/todayLog'
 
 describe('tileOrder', () => {
   it('leads with sleep in the morning, food at midday, spending in the evening', () => {
@@ -27,4 +27,12 @@ describe('mealTypeFor / hoursBetween', () => {
     expect(mealTypeFor(19)).toBe('dinner')
   })
   it('counts sleep across midnight', () => expect(hoursBetween('23:00', '06:30')).toBe(7.5))
+})
+
+describe('sleepWindow', () => {
+  it('counts back from the wake time across midnight', () => {
+    expect(sleepWindow(7.5, '06:30')).toEqual({ bedtime: '23:00', wake_time: '06:30' })
+    expect(sleepWindow(6, '05:00')).toEqual({ bedtime: '23:00', wake_time: '05:00' })
+    expect(sleepWindow(8, '09:00')).toEqual({ bedtime: '01:00', wake_time: '09:00' })
+  })
 })
