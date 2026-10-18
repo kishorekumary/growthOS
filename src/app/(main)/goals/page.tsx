@@ -12,8 +12,11 @@ export default function GoalsPage() {
   return (
     <div className="mx-auto max-w-2xl px-4 py-8 md:px-8">
       <div className="mb-6 flex items-center gap-3">
-        <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-violet-600/20 border border-violet-500/30">
-          <Target className="h-5 w-5 text-violet-400" />
+        <div className="relative">
+          <div aria-hidden className="absolute inset-0 rounded-2xl bg-violet-500/40 blur-xl" />
+          <div className="relative flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-violet-500 to-fuchsia-600 shadow-lg">
+            <Target className="h-6 w-6 text-snow" />
+          </div>
         </div>
         <div>
           <h1 className="text-2xl font-bold text-white">My Goals</h1>
