@@ -1445,7 +1445,7 @@ export default function HabitTracker() {
                 // yet tappable. There: hide it unless keystone, and make the
                 // keystone crown a plain badge — toggling lives in the detail modal.
                 className={cn(
-                  'shrink-0 transition-all opacity-0 group-hover:opacity-100',
+                  'shrink-0 transition-all opacity-0 group-hover:opacity-100 [@media(hover:none)]:opacity-100',
                   keystone
                     ? 'text-amber-400 opacity-100 hover:text-amber-300 [@media(hover:none)]:pointer-events-none'
                     : canMarkKeystone

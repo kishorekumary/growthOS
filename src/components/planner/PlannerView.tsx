@@ -1,5 +1,6 @@
 'use client'
 
+import SegmentedTabs from '@/components/ui/segmented-tabs'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { X } from 'lucide-react'
@@ -145,26 +146,15 @@ export default function PlannerView() {
         </div>
       ) : (
         <div className="space-y-4">
-          <div className="flex gap-1 rounded-xl bg-white/5 p-1" role="tablist">
-            {PERIOD_TYPES.map(type => {
+          <SegmentedTabs
+            className="mb-0"
+            value={tab}
+            onChange={setTab}
+            tabs={PERIOD_TYPES.map(type => {
               const { done, total } = countDone(listProps(type, 'tab'))
-              return (
-                <button
-                  key={type}
-                  type="button"
-                  role="tab"
-                  aria-selected={tab === type}
-                  onClick={() => setTab(type)}
-                  className={cn(
-                    'flex-1 rounded-lg py-2 text-center text-sm font-semibold transition-all',
-                    tab === type ? 'bg-violet-600 text-snow shadow-sm' : 'text-slate-400 hover:text-white',
-                  )}
-                >
-                  {TAB_LABEL[type]} <span className="text-xs font-normal opacity-80">{done}/{total}</span>
-                </button>
-              )
+              return { value: type, label: TAB_LABEL[type], badge: `${done}/${total}` }
             })}
-          </div>
+          />
           <PeriodList key={tab} {...listProps(tab, 'tab')} />
         </div>
       )}

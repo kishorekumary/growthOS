@@ -1,5 +1,6 @@
 'use client'
 
+import SegmentedTabs from '@/components/ui/segmented-tabs'
 import { useState, useEffect, useRef } from 'react'
 import {
   Camera, Loader2, Plus, Trash2, Flame, Trophy, Zap,
@@ -994,15 +995,8 @@ export default function NutritionTracker() {
   return (
     <div className="space-y-5">
       {/* Sub-tabs */}
-      <div className="flex gap-1 rounded-lg border border-white/10 bg-white/3 p-1">
-        {SUBTABS.map(t => (
-          <button key={t.id} type="button" onClick={() => setSubTab(t.id)}
-            className={cn('flex-1 rounded-md py-1.5 text-xs font-medium transition-all',
-              subTab === t.id ? 'bg-violet-600 text-snow shadow' : 'text-slate-400 hover:text-white')}>
-            {t.label}
-          </button>
-        ))}
-      </div>
+      <SegmentedTabs className="mb-0" size="sm" value={subTab} onChange={setSubTab}
+        tabs={SUBTABS.map(t => ({ value: t.id, label: t.label }))} />
 
       {/* ── Today tab ── */}
       {subTab === 'today' && (
@@ -1103,7 +1097,7 @@ export default function NutritionTracker() {
                   {log.notes && <p className="text-[10px] text-slate-600 italic truncate">{log.notes}</p>}
                 </div>
                 <button onClick={() => deleteLog(log.id)} disabled={deletingId === log.id}
-                  className="mt-0.5 shrink-0 text-slate-700 opacity-0 group-hover:opacity-100 hover:text-red-400 transition-all">
+                  className="mt-0.5 shrink-0 text-slate-700 opacity-0 group-hover:opacity-100 [@media(hover:none)]:opacity-100 hover:text-red-400 transition-all">
                   {deletingId === log.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
                 </button>
               </div>
