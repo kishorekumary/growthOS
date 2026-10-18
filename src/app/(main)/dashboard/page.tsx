@@ -1,6 +1,6 @@
 import Link from 'next/link'
 import { format, startOfWeek } from 'date-fns'
-import { Brain, Dumbbell, Wallet, BookOpen, ArrowRight, Flame, Trophy, TrendingUp, BookMarked } from 'lucide-react'
+import { Brain, Dumbbell, Wallet, BookOpen, ArrowRight, Flame, Trophy, TrendingUp, BookMarked, Sparkles } from 'lucide-react'
 import { createSupabaseServerClient } from '@/lib/supabase-server'
 import DailyGreetingCard from '@/components/shared/DailyGreetingCard'
 import DailyPractice from '@/components/shared/DailyPractice'
@@ -10,6 +10,7 @@ import DashboardGoalsCard from '@/components/goals/DashboardGoalsCard'
 import TodayHabits from '@/components/dashboard/TodayHabits'
 import RewardsProgressCard from '@/components/dashboard/RewardsProgressCard'
 import ThemeToggle from '@/components/layout/ThemeToggle'
+import PageHeader from '@/components/ui/page-header'
 import PowerQuestions from '@/components/dashboard/PowerQuestions'
 import DecisionsDue from '@/components/dashboard/DecisionsDue'
 import WorkbookDue from '@/components/dashboard/WorkbookDue'
@@ -146,16 +147,8 @@ export default async function DashboardPage() {
   return (
     <div className="mx-auto max-w-2xl px-4 py-8 md:px-8">
       {/* Header */}
-      <div className="mb-6 flex items-start justify-between gap-3">
-        <div>
-          <p className="text-sm text-slate-500 mb-1">{today}</p>
-          <h1 className="text-2xl font-bold text-white">
-            Today
-          </h1>
-        </div>
-        {/* Phones have it in the top bar (src/app/(main)/layout.tsx). */}
-        <ThemeToggle className="hidden md:flex" />
-      </div>
+      {/* Phones have the theme toggle in the top bar (src/app/(main)/layout.tsx). */}
+      <PageHeader icon={Sparkles} title="Today" subtitle={today} right={<ThemeToggle className="hidden md:flex" />} />
 
       {/* Today's habits first — opening the app should be enough to act */}
       <div className="mb-6">
