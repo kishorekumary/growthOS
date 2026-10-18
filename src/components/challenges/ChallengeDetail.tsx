@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { Flame, CheckCircle2, ChevronLeft, Sparkles, Loader2, Trophy, Lock, Pencil, Trash2, AlertCircle } from 'lucide-react'
+import { Flame, CheckCircle2, ChevronLeft, Sparkles, Loader2, Trophy, Lock, Pencil, Trash2, AlertCircle, Quote } from 'lucide-react'
 import { createSupabaseBrowserClient } from '@/lib/supabase'
 import { useCachedQuery } from '@/hooks/useCachedQuery'
 import { format, parseISO, differenceInDays, addDays, subDays } from 'date-fns'
@@ -61,7 +61,7 @@ function computeMilestones(totalDays: number): number[] {
   return Array.from(new Set(days)).sort((a, b) => a - b)
 }
 
-function ProgressRing({ day, totalDays }: { day: number; totalDays: number }) {
+function ProgressRing({ day, totalDays, color }: { day: number; totalDays: number; color: string }) {
   const r = 38
   const circ = 2 * Math.PI * r
   const pct = Math.min(day / totalDays, 1)
@@ -72,10 +72,10 @@ function ProgressRing({ day, totalDays }: { day: number; totalDays: number }) {
         <circle cx="48" cy="48" r={r} fill="none" stroke="rgb(var(--c-white) / 0.06)" strokeWidth="7" />
         <circle
           cx="48" cy="48" r={r} fill="none"
-          stroke="#a78bfa" strokeWidth="7"
+          stroke={color} strokeWidth="7"
           strokeDasharray={`${dash} ${circ}`}
           strokeLinecap="round"
-          style={{ transition: 'stroke-dasharray 1s ease' }}
+          style={{ transition: 'stroke-dasharray 1s ease', filter: `drop-shadow(0 0 6px ${color}99)` }}
         />
       </svg>
       <div className="text-center">
@@ -234,33 +234,30 @@ export default function ChallengeDetail({ challenge, onBack, onComplete, onUpdat
 
   return (
     <div className="space-y-4">
-      {/* Back + header */}
-      <div className="flex items-center gap-3">
+      {/* Back + actions */}
+      <div className="flex items-center gap-2">
         <button
           onClick={onBack}
-          className="flex items-center gap-1 text-sm text-slate-400 hover:text-white transition-colors"
+          className="flex items-center gap-1 rounded-lg py-1 pr-2 text-sm text-slate-400 transition-colors hover:text-white"
         >
           <ChevronLeft className="h-4 w-4" />
-          Back
+          Challenges
         </button>
-        <span
-          className="text-xs px-2 py-0.5 rounded-full font-medium capitalize"
-          style={{ backgroundColor: catColor + '25', color: catColor }}
-        >
-          {challenge.category}
-        </span>
-        <span className="text-xs text-slate-500">{phase} Phase</span>
         <button
           onClick={() => setEditOpen(true)}
-          className="ml-auto flex items-center gap-1 rounded-md px-2 py-1.5 text-xs text-slate-400 hover:text-white transition-colors"
+          aria-label="Edit challenge"
+          title="Edit"
+          className="ml-auto flex h-8 w-8 items-center justify-center rounded-lg border border-white/10 bg-white/[0.03] text-slate-400 transition-colors hover:text-white"
         >
-          <Pencil className="h-3.5 w-3.5" /> Edit
+          <Pencil className="h-3.5 w-3.5" />
         </button>
         <button
           onClick={() => setDeleteOpen(true)}
-          className="flex items-center gap-1 rounded-md px-2 py-1.5 text-xs text-red-300/80 hover:text-red-300 transition-colors"
+          aria-label="Delete challenge"
+          title="Delete"
+          className="flex h-8 w-8 items-center justify-center rounded-lg border border-red-500/20 bg-red-500/[0.06] text-red-300/80 transition-colors hover:text-red-300"
         >
-          <Trash2 className="h-3.5 w-3.5" /> Delete
+          <Trash2 className="h-3.5 w-3.5" />
         </button>
       </div>
 
@@ -303,35 +300,37 @@ export default function ChallengeDetail({ challenge, onBack, onComplete, onUpdat
         <p className="text-xs text-red-400">{checkinError}</p>
       )}
 
-      {/* Hero card */}
-      <div className="rounded-2xl border border-white/8 bg-white/3 p-5">
-        <div className="flex items-start gap-4">
-          <div className="flex-1">
-            <h2 className="text-lg font-bold text-white mb-1">{challenge.title}</h2>
+      {/* Hero card, tinted in the challenge's colour */}
+      <div
+        className="card-sheen relative overflow-hidden rounded-2xl border p-5"
+        style={{ borderColor: catColor + '45', background: `linear-gradient(135deg, ${catColor}26, transparent 70%)` }}
+      >
+        <div aria-hidden className="pointer-events-none absolute -right-10 -top-10 h-32 w-32 rounded-full blur-3xl" style={{ backgroundColor: catColor + '40' }} />
+        <div className="relative flex items-start gap-4">
+          <div className="min-w-0 flex-1">
+            <div className="mb-2 flex flex-wrap items-center gap-1.5">
+              <span className="rounded-full px-2 py-0.5 text-[11px] font-semibold capitalize" style={{ backgroundColor: catColor + '30', color: catColor }}>
+                {challenge.category}
+              </span>
+              <span className="rounded-full bg-white/[0.06] px-2 py-0.5 text-[11px] font-medium text-slate-300">{phase} phase</span>
+            </div>
+            <h2 className="mb-1 text-lg font-bold leading-snug text-white">{challenge.title}</h2>
             {challenge.daily_commitment && (
-              <p className="text-xs text-slate-500 mb-3">
-                Daily: <span className="text-slate-400">{challenge.daily_commitment}</span>
+              <p className="mb-3 text-xs text-slate-400">
+                Daily: <span className="text-slate-200">{challenge.daily_commitment}</span>
               </p>
             )}
-            <div className="flex items-center gap-4 text-sm">
-              <div className="text-center">
-                <div className="font-bold text-white">{completedCount}</div>
-                <div className="text-[10px] text-slate-500">done</div>
-              </div>
-              <div className="text-center">
-                <div className="font-bold flex items-center gap-1">
-                  <Flame className="h-3.5 w-3.5 text-orange-400" />
-                  <span className="text-white">{streak}</span>
-                </div>
-                <div className="text-[10px] text-slate-500">streak</div>
-              </div>
-              <div className="text-center">
-                <div className="font-bold text-white">{Math.round(completedCount / Math.max(dayNumber - 1, 1) * 100)}%</div>
-                <div className="text-[10px] text-slate-500">rate</div>
-              </div>
+            <div className="flex flex-wrap gap-1.5 text-[11px]">
+              <span className="rounded-full bg-emerald-500/15 px-2 py-0.5 font-semibold text-emerald-300">{completedCount} done</span>
+              <span className="flex items-center gap-1 rounded-full bg-orange-500/15 px-2 py-0.5 font-semibold text-orange-300">
+                <Flame className="h-3 w-3" /> {streak} streak
+              </span>
+              <span className="rounded-full bg-white/[0.06] px-2 py-0.5 font-semibold text-slate-200">
+                {Math.round(completedCount / Math.max(dayNumber - 1, 1) * 100)}% rate
+              </span>
             </div>
           </div>
-          <ProgressRing day={dayNumber} totalDays={totalDays} />
+          <ProgressRing day={dayNumber} totalDays={totalDays} color={catColor} />
         </div>
       </div>
 
@@ -340,8 +339,8 @@ export default function ChallengeDetail({ challenge, onBack, onComplete, onUpdat
         <div className="flex items-center justify-between">
           <p className="text-xs font-semibold text-slate-400">{totalDays}-Day Map</p>
           <div className="flex items-center gap-3 text-[10px] text-slate-600">
-            <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-sm inline-block" style={{ backgroundColor: catColor + '99' }} />done</span>
-            <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-sm bg-red-500/20 inline-block" />missed</span>
+            <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-sm inline-block" style={{ backgroundColor: catColor }} />done</span>
+            <span className="flex items-center gap-1"><span className="inline-block h-2 w-2 rounded-sm ring-1 ring-inset ring-red-400/60" />missed</span>
             <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-sm bg-white/5 inline-block" />ahead</span>
           </div>
         </div>
@@ -356,8 +355,10 @@ export default function ChallengeDetail({ challenge, onBack, onComplete, onUpdat
 
             let bg = 'bg-white/5'
             let style: React.CSSProperties | undefined
-            if (isDone) { style = { backgroundColor: catColor + '99' }; bg = '' }
-            else if (!isFuture && !isToday) bg = 'bg-red-500/15'
+            // Done: solid with a soft glow. Missed: an outline, so it reads
+            // differently from days still ahead (plain faint squares).
+            if (isDone) { style = { backgroundColor: catColor, boxShadow: `0 0 6px -1px ${catColor}aa` }; bg = '' }
+            else if (!isFuture && !isToday) bg = 'bg-red-500/[0.06] ring-1 ring-inset ring-red-400/50'
 
             return (
               <button
@@ -368,7 +369,7 @@ export default function ChallengeDetail({ challenge, onBack, onComplete, onUpdat
                 onClick={editable ? () => setEditingDate(dateStr) : undefined}
                 disabled={!editable}
                 className={`aspect-square w-full rounded-sm transition-all ${bg} ${
-                  isToday && !isDone ? 'ring-1 ring-white/40' : ''
+                  isToday && !isDone ? 'ring-2 ring-white/70 animate-pulse motion-reduce:animate-none' : ''
                 } ${isMilestone && !isDone && !isFuture ? 'ring-1 ring-yellow-500/40' : ''} ${
                   editable ? 'cursor-pointer hover:ring-1 hover:ring-white/50' : 'cursor-default'
                 }`}
@@ -379,8 +380,8 @@ export default function ChallengeDetail({ challenge, onBack, onComplete, onUpdat
         </div>
         <div className="flex gap-2 flex-wrap">
           {MILESTONES.map(m => (
-            <span key={m} className={`text-[10px] px-1.5 py-0.5 rounded ${dayNumber >= m ? 'text-yellow-400 bg-yellow-500/10' : 'text-slate-600 bg-white/3'}`}>
-              Day {m}
+            <span key={m} className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${dayNumber >= m ? 'bg-yellow-500/15 text-yellow-300' : 'bg-white/[0.04] text-slate-500'}`}>
+              {dayNumber >= m ? '🏅 ' : ''}Day {m}
             </span>
           ))}
         </div>
@@ -441,7 +442,7 @@ export default function ChallengeDetail({ challenge, onBack, onComplete, onUpdat
                 onChange={e => setReflection(e.target.value)}
                 placeholder="Quick reflection (optional)…"
                 rows={2}
-                className="w-full rounded-xl border border-white/8 bg-white/3 px-3 py-2 text-sm text-slate-300 placeholder-slate-600 outline-none focus:border-purple-500/40 resize-none"
+                className="w-full resize-none rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-white placeholder-slate-500 outline-none focus:border-white/25"
               />
               <button
                 onClick={async () => { const ok = await saveCheckin(today, true, reflection); if (ok) setReflection('') }}
@@ -482,9 +483,10 @@ export default function ChallengeDetail({ challenge, onBack, onComplete, onUpdat
 
       {/* Why this matters */}
       {challenge.why_matters && (
-        <div className="rounded-2xl border border-white/5 bg-white/2 px-4 py-3">
-          <p className="text-[11px] text-slate-600 font-medium mb-1">Why this matters</p>
-          <p className="text-sm text-slate-400 italic">"{challenge.why_matters}"</p>
+        <div className="relative overflow-hidden rounded-2xl border px-4 py-4" style={{ borderColor: catColor + '30', background: `linear-gradient(135deg, ${catColor}14, transparent 75%)` }}>
+          <Quote aria-hidden className="absolute -right-1 -top-1 h-14 w-14 opacity-10" style={{ color: catColor }} />
+          <p className="mb-1 text-[11px] font-semibold uppercase tracking-wider" style={{ color: catColor }}>Why this matters</p>
+          <p className="relative text-[15px] italic leading-relaxed text-slate-200">&ldquo;{challenge.why_matters}&rdquo;</p>
         </div>
       )}
     </div>
