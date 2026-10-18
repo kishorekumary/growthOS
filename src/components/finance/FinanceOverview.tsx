@@ -1,7 +1,8 @@
 'use client'
 
+import { Percent, PiggyBank, CreditCard, Loader2, Sparkles, TrendingUp, TrendingDown, RefreshCw } from 'lucide-react'
+import StatTile from '@/components/ui/stat-tile'
 import { useState } from 'react'
-import { Loader2, Sparkles, TrendingUp, TrendingDown, RefreshCw } from 'lucide-react'
 import { useCachedQuery } from '@/hooks/useCachedQuery'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
@@ -255,17 +256,9 @@ export default function FinanceOverview() {
 
       {/* Quick Stats */}
       <div className="grid grid-cols-3 gap-3">
-        {[
-          { label: 'Savings Rate', value: `${savingsRate}%`, sub: 'of annual income' },
-          { label: 'Total Savings', value: `₹${savings.toLocaleString()}`, sub: '' },
-          { label: 'Total Debt',    value: `₹${debt.toLocaleString()}`,    sub: '' },
-        ].map(({ label, value, sub }) => (
-          <div key={label} className="rounded-xl border border-white/10 bg-white/5 p-3 text-center">
-            <p className="text-lg font-bold text-white">{value}</p>
-            <p className="text-xs text-slate-500 mt-0.5">{label}</p>
-            {sub && <p className="text-xs text-slate-600">{sub}</p>}
-          </div>
-        ))}
+        <StatTile icon={Percent} tone="emerald" label="Savings rate" value={`${savingsRate}%`} sub="of annual income" />
+        <StatTile icon={PiggyBank} tone="sky" label="Total savings" value={`₹${savings.toLocaleString('en-IN')}`} />
+        <StatTile icon={CreditCard} tone="rose" label="Total debt" value={`₹${debt.toLocaleString('en-IN')}`} />
       </div>
     </div>
   )

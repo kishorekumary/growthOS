@@ -19,10 +19,12 @@ interface Checkin {
 const MOOD_LABELS  = ['Terrible', 'Bad', 'Okay', 'Good', 'Amazing']
 const ENERGY_LABELS = ['Exhausted', 'Low', 'Moderate', 'High', 'Peak']
 const MOOD_COLORS  = ['#ef4444', '#f97316', '#eab308', '#22c55e', '#06b6d4']
+const MOOD_FACES   = ['😫', '😕', '😐', '🙂', '🤩']
+const ENERGY_FACES = ['🪫', '😴', '🙂', '💪', '⚡']
 const QUICK_WORDS  = ['Focused', 'Anxious', 'Motivated', 'Tired', 'Happy', 'Stressed', 'Calm', 'Excited', 'Grateful', 'Overwhelmed']
 
 function ScalePicker({
-  label, icon: Icon, value, onChange, labels, colors,
+  label, icon: Icon, value, onChange, labels, colors, faces,
 }: {
   label: string
   icon: React.ElementType
@@ -30,6 +32,7 @@ function ScalePicker({
   onChange: (v: number) => void
   labels: string[]
   colors: string[]
+  faces: string[]
 }) {
   return (
     <div className="space-y-2">
@@ -48,15 +51,17 @@ function ScalePicker({
             key={n}
             type="button"
             onClick={() => onChange(n)}
+            aria-label={`${label}: ${labels[n - 1]}`}
             className={cn(
-              'flex-1 h-10 rounded-lg border text-sm font-bold transition-all',
+              'flex flex-1 flex-col items-center gap-0.5 rounded-xl border py-2 transition-all active:scale-95',
               value === n
-                ? 'border-transparent text-white shadow-lg scale-105'
-                : 'border-white/10 bg-white/5 text-slate-500 hover:border-white/20 hover:text-white'
+                ? 'scale-105 border-transparent shadow-lg'
+                : 'border-white/10 bg-white/5 opacity-60 grayscale-[40%] hover:opacity-100 hover:grayscale-0'
             )}
-            style={value === n ? { background: colors[n - 1] + '33', borderColor: colors[n - 1] + '88', color: colors[n - 1] } : {}}
+            style={value === n ? { background: colors[n - 1] + '2e', borderColor: colors[n - 1] + '99', boxShadow: `0 6px 18px -8px ${colors[n - 1]}` } : {}}
           >
-            {n}
+            <span className={cn('text-2xl leading-none transition-transform', value === n && 'animate-pop motion-reduce:animate-none')}>{faces[n - 1]}</span>
+            <span className="text-[10px] font-medium" style={{ color: value === n ? colors[n - 1] : undefined }}>{labels[n - 1]}</span>
           </button>
         ))}
       </div>
@@ -136,12 +141,12 @@ export default function MoodCheckin() {
       <div className="grid grid-cols-2 gap-3">
         <div className="rounded-xl border border-white/8 bg-white/3 p-4 text-center">
           <p className="text-xs text-slate-500 mb-1">Mood</p>
-          <p className="text-2xl font-bold" style={{ color: MOOD_COLORS[existing.mood - 1] }}>{existing.mood}/5</p>
+          <p className="text-3xl leading-none">{MOOD_FACES[existing.mood - 1]}</p>
           <p className="text-xs mt-1" style={{ color: MOOD_COLORS[existing.mood - 1] }}>{MOOD_LABELS[existing.mood - 1]}</p>
         </div>
         <div className="rounded-xl border border-white/8 bg-white/3 p-4 text-center">
           <p className="text-xs text-slate-500 mb-1">Energy</p>
-          <p className="text-2xl font-bold" style={{ color: MOOD_COLORS[existing.energy - 1] }}>{existing.energy}/5</p>
+          <p className="text-3xl leading-none">{ENERGY_FACES[existing.energy - 1]}</p>
           <p className="text-xs mt-1" style={{ color: MOOD_COLORS[existing.energy - 1] }}>{ENERGY_LABELS[existing.energy - 1]}</p>
         </div>
       </div>
@@ -171,8 +176,8 @@ export default function MoodCheckin() {
         <p className="text-xs text-amber-400">Can't confirm today's check-in — you're offline.</p>
       )}
 
-      <ScalePicker label="Mood"   icon={Smile} value={mood}   onChange={setMood}   labels={MOOD_LABELS}   colors={MOOD_COLORS} />
-      <ScalePicker label="Energy" icon={Zap}   value={energy} onChange={setEnergy} labels={ENERGY_LABELS} colors={MOOD_COLORS} />
+      <ScalePicker label="Mood"   icon={Smile} value={mood}   onChange={setMood}   labels={MOOD_LABELS}   colors={MOOD_COLORS} faces={MOOD_FACES} />
+      <ScalePicker label="Energy" icon={Zap}   value={energy} onChange={setEnergy} labels={ENERGY_LABELS} colors={MOOD_COLORS} faces={ENERGY_FACES} />
 
       <div className="space-y-2">
         <p className="text-xs font-medium text-slate-400">One word (optional)</p>

@@ -1,8 +1,9 @@
 'use client'
 
+import { NotebookPen, Mic, Square, Save, Plus, Trash2, Pencil, X, ChevronLeft } from 'lucide-react'
+import EmptyState from '@/components/ui/empty-state'
 import { useState, useEffect, useRef } from 'react'
 import { mergeFinalTranscripts, newSpeechText } from '@/lib/speechTranscript'
-import { Mic, Square, Save, Plus, Trash2, Pencil, X, ChevronLeft } from 'lucide-react'
 import { createSupabaseBrowserClient } from '@/lib/supabase'
 import { useCachedQuery } from '@/hooks/useCachedQuery'
 import { format, parseISO } from 'date-fns'
@@ -295,10 +296,11 @@ export default function JournalApp() {
           <p className="text-sm text-slate-500">Can't load entries — you're offline.</p>
         </div>
       ) : Object.keys(grouped).length === 0 ? (
-        <div className="rounded-2xl border border-white/8 bg-white/3 p-8 text-center">
-          <p className="text-sm text-slate-500">No journal entries yet.</p>
-          <p className="text-xs text-slate-600 mt-1">Write your first entry above — voice or text.</p>
-        </div>
+        <EmptyState
+          icon={NotebookPen}
+          title="Your journal starts today"
+          hint="Tap Write a new entry above. Speak it or type it, a few lines is plenty."
+        />
       ) : (
         Object.entries(grouped).map(([month, monthEntries]) => (
           <div key={month} className="space-y-2">
