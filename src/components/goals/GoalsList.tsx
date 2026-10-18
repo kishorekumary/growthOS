@@ -1,11 +1,12 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
+import { createPortal } from 'react-dom'
 import {
   Target, Plus, Check, Trash2, Loader2, AlertCircle,
   Dumbbell, Wallet, BookOpen, Sparkles, Briefcase,
   ChevronDown, ChevronUp, CalendarDays, CalendarRange, TrendingUp, Pencil, RotateCcw,
-  Image as ImageIcon, Maximize2,
+  Image as ImageIcon, Maximize2, Trophy,
 } from 'lucide-react'
 import GoalsFocusModal from './GoalsFocusModal'
 import GoalsOverview from './GoalsOverview'
@@ -22,6 +23,11 @@ import {
 import { cn } from '@/lib/utils'
 import { format, parseISO } from 'date-fns'
 import { timeProgress, type Urgency } from '@/lib/goalProgress'
+import { formatDistanceToNowStrict } from 'date-fns'
+import { useSettle } from '@/hooks/useSettle'
+import { haptic } from '@/lib/effects'
+import Collapse from '@/components/ui/collapse'
+import ListClearedBurst from '@/components/shared/ListClearedBurst'
 
 type Category  = 'fitness' | 'finance' | 'books' | 'general' | 'career'
 type Timeframe = 'week' | 'month' | 'year' | 'custom'
@@ -686,6 +692,8 @@ function GoalCard({
 }) {
   const cat = CATEGORY_CONFIG[goal.category]
   const CatIcon = cat.icon
+  // Just achieved: shown checked for a moment before the card glides out.
+  const achieved = goal.is_completed
 
   return (
     <div className="card-sheen group relative flex flex-col overflow-hidden rounded-xl border border-white/10 bg-gradient-to-br from-white/[0.05] to-white/[0.015] transition-colors hover:border-white/20">
@@ -702,20 +710,27 @@ function GoalCard({
         <button
           type="button"
           onClick={() => onComplete(goal.id)}
-          disabled={!!markingId}
+          disabled={!!markingId || achieved}
           aria-label="Mark achieved"
           title="Mark achieved"
-          className="group/check mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full border-2 border-white/25 transition-all hover:border-emerald-400 hover:bg-emerald-500/20 active:scale-90"
+          className={cn(
+            'group/check mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full border-2 transition-all active:scale-90',
+            achieved
+              ? 'animate-pop border-emerald-400 bg-emerald-500 motion-reduce:animate-none'
+              : 'border-white/25 hover:border-emerald-400 hover:bg-emerald-500/20',
+          )}
         >
-          {markingId === goal.id
-            ? <Loader2 className="h-3.5 w-3.5 animate-spin text-slate-400" />
-            : <Check className="h-3.5 w-3.5 text-emerald-300 opacity-0 transition-opacity group-hover/check:opacity-100 [@media(hover:none)]:opacity-30" strokeWidth={3} />
+          {achieved
+            ? <Check className="h-4 w-4 text-emerald-950" strokeWidth={3} />
+            : markingId === goal.id
+              ? <Loader2 className="h-3.5 w-3.5 animate-spin text-slate-400" />
+              : <Check className="h-3.5 w-3.5 text-emerald-300 opacity-0 transition-opacity group-hover/check:opacity-100 [@media(hover:none)]:opacity-30" strokeWidth={3} />
           }
         </button>
 
         <div className="min-w-0 flex-1 space-y-1.5">
           <div className="flex items-start gap-2">
-            <p className="min-w-0 flex-1 text-sm font-semibold leading-snug text-white">{goal.title}</p>
+            <p className={cn('min-w-0 flex-1 text-sm font-semibold leading-snug', achieved ? 'text-emerald-200 line-through decoration-emerald-400/60' : 'text-white')}>{goal.title}</p>
             <div className={cn('-mr-1 -mt-1 flex shrink-0 items-center transition-opacity', REVEAL)}>
               <EditGoalModal
                 goal={goal}
@@ -765,6 +780,7 @@ function GoalSection({
   onImageSaved,
   markingId,
   deletingId,
+  leaving,
 }: {
   timeframe: Timeframe
   goals: Goal[]
@@ -775,6 +791,7 @@ function GoalSection({
   onImageSaved: (id: string, url: string) => void
   markingId: string | null
   deletingId: string | null
+  leaving: ReadonlySet<string>  // just achieved: collapsing out
 }) {
   const [collapsed, setCollapsed] = useState(false)
   const cfg  = TIMEFRAME_CONFIG[timeframe]
@@ -827,16 +844,17 @@ function GoalSection({
         <div className="px-4 pb-4 space-y-2">
           {goals.length > 0 ? (
             goals.map(goal => (
-              <GoalCard
-                key={goal.id}
-                goal={goal}
-                onComplete={onComplete}
-                onDelete={onDelete}
-                onEdit={onEdit}
-                onImageSaved={onImageSaved}
-                markingId={markingId}
-                deletingId={deletingId}
-              />
+              <Collapse key={goal.id} open={!leaving.has(goal.id)}>
+                <GoalCard
+                  goal={goal}
+                  onComplete={onComplete}
+                  onDelete={onDelete}
+                  onEdit={onEdit}
+                  onImageSaved={onImageSaved}
+                  markingId={markingId}
+                  deletingId={deletingId}
+                />
+              </Collapse>
             ))
           ) : (
             <p className="text-xs text-slate-600 py-1">
@@ -861,6 +879,7 @@ function CategorySection({
   onImageSaved,
   markingId,
   deletingId,
+  leaving,
 }: {
   category: Category
   goals: Goal[]
@@ -871,6 +890,7 @@ function CategorySection({
   onImageSaved: (id: string, url: string) => void
   markingId: string | null
   deletingId: string | null
+  leaving: ReadonlySet<string>  // just achieved: collapsing out
 }) {
   const cfg  = CATEGORY_CONFIG[category]
   const Icon = cfg.icon
@@ -904,16 +924,17 @@ function CategorySection({
       {goals.length > 0 ? (
         <div className="space-y-2">
           {goals.map(goal => (
-            <GoalCard
-              key={goal.id}
-              goal={goal}
-              onComplete={onComplete}
-              onDelete={onDelete}
-              onEdit={onEdit}
-              onImageSaved={onImageSaved}
-              markingId={markingId}
-              deletingId={deletingId}
-            />
+            <Collapse key={goal.id} open={!leaving.has(goal.id)}>
+              <GoalCard
+                goal={goal}
+                onComplete={onComplete}
+                onDelete={onDelete}
+                onEdit={onEdit}
+                onImageSaved={onImageSaved}
+                markingId={markingId}
+                deletingId={deletingId}
+              />
+            </Collapse>
           ))}
         </div>
       ) : (
@@ -938,52 +959,65 @@ function CompletedList({
 }) {
   const [show, setShow] = useState(false)
   if (!goals.length) return null
+  const latest = [...goals]
+    .filter(g => g.completed_at)
+    .sort((a, b) => b.completed_at!.localeCompare(a.completed_at!))[0]
   return (
-    <div className="space-y-2 pt-2 border-t border-white/5">
+    <div className="rounded-2xl border border-emerald-500/20 bg-gradient-to-br from-emerald-500/10 to-transparent">
       <button
         type="button"
         onClick={() => setShow(v => !v)}
-        className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-slate-500 hover:text-slate-400 transition-colors"
+        className="flex w-full items-center gap-3 px-4 py-3 text-left"
       >
-        {show ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
-        Achieved ({goals.length})
+        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-emerald-500/30 bg-emerald-500/15">
+          <Trophy className="h-4 w-4 text-emerald-300" />
+        </div>
+        <div className="min-w-0 flex-1">
+          <p className="text-sm font-semibold text-emerald-200">Achieved <span className="text-emerald-400/70">· {goals.length}</span></p>
+          {!show && latest && (
+            <p className="truncate text-[11px] text-slate-500">
+              Latest: {latest.title} · {formatDistanceToNowStrict(new Date(latest.completed_at!), { addSuffix: true })}
+            </p>
+          )}
+        </div>
+        {show ? <ChevronUp className="h-4 w-4 text-emerald-400/60" /> : <ChevronDown className="h-4 w-4 text-emerald-400/60" />}
       </button>
       {show && (
-        <div className="space-y-2">
+        <div className="space-y-2 px-4 pb-4 animate-in fade-in-0 slide-in-from-top-1 duration-200">
           {goals.map(goal => {
             const cfg  = CATEGORY_CONFIG[goal.category]
             const Icon = cfg.icon
             return (
-              <div key={goal.id} className="group flex items-start gap-3 rounded-xl border border-white/5 bg-white/3 p-4 opacity-60 hover:opacity-80 transition-opacity">
-                <button
-                  type="button"
-                  onClick={() => onUncomplete(goal.id)}
-                  title="Mark as in progress"
-                  aria-label="Mark as in progress"
-                  className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-emerald-500/30 border-2 border-emerald-500 hover:bg-slate-500/30 hover:border-slate-500 transition-all cursor-pointer"
-                >
-                  <Check className="h-3 w-3 text-emerald-400 group-hover:hidden" />
-                  <RotateCcw className="h-3 w-3 text-slate-400 hidden group-hover:block" />
-                </button>
-                <div className="flex-1 min-w-0 space-y-1">
-                  <div className="flex items-start gap-2 justify-between">
-                    <p className="text-sm font-medium text-slate-400 line-through leading-snug">{goal.title}</p>
-                    <span className={cn('flex items-center gap-1 text-xs px-1.5 py-0.5 rounded-full shrink-0', cfg.bg, cfg.color)}>
-                      <Icon className="h-3 w-3" />{cfg.label}
-                    </span>
-                  </div>
-                  {goal.completed_at && (
-                    <p className="text-xs text-emerald-600">✓ Achieved {format(new Date(goal.completed_at), 'MMM d, yyyy')}</p>
-                  )}
+              <div key={goal.id} className="group flex items-center gap-3 rounded-xl border border-white/5 bg-white/[0.03] px-3 py-2.5">
+                <span className="text-lg" aria-hidden>🏆</span>
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-sm font-medium text-slate-200">{goal.title}</p>
+                  <p className="flex items-center gap-1.5 text-[11px] text-slate-500">
+                    <Icon className={cn('h-3 w-3', cfg.color)} />
+                    {cfg.label}
+                    {goal.completed_at && <> · {format(new Date(goal.completed_at), 'MMM d, yyyy')}</>}
+                  </p>
                 </div>
-                <button
-                  type="button"
-                  onClick={() => onDelete(goal.id)}
-                  aria-label="Delete"
-                  className="shrink-0 mt-0.5 text-slate-700 opacity-0 group-hover:opacity-100 hover:text-red-400 transition-all"
-                >
-                  <Trash2 className="h-4 w-4" />
-                </button>
+                <div className={cn('flex shrink-0 items-center transition-opacity', REVEAL)}>
+                  <button
+                    type="button"
+                    onClick={() => onUncomplete(goal.id)}
+                    title="Back to in progress"
+                    aria-label="Back to in progress"
+                    className={CARD_ACTION}
+                  >
+                    <RotateCcw className="h-3.5 w-3.5" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => onDelete(goal.id)}
+                    title="Delete"
+                    aria-label="Delete"
+                    className={cn(CARD_ACTION, 'hover:bg-red-500/10 hover:text-red-400')}
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </button>
+                </div>
               </div>
             )
           })}
@@ -1014,15 +1048,28 @@ export default function GoalsList() {
   const [tab, setTab]                   = useState<TabView>('timeframe')
   const [activeCategory, setActiveCat]  = useState<Category>('fitness')
   const [focusOpen, setFocusOpen]       = useState(false)
+  // A goal just achieved stays in place, checked, then glides out to the
+  // Achieved shelf while the celebration plays.
+  const settle = useSettle(900)
+  const [celebrating, setCelebrating]   = useState<Goal | null>(null)
+  useEffect(() => {
+    if (!celebrating) return
+    const t = setTimeout(() => setCelebrating(null), 2200)
+    return () => clearTimeout(t)
+  }, [celebrating])
 
   async function markComplete(id: string) {
     setMarkingId(id)
     const now = new Date().toISOString()
+    settle.hold(id)
     setGoals(prev => prev.map(g => g.id === id ? { ...g, is_completed: true, completed_at: now } : g))
+    setCelebrating(goals.find(g => g.id === id) ?? null)
+    haptic('success')
     const supabase = createSupabaseBrowserClient()
     await supabase.from('user_goals')
       .update({ is_completed: true, completed_at: now, updated_at: now })
       .eq('id', id)
+    settle.release(id)
     setMarkingId(null)
   }
 
@@ -1054,8 +1101,8 @@ export default function GoalsList() {
     </div>
   )
 
-  const active    = goals.filter(g => !g.is_completed)
-  const completed = goals.filter(g => g.is_completed)
+  const active    = goals.filter(g => !g.is_completed || settle.held.has(g.id))
+  const completed = goals.filter(g => g.is_completed && !settle.held.has(g.id))
 
   const byTimeframe = (tf: Timeframe) => active.filter(g => effectiveTimeframe(g) === tf)
   const byCategory  = (cat: Category) => active.filter(g => g.category === cat)
@@ -1072,6 +1119,11 @@ export default function GoalsList() {
 
   return (
     <div className="space-y-4">
+      {celebrating && typeof document !== 'undefined' && createPortal(
+        <ListClearedBurst title="Goal achieved!" subtitle={celebrating.title} emoji="🏆" />,
+        document.body,
+      )}
+
       {goals.length > 0 && <GoalsOverview goals={goals} />}
 
       {/* Header (the empty state has its own Add button) */}
@@ -1143,11 +1195,11 @@ export default function GoalsList() {
       {/* ── By Timeframe tab ── */}
       {goals.length > 0 && tab === 'timeframe' && (
         <div className="space-y-4">
-          <GoalSection timeframe="week"   goals={weekGoals}   onAdd={fetchGoals} onComplete={markComplete} onDelete={deleteGoal} onEdit={fetchGoals} onImageSaved={handleImageSaved} markingId={markingId} deletingId={deletingId} />
-          <GoalSection timeframe="month"  goals={monthGoals}  onAdd={fetchGoals} onComplete={markComplete} onDelete={deleteGoal} onEdit={fetchGoals} onImageSaved={handleImageSaved} markingId={markingId} deletingId={deletingId} />
-          <GoalSection timeframe="year"   goals={yearGoals}   onAdd={fetchGoals} onComplete={markComplete} onDelete={deleteGoal} onEdit={fetchGoals} onImageSaved={handleImageSaved} markingId={markingId} deletingId={deletingId} />
+          <GoalSection timeframe="week"   goals={weekGoals}   onAdd={fetchGoals} onComplete={markComplete} onDelete={deleteGoal} onEdit={fetchGoals} onImageSaved={handleImageSaved} markingId={markingId} deletingId={deletingId} leaving={settle.leaving} />
+          <GoalSection timeframe="month"  goals={monthGoals}  onAdd={fetchGoals} onComplete={markComplete} onDelete={deleteGoal} onEdit={fetchGoals} onImageSaved={handleImageSaved} markingId={markingId} deletingId={deletingId} leaving={settle.leaving} />
+          <GoalSection timeframe="year"   goals={yearGoals}   onAdd={fetchGoals} onComplete={markComplete} onDelete={deleteGoal} onEdit={fetchGoals} onImageSaved={handleImageSaved} markingId={markingId} deletingId={deletingId} leaving={settle.leaving} />
           {customGoals.length > 0 && (
-            <GoalSection timeframe="custom" goals={customGoals} onAdd={fetchGoals} onComplete={markComplete} onDelete={deleteGoal} onEdit={fetchGoals} onImageSaved={handleImageSaved} markingId={markingId} deletingId={deletingId} />
+            <GoalSection timeframe="custom" goals={customGoals} onAdd={fetchGoals} onComplete={markComplete} onDelete={deleteGoal} onEdit={fetchGoals} onImageSaved={handleImageSaved} markingId={markingId} deletingId={deletingId} leaving={settle.leaving} />
           )}
           {active.length === 0 && (
             <EmptyState
@@ -1210,6 +1262,7 @@ export default function GoalsList() {
             onImageSaved={handleImageSaved}
             markingId={markingId}
             deletingId={deletingId}
+            leaving={settle.leaving}
           />
 
           <CompletedList goals={completed.filter(g => g.category === activeCategory)} onDelete={deleteGoal} onUncomplete={markUncomplete} />
