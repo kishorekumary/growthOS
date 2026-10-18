@@ -4,8 +4,7 @@ import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
 import {
   Flame, Plus, Trash2, Check, Loader2, AlertCircle,
   RotateCcw, XCircle, Trophy, Pencil, Crown, Globe, X,
-  Settings2, Eye, EyeOff,
-} from 'lucide-react'
+  Settings2, Eye, EyeOff, CheckCircle2 } from 'lucide-react'
 import { createSupabaseBrowserClient } from '@/lib/supabase'
 import { useCachedQuery } from '@/hooks/useCachedQuery'
 import { useInFlightIds } from '@/hooks/useInFlightIds'
@@ -27,6 +26,7 @@ import CountUp from '@/components/ui/count-up'
 import { notifyPointsChanged } from '@/lib/pointsEvents'
 import StreakFlame from '@/components/ui/streak-flame'
 import EmptyState from '@/components/ui/empty-state'
+import StatTile from '@/components/ui/stat-tile'
 
 type Category  = HabitCategory
 type Frequency = 'daily' | 'weekly'
@@ -601,25 +601,10 @@ function OverallProgressCard({
   if (habitCount === 0) return null
 
   return (
-    <div className="rounded-xl border border-white/8 bg-white/3 p-4 space-y-3">
-      <div className="flex items-center gap-2">
-        <Flame className="h-4 w-4 text-violet-400" />
-        <p className="text-xs font-medium text-slate-400">Overall Progress</p>
-      </div>
-      <div className="grid grid-cols-3 gap-2">
-        <div className="text-center">
-          <p className="text-2xl font-bold text-white">{completionRate === null ? '—' : `${completionRate}%`}</p>
-          <p className="text-[10px] text-slate-500 mt-0.5">done · 90d</p>
-        </div>
-        <div className="text-center">
-          <p className="text-2xl font-bold text-orange-300">{topStreak}</p>
-          <p className="text-[10px] text-slate-500 mt-0.5">best current streak</p>
-        </div>
-        <div className="text-center">
-          <p className="text-2xl font-bold text-amber-300">{bestEverStreak}</p>
-          <p className="text-[10px] text-slate-500 mt-0.5">best-ever streak</p>
-        </div>
-      </div>
+    <div className="grid grid-cols-3 gap-2">
+      <StatTile icon={CheckCircle2} tone="emerald" label="Done · last 90 days" value={completionRate === null ? '—' : <><CountUp value={completionRate} />%</>} />
+      <StatTile icon={Flame} tone="orange" label="Best current streak" value={<CountUp value={topStreak} />} />
+      <StatTile icon={Trophy} tone="amber" label="Best ever" value={<CountUp value={bestEverStreak} />} />
     </div>
   )
 }
@@ -637,43 +622,39 @@ function WeeklyScoreCard({
   const streakBonus = Math.min(20, Math.round(avgCompletedStreak * 2))
   const score       = Math.min(100, baseScore + streakBonus)
 
-  const { label, color, bar } =
-    score >= 90 ? { label: 'On fire! 🔥',         color: 'text-emerald-400', bar: 'bg-emerald-500' } :
-    score >= 80 ? { label: 'Excellent week! 🎯',   color: 'text-emerald-400', bar: 'bg-emerald-500' } :
-    score >= 60 ? { label: 'Good progress 💪',     color: 'text-sky-400',     bar: 'bg-sky-500'     } :
-    score >= 40 ? { label: 'Keep going 📈',         color: 'text-amber-400',   bar: 'bg-amber-500'   } :
-                  { label: 'Room to grow 🌱',        color: 'text-slate-400',   bar: 'bg-slate-500'   }
+  const { label, color } =
+    score >= 90 ? { label: 'On fire! 🔥',         color: 'text-emerald-400' } :
+    score >= 80 ? { label: 'Excellent week! 🎯',   color: 'text-emerald-400' } :
+    score >= 60 ? { label: 'Good progress 💪',     color: 'text-sky-400' } :
+    score >= 40 ? { label: 'Keep going 📈',         color: 'text-amber-400' } :
+                  { label: 'Room to grow 🌱',        color: 'text-slate-400' }
 
+  const r = 26, circ = 2 * Math.PI * r
   return (
-    <div className="rounded-xl border border-white/8 bg-white/3 p-4 space-y-3">
-      <div className="flex items-center justify-between">
-        <div>
-          <div className="flex items-center gap-2">
-            <Trophy className="h-4 w-4 text-amber-400" />
-            <p className="text-xs font-medium text-slate-400">Weekly Score</p>
+    <div className="card-sheen relative overflow-hidden rounded-2xl border border-white/10 bg-gradient-to-br from-white/[0.06] to-transparent p-4">
+      <div className="flex items-center gap-4">
+        <div className="relative h-16 w-16 shrink-0">
+          <svg viewBox="0 0 64 64" className={cn('h-16 w-16 -rotate-90', color)}>
+            <circle cx="32" cy="32" r={r} fill="none" stroke="rgb(var(--c-white) / 0.08)" strokeWidth="6" />
+            <circle cx="32" cy="32" r={r} fill="none" stroke="currentColor" strokeWidth="6" strokeLinecap="round"
+              strokeDasharray={circ} strokeDashoffset={circ * (1 - score / 100)}
+              className="transition-[stroke-dashoffset] duration-1000 ease-out" style={{ filter: 'drop-shadow(0 0 6px currentColor)' }} />
+          </svg>
+          <span className="absolute inset-0 flex items-center justify-center text-base font-bold text-white"><CountUp value={score} />%</span>
+        </div>
+        <div className="min-w-0 flex-1">
+          <p className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-slate-400">
+            <Trophy className="h-3.5 w-3.5 text-amber-400" /> Weekly score
+          </p>
+          <p className={cn('mt-0.5 text-sm font-semibold', color)}>{label}</p>
+          <div className="mt-1.5 flex flex-wrap gap-1.5 text-[11px]">
+            <span className="rounded-full bg-emerald-500/15 px-2 py-0.5 font-medium text-emerald-300">{done} done</span>
+            <span className="rounded-full bg-red-500/15 px-2 py-0.5 font-medium text-red-300">{missed} missed</span>
+            {streakBonus > 0 && <span className="rounded-full bg-amber-500/15 px-2 py-0.5 font-medium text-amber-300">+{streakBonus} streak bonus</span>}
           </div>
-          <p className={cn('text-3xl font-bold mt-0.5', color)}><CountUp value={score} />%</p>
-          <p className="text-xs text-slate-500 mt-0.5">{label}</p>
-          {streakBonus > 0 && (
-            <p className="text-xs text-amber-400/70 mt-0.5">+{streakBonus} streak bonus</p>
-          )}
-        </div>
-        <div className="text-right space-y-1">
-          <p className="text-xs text-slate-500">
-            <span className="text-emerald-400 font-medium">{done}</span> completed
-          </p>
-          <p className="text-xs text-slate-500">
-            <span className="text-red-400 font-medium">{missed}</span> missed
-          </p>
-          <p className="text-xs text-slate-600">{total} logged · keystone 2×</p>
         </div>
       </div>
-      <div className="h-1.5 rounded-full bg-white/5 overflow-hidden">
-        <div
-          className={cn('h-full rounded-full transition-all duration-500', bar)}
-          style={{ width: `${score}%` }}
-        />
-      </div>
+      <p className="mt-2 text-[10px] text-slate-600">{total} logged this week · keystone habits count 2×</p>
     </div>
   )
 }
@@ -1149,7 +1130,9 @@ export default function HabitTracker() {
     return sum + Math.max(0, days)
   }, 0)
   const totalDoneDays = last90dLogs.filter(l => l.status === 'done' && dailyHabitIds.has(l.habit_id)).length
-  const completionRate90d = totalPossibleDays > 0 ? Math.round((totalDoneDays / totalPossibleDays) * 100) : null
+  // Capped: logs dated before a habit's creation (imports, edits) could
+  // otherwise push it past 100%.
+  const completionRate90d = totalPossibleDays > 0 ? Math.min(100, Math.round((totalDoneDays / totalPossibleDays) * 100)) : null
 
   // Average streak of habits completed at least once this week (for streak bonus)
   const completedHabitIds = new Set(weekLogs.filter(l => l.status === 'done').map(l => l.habit_id))
@@ -1238,14 +1221,29 @@ export default function HabitTracker() {
 
       {/* Header */}
       <div className="flex items-center justify-between">
-        <div>
-          <h2 className="font-semibold text-white">Habit Tracker</h2>
-          {visibleHabits.length > 0 && (
-            <p className="text-xs text-slate-500 mt-0.5">
-              {done.length}/{visibleHabits.length} done today
-              {topStreak > 0 && ` · 🔥 Best streak: ${topStreak}`}
-            </p>
-          )}
+        <div className="flex min-w-0 items-center gap-3">
+          {visibleHabits.length > 0 && (() => {
+            const share = done.length / visibleHabits.length, r = 18, circ = 2 * Math.PI * r
+            return (
+              <div className="relative h-11 w-11 shrink-0">
+                <svg viewBox="0 0 44 44" className="h-11 w-11 -rotate-90 text-emerald-400">
+                  <circle cx="22" cy="22" r={r} fill="none" stroke="rgb(var(--c-white) / 0.08)" strokeWidth="4.5" />
+                  <circle cx="22" cy="22" r={r} fill="none" stroke="currentColor" strokeWidth="4.5" strokeLinecap="round"
+                    strokeDasharray={circ} strokeDashoffset={circ * (1 - share)} className="transition-[stroke-dashoffset] duration-700 ease-out" />
+                </svg>
+                <span className="absolute inset-0 flex items-center justify-center text-[11px] font-bold text-white">{done.length}/{visibleHabits.length}</span>
+              </div>
+            )
+          })()}
+          <div className="min-w-0">
+            <h2 className="font-semibold text-white">Today&apos;s habits</h2>
+            {visibleHabits.length > 0 && (
+              <p className="mt-0.5 text-xs text-slate-500">
+                {done.length === visibleHabits.length ? 'All done. Great day! 🎉' : `${visibleHabits.length - done.length} to go`}
+                {topStreak > 0 && <> · <StreakFlame seed={topStreak} /> best {topStreak}</>}
+              </p>
+            )}
+          </div>
         </div>
         <div className="flex items-center gap-2">
           {habits.some(h => h.is_global) && (
@@ -1339,7 +1337,7 @@ export default function HabitTracker() {
                     // phone otherwise lands on the row and opens the history modal.
                     className="group/done -m-2 flex h-10 w-10 items-center justify-center rounded-full"
                   >
-                    <span className="flex h-6 w-6 items-center justify-center rounded-full border-2 border-slate-600 group-hover/done:border-emerald-400 group-hover/done:bg-emerald-500/20 group-active/done:scale-90 transition-all">
+                    <span className="flex h-7 w-7 items-center justify-center rounded-full border-2 border-slate-500 group-hover/done:border-emerald-400 group-hover/done:bg-emerald-500/20 group-active/done:scale-90 transition-all">
                       {markingIds.has(habit.id)
                         ? <Loader2 className="h-3 w-3 animate-spin text-slate-400" />
                         : <Check className="h-3 w-3 text-slate-600 group-hover/done:text-emerald-400" />}
@@ -1361,9 +1359,9 @@ export default function HabitTracker() {
                   disabled={markingIds.has(habit.id)}
                   aria-label="Undo"
                   className={cn(
-                    'group/undo flex h-6 w-6 shrink-0 items-center justify-center rounded-full border-2 transition-all',
+                    'group/undo flex h-7 w-7 shrink-0 items-center justify-center rounded-full border-2 transition-all',
                     status === 'done'
-                      ? 'border-emerald-400 bg-emerald-400 hover:bg-slate-700 hover:border-slate-500'
+                      ? 'animate-pop border-emerald-400 bg-emerald-400 shadow-[0_0_12px_-2px_rgba(52,211,153,0.6)] hover:bg-slate-700 hover:border-slate-500 motion-reduce:animate-none'
                       : 'border-red-400 bg-red-400 hover:bg-slate-700 hover:border-slate-500'
                   )}
                 >
@@ -1419,14 +1417,14 @@ export default function HabitTracker() {
 
               {/* Streak — not shown for global (no per-user streak tracked on habit row) */}
               {habit.streak_count > 0 && !habit.is_global && (
-                <div className="flex items-center gap-1 shrink-0">
-                  <StreakFlame seed={habit.streak_count} className="text-orange-400" />
-                  <span className="text-sm font-semibold text-orange-300">
+                <div className="flex shrink-0 flex-col items-end gap-0.5">
+                  <span className="flex items-center gap-1 rounded-full bg-orange-500/15 px-2 py-0.5 text-sm font-semibold text-orange-300">
+                    <StreakFlame seed={habit.streak_count} />
                     {habit.streak_count}
-                    <span className="text-xs font-normal text-slate-500 ml-0.5">days</span>
+                    <span className="text-[11px] font-normal text-orange-300/70">{habit.streak_count === 1 ? 'day' : 'days'}</span>
                   </span>
                   {habit.longest_streak > habit.streak_count && (
-                    <span className="text-[10px] text-slate-600">· best {habit.longest_streak}</span>
+                    <span className="text-[10px] text-slate-600">best {habit.longest_streak}</span>
                   )}
                 </div>
               )}
