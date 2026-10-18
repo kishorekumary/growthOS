@@ -2,65 +2,82 @@
 
 import dynamic from 'next/dynamic'
 import Link from 'next/link'
-import { Timer, Brain, SearchCheck } from 'lucide-react'
+import { Timer, Brain, SearchCheck, ArrowRight, type LucideIcon } from 'lucide-react'
+import { cn } from '@/lib/utils'
 import { SkeletonCards } from '@/components/ui/skeleton'
 
 const FocusTimer = dynamic(() => import('@/components/focus/FocusTimer'), {
   loading: () => <SkeletonCards />,
 })
 
+// Full class names per tone so Tailwind's scanner picks them up.
+const TOOL_TONES = {
+  violet: { card: 'border-violet-500/25 from-violet-500/15', glow: 'bg-violet-500/30', tile: 'border-violet-500/30 bg-violet-500/15 text-violet-300', link: 'text-violet-300' },
+  amber:  { card: 'border-amber-500/25 from-amber-500/15',   glow: 'bg-amber-500/30',  tile: 'border-amber-500/30 bg-amber-500/15 text-amber-300',   link: 'text-amber-300' },
+} as const
+
+const TOOLS: { href: string; icon: LucideIcon; tone: keyof typeof TOOL_TONES; title: string; detail: string; meta: string }[] = [
+  {
+    href: '/focus/mindshift', icon: Brain, tone: 'violet',
+    title: 'Mindshift Leakage Score',
+    detail: 'Find where your mental energy leaks.',
+    meta: '20 questions · 5 dimensions',
+  },
+  {
+    href: '/focus/overthinking-audit', icon: SearchCheck, tone: 'amber',
+    title: 'The Overthinking Audit',
+    detail: 'Diagnose your thinking patterns.',
+    meta: '10 questions · 3 buckets',
+  },
+]
+
 export default function FocusPage() {
   return (
     <div className="mx-auto max-w-2xl px-4 py-8 md:px-8">
       <div className="mb-6 flex items-center gap-3">
-        <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-violet-600/20 border border-violet-500/30">
-          <Timer className="h-5 w-5 text-violet-400" />
+        <div className="relative">
+          <div aria-hidden className="absolute inset-0 rounded-2xl bg-violet-500/40 blur-xl" />
+          <div className="relative flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-violet-500 to-indigo-600 shadow-lg">
+            <Timer className="h-6 w-6 text-snow" />
+          </div>
         </div>
         <div>
           <h1 className="text-2xl font-bold text-white">Focus</h1>
-          <p className="text-slate-400 text-sm mt-0.5">Build sequences of timed intervals with alerts</p>
+          <p className="mt-0.5 text-sm text-slate-400">Protect your attention, one interval at a time</p>
         </div>
       </div>
 
       <FocusTimer />
 
-      {/* Mindshift survey card */}
-      <Link
-        href="/focus/mindshift"
-        className="mt-6 flex items-center gap-4 rounded-2xl border border-violet-500/20 bg-violet-600/5 p-5 hover:bg-violet-600/10 transition-colors group"
-      >
-        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-violet-600/20 border border-violet-500/30">
-          <Brain className="h-5 w-5 text-violet-400" />
-        </div>
-        <div>
-          <p className="text-sm font-semibold text-white group-hover:text-violet-300 transition-colors">
-            Mindshift Leakage Score
-          </p>
-          <p className="text-xs text-slate-400 mt-0.5">
-            Discover where your mental energy leaks — 20 questions across 5 dimensions
-          </p>
-        </div>
-        <span className="ml-auto text-slate-600 group-hover:text-slate-400 transition-colors text-sm">→</span>
-      </Link>
-
-      {/* Overthinking Audit card */}
-      <Link
-        href="/focus/overthinking-audit"
-        className="mt-3 flex items-center gap-4 rounded-2xl border border-amber-500/20 bg-amber-500/5 p-5 hover:bg-amber-500/10 transition-colors group"
-      >
-        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-amber-500/20 border border-amber-500/30">
-          <SearchCheck className="h-5 w-5 text-amber-400" />
-        </div>
-        <div>
-          <p className="text-sm font-semibold text-white group-hover:text-amber-300 transition-colors">
-            The Overthinking Audit
-          </p>
-          <p className="text-xs text-slate-400 mt-0.5">
-            Diagnose your thinking patterns — 10 questions across 3 buckets
-          </p>
-        </div>
-        <span className="ml-auto text-slate-600 group-hover:text-slate-400 transition-colors text-sm">→</span>
-      </Link>
+      <p className="mb-3 mt-8 text-xs font-semibold uppercase tracking-wider text-slate-500">Know your mind</p>
+      <div className="grid gap-3 sm:grid-cols-2">
+        {TOOLS.map(({ href, icon: Icon, tone, title, detail, meta }) => {
+          const t = TOOL_TONES[tone]
+          return (
+            <Link
+              key={href}
+              href={href}
+              className={cn(
+                'card-sheen group relative overflow-hidden rounded-2xl border bg-gradient-to-br to-transparent p-5 transition-transform hover:-translate-y-0.5 active:scale-[0.98] motion-reduce:transform-none',
+                t.card,
+              )}
+            >
+              <div aria-hidden className={cn('pointer-events-none absolute -right-8 -top-8 h-24 w-24 rounded-full blur-2xl', t.glow)} />
+              <div className={cn('relative flex h-10 w-10 items-center justify-center rounded-xl border', t.tile)}>
+                <Icon className="h-5 w-5" />
+              </div>
+              <p className="relative mt-3 text-sm font-semibold text-white">{title}</p>
+              <p className="relative mt-0.5 text-xs text-slate-400">{detail}</p>
+              <p className="relative mt-3 flex items-center justify-between text-[11px] text-slate-500">
+                {meta}
+                <span className={cn('flex items-center gap-1 font-medium', t.link)}>
+                  Start <ArrowRight className="h-3.5 w-3.5 transition-transform group-hover:translate-x-0.5" />
+                </span>
+              </p>
+            </Link>
+          )
+        })}
+      </div>
     </div>
   )
 }
