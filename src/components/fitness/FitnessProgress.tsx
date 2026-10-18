@@ -1,5 +1,7 @@
 'use client'
 
+import CountUp from '@/components/ui/count-up'
+import StatTile from '@/components/ui/stat-tile'
 import { useState } from 'react'
 import { Loader2, TrendingUp, Flame, Clock, Dumbbell } from 'lucide-react'
 import { createSupabaseBrowserClient } from '@/lib/supabase'
@@ -149,21 +151,9 @@ export default function FitnessProgress() {
 
       {/* Stats */}
       <div className="grid grid-cols-3 gap-3">
-        <div className="rounded-xl border border-white/10 bg-white/5 p-3 text-center">
-          <Dumbbell className="h-4 w-4 text-violet-400 mx-auto mb-1" />
-          <p className="text-xl font-bold text-white">{totalWorkouts}</p>
-          <p className="text-xs text-slate-500">Workouts</p>
-        </div>
-        <div className="rounded-xl border border-white/10 bg-white/5 p-3 text-center">
-          <Clock className="h-4 w-4 text-sky-400 mx-auto mb-1" />
-          <p className="text-xl font-bold text-white">{totalMins}</p>
-          <p className="text-xs text-slate-500">Minutes</p>
-        </div>
-        <div className="rounded-xl border border-white/10 bg-white/5 p-3 text-center">
-          <Flame className="h-4 w-4 text-orange-400 mx-auto mb-1" />
-          <p className="text-xl font-bold text-white">{streak}</p>
-          <p className="text-xs text-slate-500">Day streak</p>
-        </div>
+        <StatTile icon={Dumbbell} tone="violet" label="Workouts" value={<CountUp value={totalWorkouts} />} />
+        <StatTile icon={Clock} tone="sky" label="Minutes" value={<CountUp value={totalMins} />} />
+        <StatTile icon={Flame} tone="orange" label="Day streak" value={<CountUp value={streak} />} />
       </div>
 
       {/* Workouts per week */}

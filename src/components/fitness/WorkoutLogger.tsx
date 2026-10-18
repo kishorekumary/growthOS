@@ -246,11 +246,24 @@ export default function WorkoutLogger() {
         {type !== 'rest' && (
           <div className="space-y-1.5">
             <Label className="text-slate-300 text-xs">Duration (minutes)</Label>
+            <div className="flex flex-wrap gap-1.5">
+              {[15, 20, 30, 45, 60, 90].map(m => (
+                <button key={m} type="button" onClick={() => setDuration(String(m))}
+                  className={cn(
+                    'rounded-full border px-3 py-1.5 text-xs font-semibold transition-all active:scale-95',
+                    duration === String(m)
+                      ? 'border-violet-500 bg-violet-500/20 text-white'
+                      : 'border-white/10 bg-white/5 text-slate-400 hover:border-white/20',
+                  )}>
+                  {m}m
+                </button>
+              ))}
+            </div>
             <Input
               type="number"
               min="1"
               max="300"
-              placeholder="e.g. 45"
+              placeholder="Or type minutes"
               value={duration}
               onChange={(e) => setDuration(e.target.value)}
               className="border-white/20 bg-white/5 text-white placeholder:text-slate-500 focus-visible:ring-violet-500"
