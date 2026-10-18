@@ -13,7 +13,8 @@ import { Label } from '@/components/ui/label'
 import { cn } from '@/lib/utils'
 import { useTimer, playAlarm, showNotification, type Sequence } from '@/contexts/TimerContext'
 import EmptyState from '@/components/ui/empty-state'
-import { sessionProgress, stepTone, type StepTone } from '@/lib/focusSession'
+import { focusMinutes, sessionProgress, stepTone, type StepTone } from '@/lib/focusSession'
+import ListClearedBurst from '@/components/shared/ListClearedBurst'
 
 // ─── Types ────────────────────────────────────────────────────
 
@@ -613,22 +614,51 @@ export default function FocusTimer() {
 
     return (
       <div className="flex flex-col items-center gap-5">
-        <div className="flex w-full items-center justify-between">
-          <p className="text-sm font-semibold text-white">{runSeq.name}</p>
-          <button onClick={stopTimer}
-            className="flex items-center gap-1.5 text-xs text-slate-500 hover:text-red-400 transition-colors">
-            <Square className="h-3.5 w-3.5" /> End session
-          </button>
-        </div>
+        {!done && (
+          <div className="flex w-full items-center justify-between">
+            <p className="text-sm font-semibold text-white">{runSeq.name}</p>
+            <button onClick={stopTimer}
+              className="flex items-center gap-1.5 text-xs text-slate-500 hover:text-red-400 transition-colors">
+              <Square className="h-3.5 w-3.5" /> End session
+            </button>
+          </div>
+        )}
 
         {done ? (
-          <div className="flex flex-col items-center gap-4 py-8">
-            <div className="flex h-24 w-24 items-center justify-center rounded-full bg-emerald-500/15 border-2 border-emerald-500/50">
-              <Check className="h-12 w-12 text-emerald-400" />
+          <div className="relative flex w-full flex-col items-center py-6 text-center">
+            <ListClearedBurst card={false} />
+            <div aria-hidden className="absolute top-6 h-40 w-40 rounded-full bg-emerald-500/25 blur-3xl animate-breathe motion-reduce:animate-none" />
+            <div className="relative flex h-24 w-24 animate-pop items-center justify-center rounded-full bg-gradient-to-br from-emerald-400 to-teal-600 shadow-[0_10px_40px_-8px_rgba(16,185,129,0.7)]">
+              <Check className="h-12 w-12 text-snow" strokeWidth={3} />
             </div>
-            <p className="text-xl font-bold text-white">Session Complete!</p>
-            <p className="text-sm text-slate-400">All {runSeq.steps.length} steps finished 🎉</p>
-            <Button onClick={stopTimer} className="mt-2 bg-violet-600 hover:bg-violet-700 text-snow px-8">Done</Button>
+            <p className="relative mt-5 text-2xl font-bold text-white">Session complete</p>
+            <p className="relative mt-1 text-sm text-slate-400">{runSeq.name}</p>
+
+            <div className="relative mt-6 grid w-full grid-cols-3 gap-2">
+              {([
+                ['Focused', `${focusMinutes(runSeq.steps)}m`],
+                ['Breaks',  `${Math.round(runSeq.steps.filter(x => stepTone(x.label) === 'break').reduce((a, x) => a + x.duration, 0) / 60)}m`],
+                ['Steps',   String(runSeq.steps.length)],
+              ] as const).map(([label, value]) => (
+                <div key={label} className="rounded-xl border border-white/8 bg-white/[0.04] px-3 py-3">
+                  <p className="text-xl font-bold text-white tabular-nums">{value}</p>
+                  <p className="text-[11px] text-slate-500">{label}</p>
+                </div>
+              ))}
+            </div>
+
+            <p className="relative mt-5 text-sm text-emerald-300">Deep work done. Give yourself a moment before the next thing 🌿</p>
+
+            <div className="relative mt-6 flex w-full gap-2">
+              <button onClick={stopTimer}
+                className="flex-1 rounded-xl border border-white/10 bg-white/5 py-2.5 text-sm font-medium text-slate-300 hover:bg-white/10 active:scale-[0.98] transition">
+                Done
+              </button>
+              <button onClick={() => startSequence(runSeq)}
+                className="flex flex-1 items-center justify-center gap-1.5 rounded-xl bg-gradient-to-br from-violet-500 to-indigo-600 py-2.5 text-sm font-semibold text-snow shadow-[0_8px_24px_-8px_rgba(99,102,241,0.7)] active:scale-[0.98] transition">
+                <RotateCcw className="h-4 w-4" /> Run again
+              </button>
+            </div>
           </div>
         ) : (
           <>
