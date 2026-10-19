@@ -5,6 +5,7 @@ import { createSupabaseServerClient } from '@/lib/supabase-server'
 import Sidebar from '@/components/layout/Sidebar'
 import BottomNav from '@/components/layout/BottomNav'
 import ServiceWorkerRegister from '@/components/layout/ServiceWorkerRegister'
+import HealthAutoSync from '@/components/layout/HealthAutoSync'
 import MobileMenuButton from '@/components/layout/MobileMenuButton'
 import MobileDrawer from '@/components/layout/MobileDrawer'
 import MobileSearchButton from '@/components/layout/MobileSearchButton'
@@ -81,6 +82,7 @@ export default async function MainLayout({ children }: { children: React.ReactNo
       <OfflineBanner />
       <GlobalSearch />
       <ServiceWorkerRegister />
+      <HealthAutoSync />
       <div className="fixed bottom-1.5 right-2 text-[9px] text-slate-800 font-mono select-none pointer-events-none z-50 hidden md:block">
         {process.env.NEXT_PUBLIC_GIT_BRANCH}/{process.env.NEXT_PUBLIC_GIT_COMMIT}
       </div>
