@@ -73,7 +73,7 @@ function LoginForm() {
       return
     }
 
-    const { error } = await supabase.auth.signInWithPassword({
+    const { data: signIn, error } = await supabase.auth.signInWithPassword({
       email: values.identifier.trim(),
       password: values.password,
     })
@@ -84,10 +84,13 @@ function LoginForm() {
       return
     }
 
+    // Scope to this user: admins can read every profile, so an unscoped
+    // .single() matched many rows, failed, and sent them to onboarding.
     const { data: profile } = await supabase
       .from('user_profiles')
       .select('onboarding_done')
-      .single()
+      .eq('id', signIn.user.id)
+      .maybeSingle()
 
     router.push(profile?.onboarding_done ? '/dashboard' : '/onboarding')
   }
