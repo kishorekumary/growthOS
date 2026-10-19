@@ -1,10 +1,11 @@
 'use client'
 
 import PageHeader from '@/components/ui/page-header'
+import AccountSettings from '@/components/settings/AccountSettings'
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import dynamic from 'next/dynamic'
-import { Bell, ShieldCheck, ChevronRight, Mail, Sun, PartyPopper, Palette, Settings } from 'lucide-react'
+import { Bell, ShieldCheck, ChevronRight, Mail, Sun, PartyPopper, Palette, Settings, UserRound } from 'lucide-react'
 import { SkeletonCards } from '@/components/ui/skeleton'
 import { createSupabaseBrowserClient } from '@/lib/supabase'
 import EffectsSettings from '@/components/settings/EffectsSettings'
@@ -46,7 +47,7 @@ export default function SettingsPage() {
 
   return (
     <div className="mx-auto max-w-2xl px-4 py-8 md:px-8">
-      <PageHeader icon={Settings} tone="slate" title="Settings" subtitle="Notifications, appearance, celebrations and integrations" />
+      <PageHeader icon={Settings} tone="slate" title="Settings" subtitle="Sign-in, notifications, appearance and integrations" />
 
       {/* Admin section — only visible to admins */}
       {isAdmin === true && (
@@ -66,6 +67,14 @@ export default function SettingsPage() {
           </button>
         </div>
       )}
+
+      <div className="mb-6">
+        <div className="flex items-center gap-2 mb-4">
+          <UserRound className="h-4 w-4 text-violet-400" />
+          <h2 className="text-base font-semibold text-white">Account &amp; sign-in</h2>
+        </div>
+        <AccountSettings />
+      </div>
 
       <div className="mb-6">
         <div className="flex items-center gap-2 mb-4">

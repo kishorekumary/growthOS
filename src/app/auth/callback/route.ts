@@ -53,8 +53,12 @@ export async function GET(request: NextRequest) {
     data: { user },
   } = await supabase.auth.getUser()
 
-  let redirectPath = '/onboarding'
-  if (user) {
+  // `next` (e.g. the password-reset page) — same-site paths only.
+  const next = searchParams.get('next')
+  const safeNext = next && next.startsWith('/') && !next.startsWith('//') ? next : null
+
+  let redirectPath = safeNext ?? '/onboarding'
+  if (user && !safeNext) {
     const { data: profile } = await supabase
       .from('user_profiles')
       .select('onboarding_done')

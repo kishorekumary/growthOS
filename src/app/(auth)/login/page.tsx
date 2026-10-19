@@ -6,7 +6,8 @@ import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'
-import { Loader2 } from 'lucide-react'
+import { Loader2, Mail, CheckCircle2 } from 'lucide-react'
+import { isEmailIdentifier } from '@/lib/username'
 
 import { createSupabaseBrowserClient } from '@/lib/supabase'
 import { Button } from '@/components/ui/button'
@@ -14,8 +15,9 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card'
 
+// One field for either an email or a username (migration 055).
 const loginSchema = z.object({
-  email: z.string().email('Enter a valid email address'),
+  identifier: z.string().trim().min(1, 'Enter your email or username'),
   password: z.string().min(6, 'Password must be at least 6 characters'),
 })
 
@@ -36,9 +38,13 @@ function LoginForm() {
   const [isGoogleLoading, setIsGoogleLoading] = useState(false)
   const [serverError, setServerError] = useState<string | null>(null)
 
+  const [magicSending, setMagicSending] = useState(false)
+  const [magicSentTo, setMagicSentTo]   = useState<string | null>(null)
+
   const {
     register,
     handleSubmit,
+    getValues,
     formState: { errors },
   } = useForm<LoginFormValues>({
     resolver: zodResolver(loginSchema),
@@ -49,8 +55,26 @@ function LoginForm() {
     setServerError(null)
     const supabase = createSupabaseBrowserClient()
 
+    // Username: resolved and signed in on the server, which sets the session.
+    if (!isEmailIdentifier(values.identifier)) {
+      const res = await fetch('/api/auth/username-login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username: values.identifier, password: values.password }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        setServerError(data.error ?? 'Invalid username or password')
+        setIsLoading(false)
+        return
+      }
+      router.push(data.next ?? '/dashboard')
+      router.refresh()
+      return
+    }
+
     const { error } = await supabase.auth.signInWithPassword({
-      email: values.email,
+      email: values.identifier.trim(),
       password: values.password,
     })
 
@@ -66,6 +90,21 @@ function LoginForm() {
       .single()
 
     router.push(profile?.onboarding_done ? '/dashboard' : '/onboarding')
+  }
+
+  // Passwordless: a one-time sign-in link to an existing account's email.
+  async function sendMagicLink() {
+    const id = (getValues('identifier') ?? '').trim()
+    setServerError(null)
+    if (!isEmailIdentifier(id)) { setServerError('Enter your email above to get a sign-in link'); return }
+    setMagicSending(true)
+    const { error } = await createSupabaseBrowserClient().auth.signInWithOtp({
+      email: id,
+      options: { emailRedirectTo: `${window.location.origin}/auth/callback`, shouldCreateUser: false },
+    })
+    setMagicSending(false)
+    if (error) { setServerError(error.message); return }
+    setMagicSentTo(id)
   }
 
   async function handleGoogleLogin() {
@@ -138,17 +177,20 @@ function LoginForm() {
         {/* Email / Password form */}
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
           <div className="space-y-1.5">
-            <Label htmlFor="email" className="text-slate-300">Email</Label>
+            <Label htmlFor="identifier" className="text-slate-300">Email or username</Label>
             <Input
-              id="email"
-              type="email"
-              placeholder="you@example.com"
-              autoComplete="email"
+              id="identifier"
+              type="text"
+              inputMode="email"
+              autoCapitalize="none"
+              autoCorrect="off"
+              placeholder="you@example.com or username"
+              autoComplete="username"
               className="border-white/20 bg-white/5 text-white placeholder:text-slate-500 focus-visible:ring-purple-500"
-              {...register('email')}
+              {...register('identifier')}
             />
-            {errors.email && (
-              <p className="text-xs text-red-400">{errors.email.message}</p>
+            {errors.identifier && (
+              <p className="text-xs text-red-400">{errors.identifier.message}</p>
             )}
           </div>
 
@@ -190,6 +232,23 @@ function LoginForm() {
             Sign in
           </Button>
         </form>
+
+        {magicSentTo ? (
+          <div className="flex items-start gap-2 rounded-md border border-emerald-500/20 bg-emerald-500/10 px-3 py-2">
+            <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-emerald-400" />
+            <p className="text-xs text-emerald-300">Check {magicSentTo} for a sign-in link. It works once and expires soon.</p>
+          </div>
+        ) : (
+          <button
+            type="button"
+            onClick={sendMagicLink}
+            disabled={magicSending || isLoading}
+            className="flex w-full items-center justify-center gap-2 rounded-md border border-white/10 bg-white/[0.03] py-2 text-sm text-slate-300 transition-colors hover:bg-white/[0.06] hover:text-white disabled:opacity-50"
+          >
+            {magicSending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Mail className="h-4 w-4" />}
+            Email me a sign-in link instead
+          </button>
+        )}
       </CardContent>
 
       <CardFooter className="justify-center">
