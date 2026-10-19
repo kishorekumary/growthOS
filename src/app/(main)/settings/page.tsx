@@ -2,10 +2,11 @@
 
 import PageHeader from '@/components/ui/page-header'
 import AccountSettings from '@/components/settings/AccountSettings'
+import HealthSettings from '@/components/settings/HealthSettings'
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import dynamic from 'next/dynamic'
-import { Bell, ShieldCheck, ChevronRight, Mail, Sun, PartyPopper, Palette, Settings, UserRound } from 'lucide-react'
+import { Bell, ShieldCheck, ChevronRight, Mail, Sun, PartyPopper, Palette, Settings, UserRound, HeartPulse } from 'lucide-react'
 import { SkeletonCards } from '@/components/ui/skeleton'
 import { createSupabaseBrowserClient } from '@/lib/supabase'
 import EffectsSettings from '@/components/settings/EffectsSettings'
@@ -98,6 +99,14 @@ export default function SettingsPage() {
           <h2 className="text-base font-semibold text-white">Celebrations</h2>
         </div>
         <EffectsSettings />
+      </div>
+
+      <div className="mb-6">
+        <div className="flex items-center gap-2 mb-4">
+          <HeartPulse className="h-4 w-4 text-violet-400" />
+          <h2 className="text-base font-semibold text-white">Health data</h2>
+        </div>
+        <HealthSettings />
       </div>
 
       <div className="mb-6">
