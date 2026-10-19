@@ -2,7 +2,7 @@ import type { CapacitorConfig } from '@capacitor/cli'
 
 const config: CapacitorConfig = {
   appId: 'com.exponentialai.growthos',
-  appName: 'GrowthOS',
+  appName: 'Zenith',
   webDir: 'out',
 
   server: {
