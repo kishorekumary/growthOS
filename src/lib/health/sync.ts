@@ -30,12 +30,12 @@ async function plugin() {
 }
 
 export async function healthAvailability(): Promise<{ available: boolean; reason?: string }> {
-  if (!healthSupported()) return { available: false, reason: 'Available in the GrowthOS Android app' }
+  if (!healthSupported()) return { available: false, reason: 'Needs the Zenith Android app — the home-screen web app can’t read Health Connect' }
   try {
     const r = await (await plugin()).isAvailable()
     return { available: r.available, reason: r.available ? undefined : 'Install or update “Health Connect” from the Play Store' }
   } catch {
-    return { available: false, reason: 'Update the GrowthOS app to connect Samsung Health' }
+    return { available: false, reason: 'Update the Zenith app to connect Samsung Health' }
   }
 }
 
