@@ -1,7 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { BookOpen, Check, ChevronRight, ClipboardList, Loader2, Mic, Undo2 } from 'lucide-react'
+import { BookOpen, Check, ChevronRight, ClipboardList, Loader2, Mic, StickyNote, Undo2 } from 'lucide-react'
 import { createSupabaseBrowserClient } from '@/lib/supabase'
 import { cn } from '@/lib/utils'
 import { haptic } from '@/lib/effects'
@@ -14,7 +14,7 @@ import BankSyncNudge from '@/components/finance/BankSyncNudge'
 // whether it's done and logging with a single tap. "More" opens the full
 // form (the existing Quick Log panels) for anything unusual.
 
-export type DetailPanel = 'plans' | 'voice' | 'meal' | 'workout' | 'finance' | 'journal' | 'task' | 'sleep'
+export type DetailPanel = 'plans' | 'voice' | 'meal' | 'workout' | 'finance' | 'journal' | 'note' | 'task' | 'sleep'
 
 const WATER_GOAL_ML = 4000
 const WORKOUT_META: Record<string, { icon: string; label: string }> = {
@@ -378,10 +378,11 @@ export default function TodayLog({ onOpen }: { onOpen: (panel: DetailPanel) => v
 
       {tiles.map(tileFor)}
 
-      <div className="grid grid-cols-3 gap-2 pt-1">
+      <div className="grid grid-cols-4 gap-2 pt-1">
         {([
           ['voice', Mic, 'Say it'],
           ['journal', BookOpen, 'Journal'],
+          ['note', StickyNote, 'Note'],
           ['task', ClipboardList, 'Task'],
         ] as const).map(([panel, Icon, label]) => (
           <button key={panel} type="button" onClick={() => onOpen(panel)}

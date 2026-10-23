@@ -1,9 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createSupabaseServerClient } from '@/lib/supabase-server'
+import { notePreview } from '@/lib/notes'
 
 export type SearchResultItem = {
   id: string
-  type: 'task' | 'book' | 'goal' | 'habit' | 'journal' | 'workout' | 'nutrition' | 'finance' | 'challenge' | 'section'
+  type: 'task' | 'book' | 'goal' | 'habit' | 'journal' | 'note' | 'workout' | 'nutrition' | 'finance' | 'challenge' | 'section'
   title: string
   subtitle?: string
   href: string
@@ -19,6 +20,7 @@ const SECTION_MAP: { keywords: string[]; title: string; subtitle: string; href: 
   { keywords: ['goal', 'target', 'objective', 'milestone'], title: 'Goals', subtitle: 'Your goals', href: '/goals' },
   { keywords: ['habit', 'routine', 'streak', 'daily'], title: 'Habits', subtitle: 'Habit tracker', href: '/personality/habits' },
   { keywords: ['journal', 'diary', 'reflect', 'entry', 'mood'], title: 'Journal', subtitle: 'Daily reflections', href: '/personality/journal' },
+  { keywords: ['note', 'notepad', 'jot', 'shopping', 'list', 'pin'], title: 'Notes', subtitle: 'Lists & things to remember', href: '/notes' },
   { keywords: ['finance', 'money', 'budget', 'expense', 'income', 'transaction', 'spend', 'saving'], title: 'Finance', subtitle: 'Budget & transactions', href: '/finance?tab=Tracker' },
   { keywords: ['challenge', 'ninety', '90-day'], title: 'Challenges', subtitle: '90-day challenges', href: '/challenges' },
   { keywords: ['progress', 'fitness', 'stats', 'weight', 'body'], title: 'Fitness Progress', subtitle: 'Charts & stats', href: '/fitness?tab=Progress' },
@@ -56,7 +58,7 @@ export async function GET(req: NextRequest) {
   const uid = user.id
   const p = `%${q}%`
 
-  const [todos, books, goals, habits, journals, workouts, nutrition, finance, challenges] = await Promise.all([
+  const [todos, books, goals, habits, journals, notes, workouts, nutrition, finance, challenges] = await Promise.all([
     supabase.from('planner_items')
       .select('id, title, notes, is_completed, period_type, period_start, repeats')
       .eq('user_id', uid)
@@ -87,6 +89,13 @@ export async function GET(req: NextRequest) {
       .eq('user_id', uid)
       .ilike('content', p)
       .order('entry_date', { ascending: false })
+      .limit(5),
+
+    supabase.from('notes')
+      .select('id, title, content, is_pinned')
+      .eq('user_id', uid)
+      .or(`title.ilike.${p},content.ilike.${p}`)
+      .order('updated_at', { ascending: false })
       .limit(5),
 
     supabase.from('workout_logs')
@@ -163,6 +172,15 @@ export async function GET(req: NextRequest) {
     subtitle: j.content?.slice(0, 90).trim(),
     href: '/personality/journal',
     meta: j.mood ? `Mood ${j.mood}/10` : undefined,
+  }))
+
+  notes.data?.forEach(n => results.push({
+    id: n.id,
+    type: 'note',
+    title: n.title || notePreview(n.content, 40) || 'Untitled note',
+    subtitle: n.title ? notePreview(n.content) : undefined,
+    href: `/notes?id=${n.id}`,
+    meta: n.is_pinned ? 'Pinned' : undefined,
   }))
 
   workouts.data?.forEach(w => results.push({

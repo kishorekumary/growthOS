@@ -4,7 +4,7 @@ import { useState, useEffect, useRef, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import {
   Search, X, BookOpen, CheckSquare, Target, Brain,
-  NotebookPen, Dumbbell, Utensils, Wallet, Flame, Loader2, Compass,
+  NotebookPen, StickyNote, Dumbbell, Utensils, Wallet, Flame, Loader2, Compass,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import type { SearchResultItem } from '@/app/api/search/route'
@@ -19,6 +19,7 @@ const TYPE_CONFIG: Record<
   goal:      { label: 'Goals',      Icon: Target,      color: 'text-green-400'  },
   habit:     { label: 'Habits',     Icon: Brain,       color: 'text-purple-400' },
   journal:   { label: 'Journal',    Icon: NotebookPen, color: 'text-rose-400'   },
+  note:      { label: 'Notes',      Icon: StickyNote,  color: 'text-amber-300'  },
   workout:   { label: 'Fitness',    Icon: Dumbbell,    color: 'text-orange-400' },
   nutrition: { label: 'Nutrition',  Icon: Utensils,    color: 'text-lime-400'   },
   finance:   { label: 'Finance',    Icon: Wallet,      color: 'text-emerald-400'},
