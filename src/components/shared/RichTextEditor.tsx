@@ -6,10 +6,11 @@ import Highlight from '@tiptap/extension-highlight'
 import Underline from '@tiptap/extension-underline'
 import Placeholder from '@tiptap/extension-placeholder'
 import { TextStyle } from '@tiptap/extension-text-style'
+import { TaskList, TaskItem } from '@tiptap/extension-list'
 import { Extension, type Editor } from '@tiptap/core'
 import { useEffect, useState, useCallback, useRef } from 'react'
 import { createPortal } from 'react-dom'
-import { Bold, Italic, Underline as UnderlineIcon, Highlighter } from 'lucide-react'
+import { Bold, Italic, Underline as UnderlineIcon, Highlighter, ListChecks } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 // ── Inline font-size mark (applies only to selected text) ─────────
@@ -137,9 +138,12 @@ interface Props {
   onChange: (html: string) => void
   placeholder?: string
   className?: string
+  // Tickable checklist items, with a button to start one.
+  checklist?: boolean
+  autoFocus?: boolean
 }
 
-export default function RichTextEditor({ value, onChange, placeholder, className }: Props) {
+export default function RichTextEditor({ value, onChange, placeholder, className, checklist, autoFocus }: Props) {
   const editor = useEditor({
     immediatelyRender: false,
     extensions: [
@@ -150,8 +154,10 @@ export default function RichTextEditor({ value, onChange, placeholder, className
       Highlight,
       Underline,
       Placeholder.configure({ placeholder: placeholder ?? 'Start writing…' }),
+      ...(checklist ? [TaskList, TaskItem.configure({ nested: true })] : []),
     ],
     content: toHtml(value),
+    autofocus: autoFocus ? 'end' : false,
     editorProps: {
       attributes: { class: 'rich-editor outline-none min-h-[6rem] py-1' },
     },
@@ -177,9 +183,21 @@ export default function RichTextEditor({ value, onChange, placeholder, className
       <EditorContent editor={editor} className="px-3 py-2.5 text-sm text-white" />
 
       {/* Subtle shortcut hint */}
-      <p className="px-3 pb-2 text-[10px] text-slate-700 select-none">
-        Select text to format · Ctrl+B bold · Ctrl+I italic · Ctrl+U underline
-      </p>
+      <div className="flex items-center justify-between gap-2 px-3 pb-2">
+        <p className="text-[10px] text-slate-700 select-none">
+          Select text to format · Ctrl+B bold · Ctrl+I italic · Ctrl+U underline
+        </p>
+        {checklist && (
+          <button type="button" onMouseDown={e => e.preventDefault()}
+            onClick={() => editor.chain().focus().toggleTaskList().run()}
+            className={cn('flex shrink-0 items-center gap-1 rounded-md border px-2 py-1 text-[11px] font-medium transition-colors',
+              editor.isActive('taskList')
+                ? 'border-amber-500/50 bg-amber-500/15 text-amber-200'
+                : 'border-white/10 text-slate-400 hover:text-white')}>
+            <ListChecks className="h-3.5 w-3.5" /> Checklist
+          </button>
+        )}
+      </div>
     </div>
   )
 }

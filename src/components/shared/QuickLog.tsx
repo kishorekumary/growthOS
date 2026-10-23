@@ -6,6 +6,7 @@ import {
   Plus, X, Utensils, Dumbbell, CreditCard, BookOpen,
   Loader2, Check, Camera, Image as ImageIcon, Zap, Sparkles, AlertCircle, CheckCircle2,
   Mic, MicOff, RefreshCw, ClipboardList, Moon, Flame, ListChecks, ChevronLeft, ChevronRight, ExternalLink,
+  StickyNote, Pin,
 } from 'lucide-react'
 import { createSupabaseBrowserClient } from '@/lib/supabase'
 import { useCachedQuery } from '@/hooks/useCachedQuery'
@@ -26,9 +27,10 @@ import { matchHabit } from '@/lib/habitMatch'
 import { averageClock, topRepeats, usualWorkout } from '@/lib/logDefaults'
 import TodayLog from './TodayLog'
 import { sleepWindow } from '@/lib/todayLog'
+import { isBlankNote } from '@/lib/notes'
 import { dragOffset, gestureAxis, swipeCommits } from '@/lib/swipe'
 
-type Panel = 'today' | 'plans' | 'voice' | 'meal' | 'workout' | 'finance' | 'journal' | 'task' | 'sleep'
+type Panel = 'today' | 'plans' | 'voice' | 'meal' | 'workout' | 'finance' | 'journal' | 'note' | 'task' | 'sleep'
 type MealType    = 'breakfast' | 'lunch' | 'dinner' | 'snack' | 'drink'
 type WorkoutType = 'cardio' | 'strength' | 'yoga' | 'sports' | 'rest'
 type TxnType     = 'expense' | 'income' | 'savings'
@@ -1187,6 +1189,77 @@ function JournalPanel({ onDone }: { onDone: () => void }) {
   )
 }
 
+// ─── Note Panel ──────────────────────────────────────────────────
+
+function NotePanel({ onDone }: { onDone: () => void }) {
+  const [title, setTitle]     = useState('')
+  const [content, setContent] = useState('')
+  const [pinned, setPinned]   = useState(false)
+  const [saving, setSaving]   = useState(false)
+  const [saved, setSaved]     = useState(false)
+  const [error, setError]     = useState(false)
+  const blank = isBlankNote(title, content)
+
+  async function handleSave() {
+    if (blank) return
+    setSaving(true); setError(false)
+    const uid = await sessionUserId()
+    const { error } = uid
+      ? await createSupabaseBrowserClient().from('notes').insert({ user_id: uid, title: title.trim(), content, is_pinned: pinned })
+      : { error: true }
+    setSaving(false)
+    if (error) { setError(true); return }
+    setSaved(true)
+    setTimeout(onDone, 900)
+  }
+
+  if (saved) return (
+    <div className="flex flex-col items-center gap-3 py-8">
+      <div className="flex h-12 w-12 items-center justify-center rounded-full bg-amber-500/20 border border-amber-500/30">
+        <Check className="h-6 w-6 text-amber-400" />
+      </div>
+      <p className="text-sm text-slate-300">{pinned ? 'Note saved and pinned' : 'Note saved'}</p>
+    </div>
+  )
+
+  return (
+    <div className="space-y-3.5">
+      <div className="flex items-center gap-2">
+        <input
+          placeholder="Title (optional)"
+          value={title}
+          onChange={e => setTitle(e.target.value)}
+          className="flex-1 rounded-lg border border-white/10 bg-white/5 px-3 py-2.5 text-sm text-white placeholder:text-slate-600 focus:outline-none focus:border-amber-500"
+        />
+        <button type="button" onClick={() => setPinned(p => !p)}
+          title={pinned ? 'Unpin' : 'Pin to top'} aria-pressed={pinned}
+          className={cn('flex items-center gap-1 rounded-lg border px-3 py-2.5 text-xs font-medium transition-all',
+            pinned ? 'border-amber-500 bg-amber-500/20 text-amber-200' : 'border-white/10 bg-white/5 text-slate-400 hover:text-white')}>
+          <Pin className={cn('h-3.5 w-3.5', pinned && 'fill-amber-300')} /> {pinned ? 'Pinned' : 'Pin'}
+        </button>
+      </div>
+
+      <RichTextEditor
+        value={content}
+        onChange={setContent}
+        placeholder="Write anything, or tap Checklist for a list…"
+        checklist
+      />
+
+      {error && <p className="text-xs text-rose-400">Couldn&apos;t save the note. Check your connection and try again.</p>}
+
+      <button
+        onClick={handleSave}
+        disabled={saving || blank}
+        className="w-full flex items-center justify-center gap-2 rounded-xl bg-amber-500 hover:bg-amber-400 disabled:opacity-50 disabled:cursor-not-allowed px-4 py-3 text-sm font-semibold text-slate-950 transition-all"
+      >
+        {saving && <Loader2 className="h-4 w-4 animate-spin" />}
+        Save Note
+      </button>
+    </div>
+  )
+}
+
 // ─── Voice Panel ─────────────────────────────────────────────────
 
 type VoiceState = 'idle' | 'listening' | 'parsing' | 'confirm' | 'confirmMany' | 'saving' | 'done' | 'error' | 'unsupported'
@@ -1940,6 +2013,12 @@ const TABS: {
     route: '/personality/journal',
   },
   {
+    id: 'note', label: 'Note', Icon: StickyNote,
+    activeClass:   'border-amber-500 bg-amber-500/20 text-white',
+    inactiveClass: 'border-amber-500/20 bg-amber-500/8 text-amber-400/80 hover:opacity-100',
+    route: '/notes',
+  },
+  {
     id: 'task', label: 'Task', Icon: ClipboardList,
     activeClass:   'border-orange-500 bg-orange-500/20 text-white',
     inactiveClass: 'border-orange-500/20 bg-orange-500/8 text-orange-400/80 hover:opacity-100',
@@ -1948,7 +2027,7 @@ const TABS: {
 ]
 
 // Swipe order: Today first, then each log.
-const PAGES: Panel[] = ['today', 'plans', 'meal', 'workout', 'sleep', 'finance', 'journal', 'task', 'voice']
+const PAGES: Panel[] = ['today', 'plans', 'meal', 'workout', 'sleep', 'finance', 'journal', 'note', 'task', 'voice']
 const pageLabel = (p: Panel) => p === 'today' ? 'Today' : TABS.find(t => t.id === p)!.label
 const SWIPE_HINT_KEY = 'growthos:quicklog-swipe-hint'
 
@@ -2210,6 +2289,7 @@ export default function QuickLog() {
               {panel === 'sleep'   && <SleepPanel   onDone={handleDone} />}
               {panel === 'finance' && <FinancePanel onDone={handleDone} />}
               {panel === 'journal' && <JournalPanel onDone={handleDone} />}
+              {panel === 'note'    && <NotePanel    onDone={handleDone} />}
               {panel === 'task'    && <TaskPanel    onDone={handleDone} />}
               </div>
             </div>
