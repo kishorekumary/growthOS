@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createSupabaseServerClient } from '@/lib/supabase-server'
 import { awardPoints } from '@/lib/awardPoints'
+import { ensureUserRewards } from '@/lib/ensureUserRewards'
 import { isPlausibleClientDate } from '@/lib/clientDate'
 import { FREEZE_MAX, prevDate, resolveFreezeCap, rollChest } from '@/lib/dailyChest'
 
@@ -53,10 +54,7 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: 'Chest unavailable' }, { status: 500 })
   }
 
-  const { error: rewardsUpsertErr } = await supabase.from('user_rewards').upsert(
-    { user_id: user.id }, { onConflict: 'user_id', ignoreDuplicates: true }
-  )
-  if (rewardsUpsertErr) console.error('POST /api/rewards/daily-chest: user_rewards upsert failed', rewardsUpsertErr)
+  await ensureUserRewards(supabase, user.id)
 
   if (roll.freeze) {
     const { data: granted } = await supabase.rpc('grant_streak_freeze', { p_user_id: user.id, p_max: FREEZE_MAX })

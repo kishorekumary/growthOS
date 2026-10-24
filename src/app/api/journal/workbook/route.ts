@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createSupabaseServerClient } from '@/lib/supabase-server'
 import { awardPoints } from '@/lib/awardPoints'
+import { ensureUserRewards } from '@/lib/ensureUserRewards'
 import { isPlausibleClientDate } from '@/lib/clientDate'
 import { formatSession, type QA } from '@/lib/powerQuestions'
 import { WORKBOOK_POINTS, WORKBOOK_TAG, exerciseTag, findExercise } from '@/lib/workbook'
@@ -46,7 +47,7 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: 'Could not save your answers' }, { status: 500 })
   }
 
-  await supabase.from('user_rewards').upsert({ user_id: user.id }, { onConflict: 'user_id', ignoreDuplicates: true })
+  await ensureUserRewards(supabase, user.id)
   const awarded = await awardPoints(supabase, user.id, WORKBOOK_POINTS, exercise.title)
   return NextResponse.json({ ok: true, points: awarded ? WORKBOOK_POINTS : 0 })
 }
