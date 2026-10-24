@@ -1,7 +1,7 @@
 'use client'
 
-import { useState, useEffect, useRef, useCallback, type TouchEvent } from 'react'
-import { Wind, Sparkles, Brain, X, ChevronLeft, ChevronRight, Loader2, RefreshCw, Zap, Target, CheckSquare, Circle, ScrollText, Leaf } from 'lucide-react'
+import { useState, useEffect, useRef, useMemo, type TouchEvent } from 'react'
+import { Wind, Sparkles, Brain, X, ChevronLeft, ChevronRight, Loader2, RefreshCw, Zap, Target, CheckSquare, Circle, ScrollText, Leaf, Volume2, VolumeX } from 'lucide-react'
 import { differenceInDays, parseISO } from 'date-fns'
 import { completeItem, openNowQuery } from '@/lib/planner/actions'
 import { periodStart } from '@/lib/planner/periods'
@@ -12,118 +12,275 @@ import { useCachedQuery } from '@/hooks/useCachedQuery'
 import { useDraggableFab } from '@/hooks/useDraggableFab'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
+import { haptic } from '@/lib/effects'
+import {
+  BREATH_PATTERNS, SESSION_MINUTES, DEFAULT_PATTERN_ID, DEFAULT_MINUTES,
+  patternById, patternCountsLabel, phasesOf, cyclesFor, sessionTimeline, formatClock,
+  type BreathKind,
+} from '@/lib/breathing'
+import { createBreathSound, type BreathSound } from '@/lib/breathSound'
 
 type Mode = 'menu' | 'breathing' | 'affirmations' | 'ai' | 'goals' | 'tasks' | 'identity' | 'grounding'
 
-// ─── Box breathing phases ─────────────────────────────────────────
-const PHASES = [
-  { label: 'Inhale',  duration: 4000, expand: true  },
-  { label: 'Hold',    duration: 4000, expand: true  },
-  { label: 'Exhale',  duration: 6000, expand: false },
-  { label: 'Hold',    duration: 4000, expand: false },
-] as const
-
 // ─── Breathing exercise ───────────────────────────────────────────
+const BREATH_PREFS_KEY = 'growthos:breathing'
+
+interface BreathPrefs { pattern: string; minutes: number; sound: boolean }
+
+function readBreathPrefs(): BreathPrefs {
+  const fallback = { pattern: DEFAULT_PATTERN_ID, minutes: DEFAULT_MINUTES, sound: true }
+  try {
+    const saved = JSON.parse(localStorage.getItem(BREATH_PREFS_KEY) ?? 'null') as Partial<BreathPrefs> | null
+    if (!saved) return fallback
+    return {
+      pattern: patternById(saved.pattern).id,
+      minutes: (SESSION_MINUTES as readonly number[]).includes(saved.minutes ?? -1) ? saved.minutes! : DEFAULT_MINUTES,
+      sound:   saved.sound !== false,
+    }
+  } catch {
+    return fallback
+  }
+}
+
+// Per-phase look: the circle grows on inhale, rests on hold, shrinks on exhale.
+const BREATH_STYLE: Record<BreathKind, { text: string; ring: string; core: string }> = {
+  inhale: { text: 'text-sky-300',    ring: 'border-sky-400/50 bg-sky-500/10',       core: 'bg-sky-500/25' },
+  hold:   { text: 'text-amber-200',  ring: 'border-amber-300/50 bg-amber-400/10',   core: 'bg-amber-400/20' },
+  exhale: { text: 'text-violet-300', ring: 'border-violet-400/50 bg-violet-500/10', core: 'bg-violet-500/25' },
+}
+
 function BreathingExercise() {
-  const [phase, setPhase]   = useState(0)
-  const [cycles, setCycles] = useState(0)
-  const [running, setRunning] = useState(false)
-  const ctxRef = useRef<AudioContext | null>(null)
+  const [prefs, setPrefs]     = useState<BreathPrefs>({ pattern: DEFAULT_PATTERN_ID, minutes: DEFAULT_MINUTES, sound: true })
+  const [status, setStatus]   = useState<'setup' | 'running' | 'done'>('setup')
+  const [stepIdx, setStepIdx] = useState(0)
+  const soundRef = useRef<BreathSound | null>(null)
 
-  const tone = useCallback((freq: number) => {
-    const ctx = ctxRef.current
-    if (!ctx) return
-    const osc  = ctx.createOscillator()
-    const gain = ctx.createGain()
-    osc.connect(gain)
-    gain.connect(ctx.destination)
-    osc.type = 'sine'
-    osc.frequency.value = freq
-    gain.gain.setValueAtTime(0, ctx.currentTime)
-    gain.gain.linearRampToValueAtTime(0.06, ctx.currentTime + 0.1)
-    gain.gain.linearRampToValueAtTime(0, ctx.currentTime + 0.4)
-    osc.start(ctx.currentTime)
-    osc.stop(ctx.currentTime + 0.5)
-  }, [])
+  useEffect(() => { setPrefs(readBreathPrefs()) }, [])
 
+  function updatePrefs(patch: Partial<BreathPrefs>) {
+    setPrefs(prev => {
+      const next = { ...prev, ...patch }
+      try { localStorage.setItem(BREATH_PREFS_KEY, JSON.stringify(next)) } catch { /* storage unavailable */ }
+      return next
+    })
+  }
+
+  const pattern  = patternById(prefs.pattern)
+  const phases   = useMemo(() => phasesOf(pattern), [pattern])
+  const timeline = useMemo(() => sessionTimeline(pattern, prefs.minutes), [pattern, prefs.minutes])
+  const cycles   = cyclesFor(pattern, prefs.minutes)
+
+  function begin() {
+    // Created inside the tap so browsers allow it to play.
+    soundRef.current?.close()
+    soundRef.current = createBreathSound(!prefs.sound)
+    setStepIdx(-1)
+    setStatus('running')
+  }
+
+  function toggleSound() {
+    const sound = !prefs.sound
+    updatePrefs({ sound })
+    soundRef.current?.setMuted(!sound)
+  }
+
+  // Ticks off whole seconds against the start time, so a slow timer never
+  // drifts the session; each phase's cue plays on its first second.
   useEffect(() => {
-    if (!running) return
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    ctxRef.current = new (window.AudioContext || (window as any).webkitAudioContext)()
-    tone(528)
-    let current = 0
-    setPhase(0)
-
-    function advance() {
-      current = (current + 1) % PHASES.length
-      setPhase(current)
-      if (current === 0) setCycles(c => c + 1)
-      tone(current === 0 ? 528 : current === 2 ? 396 : 440)
-      timer = setTimeout(advance, PHASES[current].duration)
+    if (status !== 'running') return
+    const startedAt = performance.now()
+    let shown = -1
+    function cue(i: number) {
+      const step  = timeline[i]
+      const phase = phases[step.phaseIndex]
+      const sound = soundRef.current
+      if (step.starts) {
+        haptic('tick')
+        if (phase.kind === 'inhale') sound?.inhale(phase.seconds)
+        else if (phase.kind === 'exhale') sound?.exhale(phase.seconds)
+        else sound?.hold()
+      } else if (phase.kind === 'hold') {
+        sound?.tick()
+      }
     }
+    const id = setInterval(() => {
+      const i = Math.floor((performance.now() - startedAt) / 1000)
+      if (i === shown) return
+      if (i >= timeline.length) {
+        clearInterval(id)
+        soundRef.current?.finish()
+        haptic('success')
+        setStatus('done')
+        return
+      }
+      shown = i
+      setStepIdx(i)
+      cue(i)
+    }, 100)
+    return () => clearInterval(id)
+  }, [status, timeline, phases])
 
-    let timer = setTimeout(advance, PHASES[0].duration)
-    return () => {
-      clearTimeout(timer)
-      ctxRef.current?.close()
-    }
-  }, [running, tone])
+  // Release the audio device when the session stops or the sheet closes.
+  useEffect(() => {
+    if (status === 'running') return
+    soundRef.current?.close()
+    soundRef.current = null
+  }, [status])
+  useEffect(() => () => { soundRef.current?.close() }, [])
 
-  const current  = PHASES[phase]
-  const expanded = current.expand
+  const soundToggle = (
+    <button
+      type="button"
+      onClick={toggleSound}
+      aria-label={prefs.sound ? 'Mute breathing sounds' : 'Turn on breathing sounds'}
+      className="flex items-center gap-1.5 rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-xs text-slate-400 hover:text-white"
+    >
+      {prefs.sound ? <Volume2 className="h-3.5 w-3.5" /> : <VolumeX className="h-3.5 w-3.5" />}
+      {prefs.sound ? 'Sound on' : 'Sound off'}
+    </button>
+  )
 
-  if (!running) {
+  if (status === 'setup') {
     return (
-      <div className="flex flex-col items-center gap-6 py-6">
-        <div className="text-center space-y-1.5">
-          <p className="text-white font-semibold">Box Breathing</p>
-          <p className="text-slate-400 text-sm">Inhale 4s · Hold 4s · Exhale 6s · Hold 4s</p>
+      <div className="flex flex-col gap-5 py-2">
+        <div className="text-center space-y-1">
+          <p className="text-white font-semibold">Breathing</p>
+          <p className="text-slate-400 text-xs">{phases.map(ph => `${ph.label} ${ph.seconds}s`).join(' · ')}</p>
         </div>
 
-        <div className="relative flex items-center justify-center w-44 h-44">
-          <div className="w-32 h-32 rounded-full bg-blue-500/15 border-2 border-blue-400/30" />
-          <div className="absolute w-16 h-16 rounded-full bg-blue-400/25 border border-blue-300/40" />
+        <div className="space-y-2">
+          <p className="text-[11px] uppercase tracking-wider text-slate-500">Pattern</p>
+          <div className="grid grid-cols-2 gap-2">
+            {BREATH_PATTERNS.map(p => (
+              <button
+                key={p.id}
+                type="button"
+                onClick={() => updatePrefs({ pattern: p.id })}
+                aria-pressed={p.id === pattern.id}
+                className={cn(
+                  'rounded-xl border px-3 py-2.5 text-left transition-colors',
+                  p.id === pattern.id
+                    ? 'border-blue-400/60 bg-blue-500/15'
+                    : 'border-white/10 bg-white/5 hover:border-white/20',
+                )}
+              >
+                <span className="flex items-baseline justify-between gap-2">
+                  <span className="text-sm font-medium text-white">{p.name}</span>
+                  <span className="text-xs tabular-nums text-blue-300">{patternCountsLabel(p)}</span>
+                </span>
+                <span className="mt-0.5 block text-[11px] leading-snug text-slate-400">{p.blurb}</span>
+              </button>
+            ))}
+          </div>
         </div>
 
-        <Button onClick={() => { setCycles(0); setRunning(true) }} className="bg-blue-600 hover:bg-blue-700 text-snow px-8">
-          <Wind className="mr-2 h-4 w-4" /> Begin
-        </Button>
+        <div className="space-y-2">
+          <p className="text-[11px] uppercase tracking-wider text-slate-500">Length</p>
+          <div className="grid grid-cols-4 gap-2">
+            {SESSION_MINUTES.map(m => (
+              <button
+                key={m}
+                type="button"
+                onClick={() => updatePrefs({ minutes: m })}
+                aria-pressed={m === prefs.minutes}
+                className={cn(
+                  'rounded-lg border py-2 text-sm transition-colors',
+                  m === prefs.minutes
+                    ? 'border-blue-400/60 bg-blue-500/15 text-white'
+                    : 'border-white/10 bg-white/5 text-slate-400 hover:text-white',
+                )}
+              >
+                {m} min
+              </button>
+            ))}
+          </div>
+          <p className="text-[11px] text-slate-500">{cycles} breath{cycles !== 1 ? 's' : ''} · {formatClock(timeline.length)}</p>
+        </div>
+
+        <div className="flex items-center justify-between">
+          {soundToggle}
+          <Button onClick={begin} className="bg-blue-600 hover:bg-blue-700 text-snow px-8">
+            <Wind className="mr-2 h-4 w-4" /> Begin
+          </Button>
+        </div>
       </div>
     )
   }
 
+  if (status === 'done') {
+    return (
+      <div className="flex flex-col items-center gap-5 py-8 text-center">
+        <Leaf className="h-8 w-8 text-emerald-400" />
+        <div className="space-y-1">
+          <p className="text-white font-semibold">Nicely done</p>
+          <p className="text-slate-400 text-sm">
+            {cycles} {pattern.name} breath{cycles !== 1 ? 's' : ''} · {formatClock(timeline.length)}
+          </p>
+        </div>
+        <div className="flex gap-2">
+          <Button onClick={begin} className="bg-blue-600 hover:bg-blue-700 text-snow">
+            <RefreshCw className="mr-2 h-4 w-4" /> Again
+          </Button>
+          <Button
+            variant="outline"
+            onClick={() => setStatus('setup')}
+            className="border-white/20 bg-white/5 text-slate-400 hover:text-white hover:bg-white/10"
+          >
+            Change
+          </Button>
+        </div>
+      </div>
+    )
+  }
+
+  // -1 until the first second ticks, so the opening inhale grows from small.
+  const shownIdx = Math.max(stepIdx, 0)
+  const step  = timeline[shownIdx]
+  const phase = phases[step.phaseIndex]
+  const look  = BREATH_STYLE[phase.kind]
+  // A hold keeps the size of the breath before it.
+  const expanded = stepIdx >= 0 && (phase.kind === 'inhale' || (phase.kind === 'hold' && phases[step.phaseIndex - 1]?.kind === 'inhale'))
+  // Size moves for the whole breath; colour switches quickly at each phase.
+  const sizeMs = phase.kind === 'hold' ? 300 : phase.seconds * 1000
+  const sizeTransition = { transitionDuration: `${sizeMs}ms, 500ms, 500ms` }
+
   return (
-    <div className="flex flex-col items-center gap-6 py-4">
+    <div className="flex flex-col items-center gap-5 py-4">
       <div className="text-center">
-        <p className="text-2xl font-light text-white tracking-widest">{current.label}</p>
-        <p className="text-slate-600 text-xs mt-1">{cycles} cycle{cycles !== 1 ? 's' : ''} complete</p>
+        <p className={cn('text-2xl font-light tracking-widest transition-colors duration-500', look.text)}>{phase.label}</p>
+        <p className="text-slate-500 text-xs mt-1 tabular-nums">
+          Breath {step.cycle + 1} of {cycles} · {formatClock(timeline.length - shownIdx)} left
+        </p>
       </div>
 
       <div className="relative flex items-center justify-center w-48 h-48">
-        {/* outer pulse ring */}
-        <div className={cn(
-          'absolute rounded-full border-2 transition-all ease-in-out',
-          expanded
-            ? 'w-44 h-44 border-blue-400/50 bg-blue-500/10'
-            : 'w-20 h-20 border-blue-400/20 bg-blue-500/5',
-          phase === 0 ? 'duration-[4000ms]' : phase === 2 ? 'duration-[6000ms]' : 'duration-150',
-        )} />
-        {/* inner circle */}
-        <div className={cn(
-          'absolute rounded-full transition-all ease-in-out',
-          expanded ? 'w-28 h-28 bg-blue-500/25' : 'w-10 h-10 bg-blue-500/15',
-          phase === 0 ? 'duration-[4000ms]' : phase === 2 ? 'duration-[6000ms]' : 'duration-150',
-        )} />
-        <p className="relative z-10 text-blue-200 text-sm font-medium">{current.label}</p>
+        <div
+          className={cn('absolute w-44 h-44 rounded-full border-2 ease-in-out transition-[transform,background-color,border-color]', look.ring, expanded ? 'scale-100' : 'scale-[0.45]')}
+          style={sizeTransition}
+        />
+        <div
+          className={cn('absolute w-28 h-28 rounded-full ease-in-out transition-[transform,background-color]', look.core, expanded ? 'scale-100' : 'scale-[0.36]')}
+          style={sizeTransition}
+        />
+        <p key={stepIdx} className={cn('relative z-10 text-3xl font-light tabular-nums animate-pop motion-reduce:animate-none', look.text)}>
+          {step.remaining}
+        </p>
       </div>
 
-      <Button
-        variant="outline"
-        onClick={() => setRunning(false)}
-        className="border-white/20 bg-white/5 text-slate-400 hover:text-white hover:bg-white/10"
-      >
-        Stop
-      </Button>
+      <div className="h-1 w-48 overflow-hidden rounded-full bg-white/5">
+        <div className="h-full rounded-full bg-blue-400/60 transition-all duration-1000 ease-linear" style={{ width: `${((stepIdx + 1) / timeline.length) * 100}%` }} />
+      </div>
+
+      <div className="flex items-center gap-2">
+        {soundToggle}
+        <Button
+          variant="outline"
+          onClick={() => setStatus('setup')}
+          className="border-white/20 bg-white/5 text-slate-400 hover:text-white hover:bg-white/10"
+        >
+          Stop
+        </Button>
+      </div>
     </div>
   )
 }
