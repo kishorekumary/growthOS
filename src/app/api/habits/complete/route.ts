@@ -7,6 +7,7 @@ import {
 } from '@/lib/rewardMilestones'
 import { isPerfectDay } from '@/lib/perfectDay'
 import { awardPoints } from '@/lib/awardPoints'
+import { ensureUserRewards } from '@/lib/ensureUserRewards'
 import { prevDate } from '@/lib/dailyChest'
 import type { RewardMilestone } from '@/lib/completeHabit'
 
@@ -162,14 +163,11 @@ export async function POST(req: Request) {
   // success even though no points moved — and if this happens to land on a
   // milestone-crossing call, last_milestone_awarded would get persisted as
   // paid without the points actually landing, permanently blocking that
-  // milestone. Bail out before any award/milestone/perfect-day logic runs.
-  const { error: rewardsUpsertErr } = await supabase.from('user_rewards').upsert(
-    { user_id: user.id },
-    { onConflict: 'user_id', ignoreDuplicates: true }
-  )
-  if (rewardsUpsertErr) {
-    console.error('POST /api/habits/complete: user_rewards upsert failed', rewardsUpsertErr)
-    return NextResponse.json({ error: 'Failed to initialize rewards' }, { status: 500 })
+  // milestone. Skip any award/milestone/perfect-day logic — but the habit
+  // itself is already recorded (steps 1–2), so still report success: a 500
+  // here made the client roll back a check that a reload then showed done.
+  if (!await ensureUserRewards(supabase, user.id)) {
+    return NextResponse.json({ streak_count: newStreak, milestones })
   }
 
   // 3b. Keystone-ness for a GLOBAL habit is per-user (user_habit_keystones),

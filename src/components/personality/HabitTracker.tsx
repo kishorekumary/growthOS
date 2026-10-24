@@ -20,6 +20,7 @@ import { cn } from '@/lib/utils'
 import { computeStreak, localDateStr, todayStr, yesterdayStr, isGraceActive } from '@/lib/habitStreak'
 import { useHabitCelebration } from '@/hooks/useHabitCelebration'
 import { completeHabit } from '@/lib/completeHabit'
+import { ensureUserRewards } from '@/lib/ensureUserRewards'
 import { useReward } from '@/contexts/RewardContext'
 import { DAILY_POINTS, DAILY_POINTS_KEYSTONE } from '@/lib/rewardMilestones'
 import CountUp from '@/components/ui/count-up'
@@ -986,10 +987,7 @@ export default function HabitTracker() {
       // points-award/reversal calls.
       if (userId) {
         const delta = -(isKeystoneFor(habit) ? DAILY_POINTS_KEYSTONE : DAILY_POINTS)
-        const { error: rewardsUpsertErr } = await supabase.from('user_rewards').upsert(
-          { user_id: userId }, { onConflict: 'user_id', ignoreDuplicates: true }
-        )
-        if (rewardsUpsertErr) console.error('Failed to reverse habit undo points:', rewardsUpsertErr)
+        await ensureUserRewards(supabase, userId)
         const { error: logErr } = await supabase.from('reward_points_log')
           .insert({ user_id: userId, delta, reason: `Undo: ${habit.habit_name}` })
         if (logErr) console.error('Failed to reverse habit undo points:', logErr)
