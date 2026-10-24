@@ -1,7 +1,7 @@
 // Web Audio cues for the breathing exercise. Each phase sounds different so
 // it can be followed eyes-closed:
-//   inhale — a tone gliding UP with a brightening breath of air, swelling in
-//   exhale — the mirror: gliding DOWN, the air darkening as it fades out
+//   inhale — a bright, steady chord that slowly swells in, like a wave arriving
+//   exhale — a lower, warmer chord that slowly fades out, like a wave receding
 //   hold   — no movement: one soft bell, then a faint tick each second
 // Everything routes through one master gain so mute is instant.
 
@@ -39,45 +39,56 @@ export function createBreathSound(muted: boolean): BreathSound | null {
     data[i] = last * 3.5
   }
 
-  // A breath: a soft chord gliding between two pitches plus filtered air
-  // whose brightness follows the glide. Fades in fast and out at the end so
-  // consecutive phases don't click.
-  function breath(seconds: number, fromHz: number, toHz: number, airFrom: number, airTo: number, peak: number) {
+  // A breath is a wave, not a siren: a soft chord at a FIXED pitch whose
+  // volume swells and recedes, with gentle air under it. Gliding the pitch
+  // sounded like an engine revving. `shape` maps 0→1 through the phase to
+  // 0→1 loudness, and starts and ends at 0 so phases never click.
+  function breath(seconds: number, chord: number[], shape: (x: number) => number, airFrom: number, airTo: number, peak: number) {
     const t0  = ctx.currentTime
     const end = t0 + seconds
+    const curve = new Float32Array(64)
+    for (let i = 0; i < curve.length; i++) curve[i] = peak * shape(i / (curve.length - 1))
     const env = ctx.createGain()
+    env.gain.value = 0
+    env.gain.setValueCurveAtTime(curve, t0, seconds)
     env.connect(master)
-    env.gain.setValueAtTime(0.0001, t0)
-    env.gain.exponentialRampToValueAtTime(peak, t0 + Math.min(0.6, seconds / 3))
-    env.gain.setValueAtTime(peak, Math.max(t0 + 0.6, end - 0.5))
-    env.gain.exponentialRampToValueAtTime(0.0001, end)
 
-    for (const [ratio, type, level] of [[1, 'sine', 0.55], [1.5, 'triangle', 0.18], [2.004, 'sine', 0.12]] as const) {
+    // Pure sines through a low-pass: warm and round, nothing buzzy.
+    const soften = ctx.createBiquadFilter()
+    soften.type = 'lowpass'
+    soften.frequency.value = 1400
+    soften.connect(env)
+    chord.forEach((hz, i) => {
       const osc = ctx.createOscillator()
       const g   = ctx.createGain()
-      osc.type = type
-      osc.frequency.setValueAtTime(fromHz * ratio, t0)
-      osc.frequency.exponentialRampToValueAtTime(toHz * ratio, end)
-      g.gain.value = level
-      osc.connect(g).connect(env)
+      osc.type = 'sine'
+      osc.frequency.value = hz
+      g.gain.value = 0.5 / (i + 1)   // upper notes quieter
+      osc.connect(g).connect(soften)
       osc.start(t0)
       osc.stop(end + 0.05)
-    }
+    })
 
+    // Soft "shh" of air, opening a little on inhale and closing on exhale.
     const air    = ctx.createBufferSource()
     const filter = ctx.createBiquadFilter()
     const airG   = ctx.createGain()
     air.buffer = noise
     air.loop   = true
-    filter.type = 'bandpass'
-    filter.Q.value = 0.8
+    filter.type = 'lowpass'
     filter.frequency.setValueAtTime(airFrom, t0)
-    filter.frequency.exponentialRampToValueAtTime(airTo, end)
-    airG.gain.value = 0.35
+    filter.frequency.linearRampToValueAtTime(airTo, end)
+    airG.gain.value = 0.22
     air.connect(filter).connect(airG).connect(env)
     air.start(t0)
     air.stop(end + 0.05)
   }
+
+  const smooth = (x: number) => x * x * (3 - 2 * x)
+  // Inhale: slowly fills, fullest near the top, then a soft release.
+  const swellIn  = (x: number) => x < 0.85 ? smooth(x / 0.85) : smooth((1 - x) / 0.15)
+  // Exhale: arrives gently, then a long fade to silence.
+  const swellOut = (x: number) => x < 0.12 ? smooth(x / 0.12) : smooth((1 - x) / 0.88)
 
   // A struck bell: fundamental plus an inharmonic partial, quick decay.
   function bell(hz: number, at = 0, level = 0.22, decay = 1.6) {
@@ -97,8 +108,10 @@ export function createBreathSound(muted: boolean): BreathSound | null {
   }
 
   return {
-    inhale: seconds => breath(seconds, 196, 330, 350, 2200, 0.16),   // G3 → E4, air opening up
-    exhale: seconds => breath(seconds, 330, 165, 2200, 260, 0.14),   // E4 → E3, air settling
+    // Inhale: brighter G major (G3 D4 B4), swelling in.
+    inhale: seconds => breath(seconds, [196, 293.66, 493.88], swellIn, 350, 900, 0.2),
+    // Exhale: lower, warmer C major (C3 G3 E4), fading out.
+    exhale: seconds => breath(seconds, [130.81, 196, 329.63], swellOut, 900, 250, 0.2),
     hold:   () => bell(880),
     tick:   () => bell(1760, 0, 0.035, 0.25),
     finish: () => { bell(523.25, 0); bell(659.25, 0.35); bell(783.99, 0.7, 0.22, 2.4) },
